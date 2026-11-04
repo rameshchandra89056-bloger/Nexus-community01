@@ -34,6 +34,71 @@
 
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+        <!-- 1. TAILWIND CSS ENGINE (With preflight:false so existing Nexus CSS stays 100% intact!) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        if (window.tailwind) {
+            tailwind.config = {
+                corePlugins: {
+                    preflight: false
+                },
+                theme: {
+                    extend: {
+                        colors: {
+                            nexusDark: '#090d16',
+                            nexusCard: '#0f172a',
+                            nexusGreen: '#10b981',
+                            nexusCyan: '#38bdf8'
+                        }
+                    }
+                }
+            };
+        }
+
+        // 2. SILENT LIVE HOT-RELOAD & TYPING DRAFT PROTECTOR (Updates JS files without refreshing page!)
+        (function() {
+            let currentAppVersion = null;
+
+            // Protect user's typed text so it is never lost
+            document.addEventListener('input', function(e) {
+                if (e.target && (e.target.id === 'nx-dm-input' || e.target.id === 'nx-chat-msg-in')) {
+                    try { sessionStorage.setItem('nx_draft_' + e.target.id, e.target.value); } catch (err) {}
+                }
+            }, { passive: true });
+
+            // Hot-swap updated JS files silently in background when Admin triggers an update
+            window.hotReloadNexusModule = function(fileName) {
+                const oldScript = document.querySelector(`script[src^="${fileName}"]`);
+                const newScript = document.createElement('script');
+                newScript.src = `${fileName}?v=${Date.now()}`;
+                newScript.charset = 'UTF-8';
+                document.body.appendChild(newScript);
+                if (oldScript) setTimeout(() => oldScript.remove(), 1500);
+            };
+
+            window.addEventListener('load', function() {
+                setTimeout(function() {
+                    if (!window.Nexus || !Nexus.db) return;
+                    Nexus.db.collection("nexus_config").doc("live_version").onSnapshot(function(doc) {
+                        if (!doc.exists) return;
+                        let data = doc.data();
+                        if (!currentAppVersion) {
+                            currentAppVersion = data.versionId;
+                            return;
+                        }
+                        if (data.versionId && data.versionId !== currentAppVersion) {
+                            currentAppVersion = data.versionId;
+                            let targetFiles = Array.isArray(data.files) && data.files.length
+                                ? data.files
+                                : ['core.js', 'home.js', 'chat.js', 'dm.js'];
+                            targetFiles.forEach(function(f) { window.hotReloadNexusModule(f); });
+                        }
+                    });
+                }, 2500);
+            });
+        })();
+    </script>
+
     <style>
         * {
             box-sizing: border-box;
