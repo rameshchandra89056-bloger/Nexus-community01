@@ -256,7 +256,7 @@
 <body>
 
     <header class="nx-header">
-        <div class="nx-logo" id="nx-main-logo" title="Tap 5 times to open Admin Vault">
+        <div class="nx-logo" id="nx-main-logo" onclick="Nexus.switchTab('tab-home')">
             Nexus <span class="nx-live-dot" id="nx-offline-dot"></span>
         </div>
         <div class="nx-header-actions">
@@ -492,21 +492,6 @@
                 this.rebuildAllUsersMasterList();
                 this.notifyAll();
 
-                let tapCount = 0, tapTimer = null;
-                const logoEl = document.getElementById('nx-main-logo');
-                if (logoEl) {
-                    logoEl.addEventListener('click', () => {
-                        tapCount++;
-                        clearTimeout(tapTimer);
-                        if (tapCount >= 5) {
-                            tapCount = 0;
-                            window.location.href = 'vault.html';
-                        } else {
-                            tapTimer = setTimeout(() => { tapCount = 0; }, 1200);
-                        }
-                    });
-                }
-
                 if (typeof firebase !== 'undefined') this.connectCloud();
                 else window.addEventListener('load', () => this.connectCloud());
             },
@@ -516,7 +501,6 @@
                 try {
                     if (!firebase.apps.length) firebase.initializeApp(this.config);
                     this.db = firebase.firestore();
-                    // 0.01s Instant IndexedDB Offline Persistence
                     this.db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
                 } catch (e) {
                     return;
