@@ -11,6 +11,7 @@
     <meta name="google-site-verification" content="qa43eoBrj0w-q8o49x4Q4-kKlkrljCivLM1FIymxS8w">
     <meta name="description" content="Nexus Community is an online community for students of all subjects and backgrounds to connect, communicate, share posts and ideas, and interact with fellow students.">
     <link rel="canonical" href="https://nexus-community01.netlify.app/">
+    <link rel="manifest" href="manifest.json">
 
     <!-- Open Graph: Social Media Preview -->
     <meta property="og:type" content="website">
@@ -23,8 +24,14 @@
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="Nexus Community">
     <meta name="twitter:description" content="A community built for all students to connect, communicate, share posts and ideas, and interact with fellow students.">
+
+    <!-- High-Speed DNS Prefetch & Preconnect -->
     <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+    <link rel="dns-prefetch" href="https://text.pollinations.ai">
+    <link rel="dns-prefetch" href="https://image.pollinations.ai">
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com">
+
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
     <style>
@@ -45,7 +52,7 @@
             color: #f8fafc;
             overflow-x: hidden;
             padding-top: 56px;
-            padding-bottom: 68px;
+            padding-bottom: 78px;
             max-width: 640px;
             margin: 0 auto;
             min-height: 100dvh;
@@ -131,6 +138,7 @@
         .nx-tab-screen {
             display: none;
             min-height: calc(100dvh - 124px);
+            padding-bottom: 28px;
         }
         .nx-tab-screen.active {
             display: block;
@@ -291,6 +299,12 @@
     </nav>
 
     <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(() => {});
+            });
+        }
+
         function safeSetLocalCache(key, dataObj) {
             try {
                 localStorage.setItem(key, JSON.stringify(dataObj));
@@ -338,6 +352,7 @@
             },
             db: null,
             initialized: false,
+            cloudReady: false,
             cloudAccounts: [],
             users: loadInitialUsersCache(),
             posts: loadInitialPostsCache(),
@@ -345,66 +360,57 @@
             pdfs: [],
             listeners: { onUsers: [], onPosts: [], onRooms: [] },
 
-            // 100% FIXED: Cloud Data ALWAYS Overrides Stale localStorage (Fixes Follower/Following Mismatch!)
             rebuildAllUsersMasterList: function() {
                 let map = {};
 
-                // 1. Seed from localStorage first
                 (this.users || []).forEach(u => {
                     if (u && u.username) {
                         let key = u.username.toLowerCase().trim();
                         let copy = Object.assign({}, u);
                         delete copy.pin;
+                        copy.dp = copy.dp || '';
                         copy.followersList = cleanUniqueList(copy.followersList);
                         copy.followingList = cleanUniqueList(copy.followingList);
                         map[key] = copy;
                     }
                 });
 
-                // 2. Seed missing authors from posts
-                (this.posts || []).forEach(p => {
-                    if (!p || p.username === 'nexus_official') return;
-                    let uname = (p.username || p.author || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
-                    if (uname && !map[uname]) {
-                        map[uname] = {
-                            username: p.username || uname,
-                            name: p.author || p.username || 'Member',
-                            bio: p.bio || 'Student',
-                            dp: p.dp || '',
-                            followersList: [],
-                            followingList: []
-                        };
-                    }
-                });
-
-                // 3. Seed current user from localStorage BEFORE cloudAccounts so cloudAccounts always wins!
                 let rawMe = localStorage.getItem('nx_active_account');
                 let myActiveKey = '';
+                let myLocalDp = '';
                 if (rawMe) {
                     try {
                         let me = JSON.parse(rawMe);
                         if (me && me.username) {
                             myActiveKey = me.username.toLowerCase().trim();
-                            if (!map[myActiveKey]) map[myActiveKey] = Object.assign({}, me);
+                            myLocalDp = me.dp || '';
+                            map[myActiveKey] = Object.assign({}, map[myActiveKey] || {}, me, {
+                                isOnlineNow: true,
+                                lastOnline: Date.now()
+                            });
                         }
                     } catch(e) {}
                 }
 
-                // 4. AUTHORITATIVE CLOUD ACCOUNTS OVERRIDE EVERYTHING!
                 (this.cloudAccounts || []).forEach(u => {
                     if (u && u.username) {
                         let key = u.username.toLowerCase().trim();
+                        let prevDp = (map[key] && map[key].dp) ? map[key].dp : '';
                         let copy = Object.assign({}, map[key] || {}, u);
                         delete copy.pin;
+                        copy.dp = u.dp || prevDp || (key === myActiveKey ? myLocalDp : '');
                         copy.followersList = cleanUniqueList(u.followersList);
                         copy.followingList = cleanUniqueList(u.followingList);
                         map[key] = copy;
 
-                        // Keep localStorage nx_active_account 100% synced with real Cloud followers/following!
                         if (key === myActiveKey && rawMe) {
                             try {
                                 let meParsed = JSON.parse(rawMe);
-                                let syncedMe = Object.assign({}, meParsed, u, { isOnlineNow: true });
+                                let syncedMe = Object.assign({}, meParsed, u, {
+                                    dp: copy.dp,
+                                    isOnlineNow: true,
+                                    lastOnline: Date.now()
+                                });
                                 syncedMe.followersList = copy.followersList;
                                 syncedMe.followingList = copy.followingList;
                                 safeSetLocalCache('nx_active_account', syncedMe);
@@ -413,11 +419,63 @@
                     }
                 });
 
-                this.users = Object.values(map);
+                let existingDisplayNames = new Set(
+                    Object.values(map).map(acc => (acc.name || acc.username || '').toLowerCase().trim()).filter(Boolean)
+                );
+
+                (this.posts || []).forEach(p => {
+                    if (!p || p.username === 'nexus_official') return;
+                    let uname = (p.username || p.author || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
+                    let authorDisplay = (p.author || p.username || '').toLowerCase().trim();
+                    if (uname && !map[uname] && !existingDisplayNames.has(authorDisplay)) {
+                        map[uname] = {
+                            username: p.username || uname,
+                            name: p.author || p.username || 'Member',
+                            bio: p.bio || 'JEE Aspirant',
+                            dp: p.dp || '',
+                            followersList: [],
+                            followingList: []
+                        };
+                        existingDisplayNames.add(authorDisplay);
+                    } else if (uname && map[uname] && !map[uname].dp && p.dp) {
+                        map[uname].dp = p.dp;
+                    }
+                });
+
+                let byNameMap = {};
+                let finalUsers = [];
+                Object.values(map).forEach(u => {
+                    if (!u || !u.username) return;
+                    let nameKey = (u.name || u.username).toLowerCase().trim();
+                    if (!byNameMap[nameKey]) {
+                        byNameMap[nameKey] = u;
+                        finalUsers.push(u);
+                    } else {
+                        let existing = byNameMap[nameKey];
+                        let existingScore = (existing.dp ? 10 : 0) + ((existing.followersList || []).length * 2) + (existing.lastOnline ? 1 : 0);
+                        let currentScore = (u.dp ? 10 : 0) + ((u.followersList || []).length * 2) + (u.lastOnline ? 1 : 0);
+
+                        if (currentScore > existingScore) {
+                            u.dp = u.dp || existing.dp || '';
+                            u.followersList = cleanUniqueList([...(existing.followersList || []), ...(u.followersList || [])]);
+                            u.followingList = cleanUniqueList([...(existing.followingList || []), ...(u.followingList || [])]);
+                            let idx = finalUsers.indexOf(existing);
+                            if (idx !== -1) finalUsers[idx] = u;
+                            byNameMap[nameKey] = u;
+                        } else {
+                            existing.dp = existing.dp || u.dp || '';
+                            existing.followersList = cleanUniqueList([...(existing.followersList || []), ...(u.followersList || [])]);
+                            existing.followingList = cleanUniqueList([...(existing.followingList || []), ...(u.followingList || [])]);
+                        }
+                    }
+                });
+
+                this.users = finalUsers;
                 let lightUsers = this.users.map(u => ({
                     username: u.username,
                     name: u.name,
                     bio: u.bio,
+                    dp: (u.dp && u.dp.length < 180000) ? u.dp : '',
                     moodNote: u.moodNote || '',
                     isOnlineNow: u.isOnlineNow,
                     lastOnline: u.lastOnline,
@@ -458,6 +516,8 @@
                 try {
                     if (!firebase.apps.length) firebase.initializeApp(this.config);
                     this.db = firebase.firestore();
+                    // 0.01s Instant IndexedDB Offline Persistence
+                    this.db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
                 } catch (e) {
                     return;
                 }
@@ -467,23 +527,25 @@
                     try {
                         let meObj = JSON.parse(rawMe);
                         if (meObj && meObj.username) {
-                            this.db.collection("nexus_accounts").doc(meObj.username).set({
+                            let updatePayload = {
                                 isOnlineNow: true,
                                 lastOnline: Date.now(),
                                 lastSeenAt: Date.now()
-                            }, { merge: true });
+                            };
+                            if (meObj.dp) updatePayload.dp = meObj.dp;
+                            this.db.collection("nexus_accounts").doc(meObj.username).set(updatePayload, { merge: true });
                         }
                     } catch(e) {}
                 }
 
-                // ANTI-LAG ENGINE: Ignore typing timestamps (dmTypingAt / typingAt) so typing NEVER re-renders Home/Profile!
                 this.db.collection("nexus_accounts").onSnapshot(snap => {
                     this.cloudAccounts = [];
                     snap.forEach(d => this.cloudAccounts.push(d.data()));
+                    this.cloudReady = true;
                     this.rebuildAllUsersMasterList();
 
                     let currentHash = this.users.map(u =>
-                        `${u.username}:${u.name}:${u.bio}:${u.moodNote || ''}:${u.verified ? 1 : 0}:${(u.followersList || []).length}:${(u.followingList || []).length}:${(u.recentVisitors || []).length}`
+                        `${u.username}:${u.name}:${u.bio}:${(u.dp || '').length}:${u.isOnlineNow ? 1 : 0}:${u.moodNote || ''}:${u.verified ? 1 : 0}:${(u.followersList || []).length}:${(u.followingList || []).length}`
                     ).join('|');
 
                     if (currentHash !== lastUsersProfileHash) {
@@ -492,12 +554,11 @@
                     }
                 });
 
-                // INSTANT FEED LOAD: Strip heavy images from localStorage cache & call onPosts ONLY ONCE!
-                this.db.collection("nexus_real_posts").orderBy("createdAt", "desc").limit(35).onSnapshot(snap => {
+                this.db.collection("nexus_real_posts").orderBy("createdAt", "desc").limit(50).onSnapshot(snap => {
                     this.posts = [];
                     snap.forEach(d => { let p = d.data(); p.id = d.id; this.posts.push(p); });
-                    let ultraLightPosts = this.posts.slice(0, 6).map(p => Object.assign({}, p, {
-                        image: (p.image && p.image.length > 40000) ? '' : p.image
+                    let ultraLightPosts = this.posts.slice(0, 25).map(p => Object.assign({}, p, {
+                        image: (p.image && p.image.length > 90000) ? '' : p.image
                     }));
                     safeSetLocalCache('nx_light_posts_v1', ultraLightPosts);
                     this.rebuildAllUsersMasterList();
@@ -518,7 +579,10 @@
                     if (!acc || !acc.username || !acc.name) return null;
                     let cloudMatch = this.cloudAccounts.find(u => u.username && u.username.toLowerCase() === acc.username.toLowerCase());
                     if (cloudMatch) {
-                        let merged = Object.assign({}, acc, cloudMatch, { isOnlineNow: true });
+                        let merged = Object.assign({}, acc, cloudMatch, {
+                            dp: cloudMatch.dp || acc.dp || '',
+                            isOnlineNow: true
+                        });
                         merged.followersList = cleanUniqueList(cloudMatch.followersList);
                         merged.followingList = cleanUniqueList(cloudMatch.followingList);
                         return merged;
@@ -528,6 +592,9 @@
             },
 
             switchTab: function(tabId, btnEl) {
+                document.documentElement.style.overflow = '';
+                document.body.style.overflow = '';
+
                 document.querySelectorAll('.nx-tab-screen').forEach(s => s.classList.remove('active'));
                 const target = document.getElementById(tabId);
                 if (target) target.classList.add('active');
@@ -587,4 +654,3 @@
     <script src="core.js" charset="UTF-8"></script>
 </body>
 </html>
-
