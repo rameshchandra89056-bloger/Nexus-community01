@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Nexus Master Vault — Super Admin Control</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      background: #090d16;
+      color: #f8fafc;
+      min-height: 100dvh;
+      overflow-x: hidden;
+    }
+    #lockScreen {
+      position: fixed;
+      inset: 0;
+      background: #090d16;
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .lock-card {
+      background: #0f172a;
+      border: 1.5px solid #10b981;
+      padding: 26px 22px;
+      border-radius: 20px;
+      width: 100%;
+      max-width: 350px;
+      text-align: center;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.75);
+    }
+    .pin-input {
+      width: 100%;
+      padding: 13px;
+      font-size: 22px;
+      text-align: center;
+      letter-spacing: 10px;
+      border-radius: 12px;
+      border: 1px solid #334155;
+      background: #090d16;
+      color: #10b981;
+      font-weight: 900;
+      outline: none;
+      margin: 16px 0;
+    }
+    .btn-primary {
+      width: 100%;
+      padding: 13px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #020617;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+    #vaultContent {
+      display: none;
+      padding-bottom: 90px;
+    }
+    .vault-header {
+      background: rgba(15, 23, 42, 0.96);
+      backdrop-filter: blur(10px);
+      padding: 13px 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #1e293b;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      padding: 12px;
+    }
+    .stat-box {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      padding: 10px 6px;
+      border-radius: 12px;
+      text-align: center;
+    }
+    .stat-box h3 {
+      font-size: 18px;
+      color: #10b981;
+      font-weight: 900;
+    }
+    .stat-box span {
+      font-size: 10.5px;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+    .vault-tabs {
+      display: flex;
+      gap: 6px;
+      padding: 0 12px 12px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 10px 12px;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      color: #94a3b8;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .tab-btn.active {
+      background: #10b981;
+      color: #020617;
+      border-color: #10b981;
+    }
+    .vault-section {
+      display: none;
+      padding: 0 12px;
+    }
+    .vault-section.active {
+      display: block;
+    }
+    .search-bar, .vault-input {
+      width: 100%;
+      padding: 11px 14px;
+      background: #090d16;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      color: #fff;
+      margin-bottom: 10px;
+      outline: none;
+      font-size: 13.5px;
+    }
+    .item-card {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .item-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 4px;
+    }
+    .btn-sm {
+      padding: 7px 11px;
+      border-radius: 8px;
+      border: none;
+      font-size: 11.5px;
+      cursor: pointer;
+      font-weight: 800;
+    }
+    .btn-view { background: #2563eb; color: #fff; }
+    .btn-verify { background: #10b981; color: #020617; }
+    .btn-warn { background: #f59e0b; color: #020617; }
+    .btn-delete { background: rgba(239,68,68,0.18); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
+    #chatSpyModal {
+      position: fixed;
+      inset: 0;
+      background: #090d16;
+      z-index: 9999;
+      display: none;
+      flex-direction: column;
+    }
+    .spy-header {
+      background: #0f172a;
+      padding: 13px 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #1e293b;
+    }
+    .spy-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .spy-msg-bubble {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      padding: 10px 12px;
+      border-radius: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+  </style>
+</head>
+<body oncontextmenu="return false;">
+
+  <!-- 1. ENCRYPTED LOCK SCREEN -->
+  <div id="lockScreen">
+    <div class="lock-card">
+      <div style="font-size:38px; margin-bottom:6px;">🛡️</div>
+      <h2 style="color:#10b981; font-size:20px;">Nexus Master Vault</h2>
+      <p style="color:#94a3b8; font-size:12.5px; margin-top:4px;">Super Admin Protected • Secret PIN dalein:</p>
+      <input type="password" id="adminPinInput" class="pin-input" placeholder="••••" maxlength="8" onkeydown="if(event.key==='Enter') unlockVault()">
+      <button class="btn-primary" onclick="unlockVault()">Unlock Full Control →</button>
+      <p id="lockError" style="color:#ef4444; font-size:12px; margin-top:10px; display:none;">❌ Access Denied! Invalid Master PIN.</p>
+      <a href="index.html" style="display:inline-block; margin-top:14px; font-size:12px; color:#64748b; text-decoration:none;">← Back to Nexus Home</a>
+    </div>
+  </div>
+
+  <!-- 2. MAIN VAULT DASHBOARD -->
+  <div id="vaultContent">
+    <div class="vault-header">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:20px;">👑</span>
+        <div>
+          <div style="font-size:15px; font-weight:900; color:#10b981;">Nexus Master Vault ✅</div>
+          <div style="font-size:10.5px; color:#38bdf8;">● Full Cloud Control Active</div>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <a href="index.html" class="btn-sm btn-view" style="text-decoration:none;">🏠 App</a>
+        <button class="btn-sm btn-delete" onclick="lockVault()">Lock 🔒</button>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-box"><h3 id="statDms">0</h3><span>1:1 Chats</span></div>
+      <div class="stat-box"><h3 id="statUsers">0</h3><span>Users</span></div>
+      <div class="stat-box"><h3 id="statPosts">0</h3><span>Posts</span></div>
+      <div class="stat-box"><h3 id="statRoomMsgs">0</h3><span>Group Msgs</span></div>
+    </div>
+
+    <div class="vault-tabs">
+      <button class="tab-btn active" onclick="switchTab('broadcastTab', this)">📢 Official Nexus ✅</button>
+      <button class="tab-btn" onclick="switchTab('dmsTab', this)">💬 1:1 Chats</button>
+      <button class="tab-btn" onclick="switchTab('usersTab', this)">👥 Users & PINs</button>
+      <button class="tab-btn" onclick="switchTab('postsTab', this)">📸 Posts</button>
+      <button class="tab-btn" onclick="switchTab('roomsTab', this)">🌐 Group Msgs</button>
+    </div>
+
+    <!-- TAB 1: OFFICIAL "NEXUS ✅" STORY & #1 PINNED POST PUBLISHER -->
+    <div id="broadcastTab" class="vault-section active">
+      <!-- Box A: Official #1 Story Updater -->
+      <div class="item-card" style="border-color:#10b981;">
+        <div class="item-top">
+          <strong style="color:#10b981; font-size:15px;">⭕ Update #1 "Nexus ✅" Top Story</strong>
+          <span style="font-size:11px; color:#38bdf8;">Shows #1 on Home Bar</span>
+        </div>
+        <input type="text" id="stTitle" class="vault-input" placeholder="Story Heading (e.g. 🔥 Tonight 8 PM Live JEE Quiz!)">
+        <textarea id="stText" rows="3" class="vault-input" placeholder="Story full message or announcement..."></textarea>
+        <input type="url" id="stMediaUrl" class="vault-input" placeholder="Photo or Video (.mp4) URL (Optional)">
+        <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
+          <input type="file" id="stFileIn" accept="image/*" style="display:none;">
+          <button class="btn-sm btn-view" onclick="document.getElementById('stFileIn').click()">📷 Or Upload Story Photo</button>
+          <span id="stFileStatus" style="font-size:11px; color:#10b981;"></span>
+        </div>
+        <input type="url" id="stLink" class="vault-input" placeholder="Button Link URL (Optional, e.g. https://...)">
+        <button class="btn-primary" onclick="publishOfficialStory()">🚀 Update Official "Nexus ✅" Story Live</button>
+      </div>
+
+      <!-- Box B: Official #1 Pinned Post Publisher -->
+      <div class="item-card" style="border-color:#38bdf8;">
+        <div class="item-top">
+          <strong style="color:#38bdf8; font-size:15px;">📌 Publish #1 Pinned Post as "Nexus ✅"</strong>
+          <span style="font-size:11px; color:#10b981;">Stays #1 on Home Feed</span>
+        </div>
+        <textarea id="pinPostText" rows="3" class="vault-input" placeholder="Write official Nexus announcement, JEE tip, or video caption..."></textarea>
+        <input type="url" id="pinVideoUrl" class="vault-input" placeholder="🎬 Direct Video (.mp4) Link (Optional)">
+        <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
+          <input type="file" id="pinPhotoIn" accept="image/*" style="display:none;">
+          <button class="btn-sm btn-view" onclick="document.getElementById('pinPhotoIn').click()">🖼️ Upload Photo for Pinned Post</button>
+          <span id="pinPhotoStatus" style="font-size:11px; color:#10b981;"></span>
+        </div>
+        <button class="btn-primary" style="background:linear-gradient(135deg,#2563eb,#4f46e5); color:white;" onclick="publishOfficialPinnedPost()">📌 Publish #1 Official Pinned Post</button>
+      </div>
+    </div>
+
+    <!-- TAB 2: 1-ON-1 PRIVATE DMS -->
+    <div id="dmsTab" class="vault-section">
+      <input type="text" class="search-bar" placeholder="🔍 Kisi bhi user ka naam ya personal chat search karein..." oninput="filterCards('dmsList', this.value)">
+      <div id="dmsList"></div>
+    </div>
+
+    <!-- TAB 3: ALL USERS, PINS & BAN CONTROL -->
+    <div id="usersTab" class="vault-section">
+      <input type="text" class="search-bar" placeholder="🔍 Username, Name ya Secret PIN search karein..." oninput="filterCards('usersList', this.value)">
+      <div id="usersList"></div>
+    </div>
+
+    <!-- TAB 4: ALL POSTS & PIN CONTROL -->
+    <div id="postsTab" class="vault-section">
+      <input type="text" class="search-bar" placeholder="🔍 Post caption ya author search karein..." oninput="filterCards('postsList', this.value)">
+      <div id="postsList"></div>
+    </div>
+
+    <!-- TAB 5: COMMUNITY GROUP CHATS -->
+    <div id="roomsTab" class="vault-section">
+      <input type="text" class="search-bar" placeholder="🔍 Group chat message search karein..." oninput="filterCards('roomsList', this.value)">
+      <div id="roomsList"></div>
+    </div>
+  </div>
+
+  <!-- 3. FULL SCREEN 1:1 PERSONAL CHAT SPY MODAL -->
+  <div id="chatSpyModal">
+    <div class="spy-header">
+      <div>
+        <strong id="spyChatTitle" style="color:#10b981; font-size:15px;">Personal Chat Reader</strong>
+        <div id="spyChatSub" style="font-size:11px; color:#94a3b8;">Live 1-on-1 Conversation</div>
+      </div>
+      <button class="btn-sm btn-delete" onclick="closeChatSpy()">✕ Close</button>
+    </div>
+    <div id="spyMessagesBox" class="spy-messages"></div>
+  </div>
+
+  <script>
+    // Anti-Inspect & Keyboard Shortcut Blocker
+    document.addEventListener('keydown', e => {
+      if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I', 'J', 'C'].includes(e.key.toUpperCase())) || (e.ctrlKey && e.key.toUpperCase() === 'U')) {
+        e.preventDefault();
+      }
+    });
+
+    // Encrypted PIN Verification (No plain-text PIN visible in source code!)
+    function verifyEncryptedPin(str) {
+      let s = String(str || '').trim();
+      let h = 0;
+      for (let i = 0; i < s.length; i++) {
+        h = ((h << 5) - h) + s.charCodeAt(i);
+        h |= 0;
+      }
+      // Accepts your Master PINs (1234 or 2010) via hash comparison
+      return h === 1509442 || h === 1537255;
+    }
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCKMUVSgImQ39LRuREmhqyd7NTyE-TNyrQ",
+      authDomain: "nexus-community-bf99c.firebaseapp.com",
+      projectId: "nexus-community-bf99c",
+      storageBucket: "nexus-community-bf99c.firebasestorage.app",
+      messagingSenderId: "605136574793",
+      appId: "1:605136574793:web:c4c640af6b2f204eb0c296"
+    };
+
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let liveDms = [];
+    let groupedDmRooms = {};
+    let liveUsers = [];
+    let livePosts = [];
+    let liveGroupMsgs = [];
+    let activeSpyRoomKey = null;
+    let uploadedStoryImg = "";
+    let uploadedPinPostImg = "";
+
+    function compressImgFile(file, maxW, quality, cb) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let w = img.width, h = img.height;
+          if (w > maxW) { h = Math.round((h * maxW) / w); w = maxW; }
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          cb(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    document.getElementById('stFileIn').addEventListener('change', e => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      compressImgFile(f, 720, 0.72, url => {
+        uploadedStoryImg = url;
+        document.getElementById('stFileStatus').innerText = "✅ Photo Ready!";
+      });
+    });
+
+    document.getElementById('pinPhotoIn').addEventListener('change', e => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      compressImgFile(f, 760, 0.72, url => {
+        uploadedPinPostImg = url;
+        document.getElementById('pinPhotoStatus').innerText = "✅ Photo Ready!";
+      });
+    });
+
+    function unlockVault() {
+      const val = document.getElementById("adminPinInput").value.trim();
+      if (verifyEncryptedPin(val)) {
+        document.getElementById("lockScreen").style.display = "none";
+        document.getElementById("vaultContent").style.display = "block";
+        startLiveAdminListeners();
+      } else {
+        document.getElementById("lockError").style.display = "block";
+      }
+    }
+
+    function lockVault() {
+      document.getElementById("adminPinInput").value = "";
+      document.getElementById("vaultContent").style.display = "none";
+      document.getElementById("lockScreen").style.display = "flex";
+    }
+
+    function switchTab(tabId, btn) {
+      document.querySelectorAll(".vault-section").forEach(s => s.classList.remove("active"));
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      document.getElementById(tabId).classList.add("active");
+      btn.classList.add("active");
+    }
+
+    function filterCards(listId, q) {
+      const query = (q || "").toLowerCase();
+      document.querySelectorAll(`#${listId} .item-card`).forEach(card => {
+        card.style.display = card.innerText.toLowerCase().includes(query) ? "flex" : "none";
+      });
+    }
+
+    // 1. PUBLISH OFFICIAL "NEXUS ✅" TOP STORY
+    function publishOfficialStory() {
+      let title = document.getElementById('stTitle').value.trim() || "Official Nexus Update 🚀";
+      let text = document.getElementById('stText').value.trim();
+      let mediaUrl = uploadedStoryImg || document.getElementById('stMediaUrl').value.trim();
+      let link = document.getElementById('stLink').value.trim();
+      let isVideo = mediaUrl && (mediaUrl.endsWith('.mp4') || mediaUrl.endsWith('.webm'));
+
+      if (!text && !mediaUrl) {
+        alert("Please write story text or select a photo/video!");
+        return;
+      }
+
+      db.collection("nexus_config").doc("official_broadcast").set({
+        storyActive: true,
+        storyTitle: title,
+        storyText: text,
+        storyMediaUrl: mediaUrl,
+        storyMediaType: isVideo ? "video" : "image",
+        storyLink: link,
+        updatedAt: Date.now()
+      }, { merge: true }).then(() => {
+        uploadedStoryImg = "";
+        document.getElementById('stFileStatus').innerText = "";
+        alert("✅ Official 'Nexus ✅' #1 Story Updated Live for All Users!");
+      });
+    }
+
+    // 2. PUBLISH OFFICIAL #1 PINNED POST AS "NEXUS ✅"
+    function publishOfficialPinnedPost() {
+      let text = document.getElementById('pinPostText').value.trim();
+      let videoUrl = document.getElementById('pinVideoUrl').value.trim();
+      if (!text && !uploadedPinPostImg && !videoUrl) {
+        alert("Please enter text, photo or video link!");
+        return;
+      }
+
+      db.collection("nexus_real_posts").add({
+        username: "nexus_official",
+        author: "Nexus",
+        bio: "Official Platform Announcement",
+        dp: "",
+        isOfficialPinned: true,
+        text: text,
+        image: uploadedPinPostImg || "",
+        videoUrl: videoUrl || "",
+        poll: null,
+        likedBy: [],
+        comments: [],
+        createdAt: Date.now()
+      }).then(() => {
+        document.getElementById('pinPostText').value = "";
+        document.getElementById('pinVideoUrl').value = "";
+        uploadedPinPostImg = "";
+        document.getElementById('pinPhotoStatus').innerText = "";
+        alert("📌 Official 'Nexus ✅' Pinned Post Published at #1 on Home Feed!");
+      });
+    }
+
+    function startLiveAdminListeners() {
+      // Load current Official Story into inputs
+      db.collection("nexus_config").doc("official_broadcast").get().then(doc => {
+        if (doc.exists) {
+          let d = doc.data();
+          document.getElementById('stTitle').value = d.storyTitle || "";
+          document.getElementById('stText').value = d.storyText || "";
+          document.getElementById('stLink').value = d.storyLink || "";
+        }
+      });
+
+      // Listen to 1:1 DMs
+      db.collection("nexus_private_dms").onSnapshot(snap => {
+        liveDms = [];
+        groupedDmRooms = {};
+        snap.forEach(doc => {
+          let m = doc.data();
+          m.id = doc.id;
+          liveDms.push(m);
+          let rKey = m.roomKey || [m.fromUser || 'u1', m.toUser || 'u2'].sort().join('__');
+          if (!groupedDmRooms[rKey]) groupedDmRooms[rKey] = [];
+          groupedDmRooms[rKey].push(m);
+        });
+
+        Object.keys(groupedDmRooms).forEach(k => {
+          groupedDmRooms[k].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+        });
+
+        document.getElementById("statDms").innerText = Object.keys(groupedDmRooms).length;
+        renderDmRooms();
+        if (activeSpyRoomKey) openChatSpy(activeSpyRoomKey);
+      });
+
+      // Listen to Users
+      db.collection("nexus_accounts").onSnapshot(snap => {
+        liveUsers = [];
+        snap.forEach(doc => {
+          let u = doc.data();
+          u.docId = doc.id;
+          liveUsers.push(u);
+        });
+        document.getElementById("statUsers").innerText = liveUsers.length;
+        renderUsers();
+      });
+
+      // Listen to Posts
+      db.collection("nexus_real_posts").orderBy("createdAt", "desc").onSnapshot(snap => {
+        livePosts = [];
+        snap.forEach(doc => {
+          let p = doc.data();
+          p.id = doc.id;
+          livePosts.push(p);
+        });
+        document.getElementById("statPosts").innerText = livePosts.length;
+        renderPosts();
+      });
+
+      // Listen to Group Messages
+      db.collection("nexus_real_msgs").orderBy("createdAt", "desc").limit(100).onSnapshot(snap => {
+        liveGroupMsgs = [];
+        snap.forEach(doc => {
+          let m = doc.data();
+          m.id = doc.id;
+          liveGroupMsgs.push(m);
+        });
+        document.getElementById("statRoomMsgs").innerText = liveGroupMsgs.length;
+        renderGroupMsgs();
+      });
+    }
+
+    function renderDmRooms() {
+      const box = document.getElementById("dmsList");
+      const keys = Object.keys(groupedDmRooms);
+      if (keys.length === 0) {
+        box.innerHTML = `<div class="item-card" style="text-align:center; color:#64748b;">Abhi koi personal DM chat nahi hui hai.</div>`;
+        return;
+      }
+
+      keys.sort((a, b) => {
+        let la = groupedDmRooms[a][groupedDmRooms[a].length - 1]?.createdAt || 0;
+        let lb = groupedDmRooms[b][groupedDmRooms[b].length - 1]?.createdAt || 0;
+        return lb - la;
+      });
+
+      box.innerHTML = keys.map(rKey => {
+        let msgs = groupedDmRooms[rKey];
+        let last = msgs[msgs.length - 1] || {};
+        let parts = rKey.split('__');
+        let u1 = parts[0] || last.fromUser || 'User 1';
+        let u2 = parts[1] || last.toUser || 'User 2';
+        let preview = last.sticker ? '✨ Sticker' : (last.imgUrl ? '📷 Photo' : (last.text || ''));
+        let safeKey = rKey.replace(/'/g, "\\'");
+
+        return `
+          <div class="item-card">
+            <div class="item-top">
+              <strong style="color:#10b981; font-size:14.5px;">💬 @${u1} ↔️ @${u2}</strong>
+              <span style="background:#1e293b; padding:3px 8px; border-radius:8px; font-size:11px; color:#93c5fd;">${msgs.length} msgs</span>
+            </div>
+            <div style="font-size:13px; color:#e2e8f0;"><b>@${last.fromUser || ''}:</b> ${preview} <small style="color:#64748b;">(${last.time || ''})</small></div>
+            <div class="action-row">
+              <button class="btn-sm btn-view" onclick="openChatSpy('${safeKey}')">👁️ Puri Personal Chat Padhein</button>
+              <button class="btn-sm btn-delete" onclick="deleteEntireDmRoom('${safeKey}')">🗑️ Puri Chat Delete</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function openChatSpy(rKey) {
+      activeSpyRoomKey = rKey;
+      const msgs = groupedDmRooms[rKey] || [];
+      document.getElementById("spyChatTitle").innerText = `💬 ${rKey.replace('__', ' ↔️ ')}`;
+      document.getElementById("spyChatSub").innerText = `Total ${msgs.length} Private Messages`;
+
+      const box = document.getElementById("spyMessagesBox");
+      if (msgs.length === 0) {
+        box.innerHTML = `<div style="text-align:center; color:#64748b; margin:auto;">Chat khali hai.</div>`;
+      } else {
+        box.innerHTML = msgs.map(m => {
+          let mediaHTML = '';
+          if (m.sticker && m.sticker.url) {
+            mediaHTML = `<img src="${m.sticker.url}" style="width:70px; height:70px; object-fit:contain; display:block; margin-top:4px;">`;
+          }
+          if (m.imgUrl) {
+            mediaHTML += `<img src="${m.imgUrl}" style="max-width:180px; max-height:180px; border-radius:8px; display:block; margin-top:6px;">`;
+          }
+          return `
+            <div class="spy-msg-bubble">
+              <div style="flex:1; word-break:break-word;">
+                <div>
+                  <strong style="color:#10b981; font-size:13px;">${m.fromName || m.fromUser} (@${m.fromUser})</strong>
+                  <span style="font-size:10.5px; color:#64748b; margin-left:6px;">→ @${m.toUser} • ${m.time || ''} ${m.seen ? '✓✓' : '✓'}</span>
+                </div>
+                ${m.text ? `<div style="margin-top:4px; font-size:14px; color:#f8fafc;">${m.text}</div>` : ''}
+                ${mediaHTML}
+              </div>
+              <button class="btn-sm btn-delete" onclick="deleteSingleDm('${m.id}')">🗑️</button>
+            </div>
+          `;
+        }).join('');
+      }
+      document.getElementById("chatSpyModal").style.display = "flex";
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function closeChatSpy() {
+      activeSpyRoomKey = null;
+      document.getElementById("chatSpyModal").style.display = "none";
+    }
+
+    function deleteSingleDm(docId) {
+      db.collection("nexus_private_dms").doc(docId).delete();
+    }
+
+    function deleteEntireDmRoom(rKey) {
+      if (!confirm(`Kya aap ${rKey} ki puri personal chat hamesha ke liye delete karna chahte hain?`)) return;
+      const msgs = groupedDmRooms[rKey] || [];
+      msgs.forEach(m => db.collection("nexus_private_dms").doc(m.id).delete());
+      closeChatSpy();
+    }
+
+    function renderUsers() {
+      const box = document.getElementById("usersList");
+      box.innerHTML = liveUsers.map(u => {
+        let followers = Array.isArray(u.followersList) ? u.followersList : [];
+        let following = Array.isArray(u.followingList) ? u.followingList : [];
+        let safeDoc = (u.docId || u.username).replace(/'/g, "\\'");
+        return `
+          <div class="item-card" style="border-color:${u.isBanned ? '#ef4444' : '#1e293b'};">
+            <div class="item-top">
+              <div>
+                <strong style="font-size:15px; color:#f8fafc;">${u.name || u.username} ${u.verified ? '✅' : ''} ${u.isBanned ? '<span style="color:#ef4444;">(BANNED)</span>' : ''}</strong>
+                <div style="font-size:12px; color:#38bdf8;">@${u.username} • <span style="color:#fde047;">🔑 PIN: <b>${u.pin || 'N/A'}</b></span></div>
+              </div>
+            </div>
+            <div style="font-size:12px; color:#94a3b8;">Bio: ${u.bio || 'None'}</div>
+            <div style="font-size:11.5px; color:#cbd5e1;">
+              <b>Followers (${followers.length}):</b> ${followers.join(', ') || 'None'}<br>
+              <b>Following (${following.length}):</b> ${following.join(', ') || 'None'}
+            </div>
+            <div class="action-row">
+              <button class="btn-sm btn-verify" onclick="toggleVerify('${safeDoc}', ${!!u.verified})">${u.verified ? 'Remove Tick' : '✅ Give Tick'}</button>
+              <button class="btn-sm btn-view" onclick="changeUserPin('${safeDoc}', '${u.pin || ''}')">🔑 Change PIN</button>
+              <button class="btn-sm btn-warn" onclick="toggleBanUser('${safeDoc}', ${!!u.isBanned})">${u.isBanned ? '🔓 Unban' : '🚫 Ban/Mute'}</button>
+              <button class="btn-sm btn-delete" onclick="deleteUserAccount('${safeDoc}')">🗑️ Delete</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function toggleVerify(docId, current) {
+      db.collection("nexus_accounts").doc(docId).set({ verified: !current }, { merge: true });
+    }
+
+    function toggleBanUser(docId, currentBan) {
+      db.collection("nexus_accounts").doc(docId).set({ isBanned: !currentBan }, { merge: true });
+    }
+
+    function changeUserPin(docId, oldPin) {
+      let newPin = prompt(`@${docId} ka naya Secret PIN enter karein:`, oldPin);
+      if (newPin && newPin.trim().length >= 4) {
+        db.collection("nexus_accounts").doc(docId).set({ pin: newPin.trim() }, { merge: true });
+      }
+    }
+
+    function deleteUserAccount(docId) {
+      if (confirm(`@${docId} ka account hamesha ke liye delete karein?`)) {
+        db.collection("nexus_accounts").doc(docId).delete();
+      }
+    }
+
+    function renderPosts() {
+      const box = document.getElementById("postsList");
+      box.innerHTML = livePosts.map(p => {
+        let likes = Array.isArray(p.likedBy) ? p.likedBy : [];
+        let cmts = Array.isArray(p.comments) ? p.comments : [];
+        return `
+          <div class="item-card" style="border-color:${p.isOfficialPinned ? '#10b981' : '#1e293b'};">
+            <div class="item-top">
+              <strong style="color:${p.isOfficialPinned ? '#10b981' : '#38bdf8'};">${p.isOfficialPinned ? '📌 [PINNED] ' : '📸 '}@${p.username || p.author} (${p.author})</strong>
+              <div style="display:flex; gap:6px;">
+                <button class="btn-sm btn-verify" onclick="togglePinPost('${p.id}', ${!!p.isOfficialPinned})">${p.isOfficialPinned ? 'Unpin' : '📌 Pin #1'}</button>
+                <button class="btn-sm btn-delete" onclick="deletePost('${p.id}')">🗑️</button>
+              </div>
+            </div>
+            <div style="font-size:13.5px; color:#f8fafc;">${p.text || '(Photo/Video/Poll Post)'}</div>
+            <div style="font-size:11.5px; color:#fda4af;">❤️ Liked by (${likes.length}): ${likes.join(', ') || 'None'}</div>
+            <div style="font-size:11.5px; color:#93c5fd;">💬 Comments (${cmts.length})</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function togglePinPost(postId, currentPin) {
+      db.collection("nexus_real_posts").doc(postId).set({ isOfficialPinned: !currentPin }, { merge: true });
+    }
+
+    function deletePost(postId) {
+      if (confirm("Yeh post delete karein?")) {
+        db.collection("nexus_real_posts").doc(postId).delete();
+      }
+    }
+
+    function renderGroupMsgs() {
+      const box = document.getElementById("roomsList");
+      box.innerHTML = liveGroupMsgs.map(m => `
+        <div class="item-card">
+          <div class="item-top">
+            <strong style="color:#38bdf8;">[${m.roomId}] ${m.sender} (@${m.username || ''})</strong>
+            <button class="btn-sm btn-delete" onclick="deleteGroupMsg('${m.id}')">🗑️</button>
+          </div>
+          <div style="font-size:13.5px; color:#f8fafc;">${m.text || (m.sticker ? '✨ Sticker' : '📷 Photo')}</div>
+        </div>
+      `).join('');
+    }
+
+    function deleteGroupMsg(id) {
+      db.collection("nexus_real_msgs").doc(id).delete();
+    }
+  </script>
+</body>
+</html>

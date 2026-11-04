@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Nexus Community">
+    <title>Nexus Community</title>
+    <meta name="google-site-verification" content="qa43eoBrj0w-q8o49x4Q4-kKlkrljCivLM1FIymxS8w">
+    <meta name="description" content="Nexus Community is an online community for students of all subjects and backgrounds to connect, communicate, share posts and ideas, and interact with fellow students.">
+    <link rel="canonical" href="https://nexus-community01.netlify.app/">
+
+    <!-- Open Graph: Social Media Preview -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Nexus Community">
+    <meta property="og:title" content="Nexus Community">
+    <meta property="og:description" content="A community built for all students to connect, communicate, share posts and ideas, and interact with fellow students.">
+    <meta property="og:url" content="https://nexus-community01.netlify.app/">
+
+    <!-- Twitter Preview -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Nexus Community">
+    <meta name="twitter:description" content="A community built for all students to connect, communicate, share posts and ideas, and interact with fellow students.">
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        html {
+            scroll-behavior: smooth;
+            background-color: #050811;
+        }
+        body {
+            background-color: #090d16;
+            color: #f8fafc;
+            overflow-x: hidden;
+            padding-top: 56px;
+            padding-bottom: 68px;
+            max-width: 640px;
+            margin: 0 auto;
+            min-height: 100dvh;
+            position: relative;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.85);
+            border-left: 1px solid rgba(30, 41, 59, 0.65);
+            border-right: 1px solid rgba(30, 41, 59, 0.65);
+        }
+        .nx-header {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 640px;
+            height: 56px;
+            background: rgba(15, 23, 42, 0.96);
+            border-bottom: 1px solid #1e293b;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            z-index: 1000;
+        }
+        .nx-logo {
+            font-size: 22px;
+            font-weight: 800;
+            color: #60a5fa;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .nx-live-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #10b981;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 8px #10b981;
+        }
+        .nx-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .nx-icon-btn {
+            background: none;
+            border: none;
+            color: #cbd5e1;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6px;
+            border-radius: 50%;
+            transition: transform 0.15s ease;
+        }
+        .nx-icon-btn:active {
+            transform: scale(0.88);
+            background: rgba(255,255,255,0.08);
+        }
+        .nx-icon-btn svg {
+            width: 22px;
+            height: 22px;
+            stroke: currentColor;
+            stroke-width: 2;
+            fill: none;
+        }
+        .nx-badge-dot {
+            position: absolute;
+            top: 2px; right: 2px;
+            background: #ef4444;
+            color: white;
+            font-size: 9px;
+            font-weight: bold;
+            padding: 1px 4px;
+            border-radius: 10px;
+            display: none;
+        }
+        .nx-tab-screen {
+            display: none;
+            min-height: calc(100dvh - 124px);
+        }
+        .nx-tab-screen.active {
+            display: block;
+        }
+        .nx-bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 640px;
+            height: 64px;
+            background: rgba(15, 23, 42, 0.98);
+            border-top: 1px solid #1e293b;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            align-items: center;
+            justify-items: center;
+            z-index: 1000;
+        }
+        .nx-nav-item {
+            background: none;
+            border: 1px solid transparent;
+            color: #64748b;
+            cursor: pointer;
+            padding: 8px 14px;
+            border-radius: 14px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        .nx-nav-item svg {
+            width: 22px;
+            height: 22px;
+            stroke: currentColor;
+            stroke-width: 2;
+            fill: none;
+        }
+        .nx-nav-item.active {
+            color: #60a5fa;
+            background: rgba(59, 130, 246, 0.14);
+            transform: translateY(-4px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.22);
+            border-color: rgba(59, 130, 246, 0.35);
+        }
+        .nx-fab-post {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #6366f1);
+            color: white;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: -18px;
+            box-shadow: 0 4px 14px rgba(59, 130, 246, 0.45);
+            cursor: pointer;
+        }
+        .nx-fab-post:active {
+            transform: scale(0.9);
+        }
+        .nx-fab-post svg {
+            width: 24px;
+            height: 24px;
+            stroke: white;
+            stroke-width: 2.5;
+            fill: none;
+        }
+        .nx-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.85);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .nx-modal-box {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 18px;
+            width: 100%;
+            max-width: 400px;
+            padding: 18px;
+            color: white;
+            max-height: 86dvh;
+            overflow-y: auto;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+        }
+        #nx-toast {
+            position: fixed;
+            bottom: 76px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #10b981;
+            color: #020617;
+            font-weight: 800;
+            font-size: 12.5px;
+            padding: 8px 18px;
+            border-radius: 22px;
+            z-index: 100000;
+            display: none;
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
+            white-space: nowrap;
+        }
+        #nx-stories-bar::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="nx-header">
+        <div class="nx-logo" id="nx-main-logo" title="Tap 5 times to open Admin Vault">
+            Nexus <span class="nx-live-dot" id="nx-offline-dot"></span>
+        </div>
+        <div class="nx-header-actions">
+            <button type="button" class="nx-icon-btn" onclick="Nexus.openNotifications()">
+                <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                <span class="nx-badge-dot" id="nx-notif-dot">0</span>
+            </button>
+            <button type="button" class="nx-icon-btn" onclick="Nexus.openSearch()">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            </button>
+        </div>
+    </header>
+
+    <main id="tab-home" class="nx-tab-screen active"></main>
+    <section id="tab-community" class="nx-tab-screen"></section>
+    <div id="tab-post-modal" class="nx-modal-overlay"></div>
+    <section id="tab-profile" class="nx-tab-screen"></section>
+    <section id="tab-settings" class="nx-tab-screen"></section>
+
+    <div id="nx-global-modal" class="nx-modal-overlay" onclick="if(event.target===this) this.style.display='none'"></div>
+    <div id="nx-toast"></div>
+
+    <!-- 5 SYMMETRICAL BOTTOM NAVIGATION TABS -->
+    <nav class="nx-bottom-nav">
+        <button type="button" class="nx-nav-item active" data-tab="tab-home" onclick="Nexus.switchTab('tab-home', this)">
+            <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+        </button>
+        <button type="button" class="nx-nav-item" data-tab="tab-community" onclick="Nexus.switchTab('tab-community', this)">
+            <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        </button>
+        <button type="button" class="nx-fab-post" onclick="Nexus.openPostModal()">
+            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        </button>
+        <button type="button" class="nx-nav-item" data-tab="tab-profile" onclick="Nexus.switchTab('tab-profile', this)">
+            <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        </button>
+        <button type="button" class="nx-nav-item" data-tab="tab-settings" onclick="Nexus.switchTab('tab-settings', this)">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
+    </nav>
+
+    <script>
+        function safeSetLocalCache(key, dataObj) {
+            try {
+                localStorage.setItem(key, JSON.stringify(dataObj));
+            } catch (e) {
+                let me = localStorage.getItem('nx_active_account');
+                let sv = localStorage.getItem('nx_saved_posts');
+                localStorage.clear();
+                if (me) localStorage.setItem('nx_active_account', me);
+                if (sv) localStorage.setItem('nx_saved_posts', sv);
+            }
+        }
+
+        function cleanUniqueList(arr) {
+            if (!Array.isArray(arr)) return [];
+            let seen = new Set();
+            let out = [];
+            arr.forEach(item => {
+                let s = String(item || '').trim().toLowerCase();
+                if (s && !seen.has(s)) {
+                    seen.add(s);
+                    out.push(s);
+                }
+            });
+            return out;
+        }
+
+        function loadInitialUsersCache() {
+            try { return JSON.parse(localStorage.getItem('nx_master_users_v1') || '[]'); } catch(e) { return []; }
+        }
+
+        function loadInitialPostsCache() {
+            try { return JSON.parse(localStorage.getItem('nx_light_posts_v1') || '[]'); } catch(e) { return []; }
+        }
+
+        let lastUsersProfileHash = '';
+
+        window.Nexus = {
+            config: {
+                apiKey: "AIzaSyCKMUVSgImQ39LRuREmhqyd7NTyE-TNyrQ",
+                authDomain: "nexus-community-bf99c.firebaseapp.com",
+                projectId: "nexus-community-bf99c",
+                storageBucket: "nexus-community-bf99c.firebasestorage.app",
+                messagingSenderId: "605136574793",
+                appId: "1:605136574793:web:c4c640af6b2f204eb0c296"
+            },
+            db: null,
+            initialized: false,
+            cloudAccounts: [],
+            users: loadInitialUsersCache(),
+            posts: loadInitialPostsCache(),
+            rooms: {},
+            pdfs: [],
+            listeners: { onUsers: [], onPosts: [], onRooms: [] },
+
+            // 100% FIXED: Cloud Data ALWAYS Overrides Stale localStorage (Fixes Follower/Following Mismatch!)
+            rebuildAllUsersMasterList: function() {
+                let map = {};
+
+                // 1. Seed from localStorage first
+                (this.users || []).forEach(u => {
+                    if (u && u.username) {
+                        let key = u.username.toLowerCase().trim();
+                        let copy = Object.assign({}, u);
+                        delete copy.pin;
+                        copy.followersList = cleanUniqueList(copy.followersList);
+                        copy.followingList = cleanUniqueList(copy.followingList);
+                        map[key] = copy;
+                    }
+                });
+
+                // 2. Seed missing authors from posts
+                (this.posts || []).forEach(p => {
+                    if (!p || p.username === 'nexus_official') return;
+                    let uname = (p.username || p.author || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
+                    if (uname && !map[uname]) {
+                        map[uname] = {
+                            username: p.username || uname,
+                            name: p.author || p.username || 'Member',
+                            bio: p.bio || 'Student',
+                            dp: p.dp || '',
+                            followersList: [],
+                            followingList: []
+                        };
+                    }
+                });
+
+                // 3. Seed current user from localStorage BEFORE cloudAccounts so cloudAccounts always wins!
+                let rawMe = localStorage.getItem('nx_active_account');
+                let myActiveKey = '';
+                if (rawMe) {
+                    try {
+                        let me = JSON.parse(rawMe);
+                        if (me && me.username) {
+                            myActiveKey = me.username.toLowerCase().trim();
+                            if (!map[myActiveKey]) map[myActiveKey] = Object.assign({}, me);
+                        }
+                    } catch(e) {}
+                }
+
+                // 4. AUTHORITATIVE CLOUD ACCOUNTS OVERRIDE EVERYTHING!
+                (this.cloudAccounts || []).forEach(u => {
+                    if (u && u.username) {
+                        let key = u.username.toLowerCase().trim();
+                        let copy = Object.assign({}, map[key] || {}, u);
+                        delete copy.pin;
+                        copy.followersList = cleanUniqueList(u.followersList);
+                        copy.followingList = cleanUniqueList(u.followingList);
+                        map[key] = copy;
+
+                        // Keep localStorage nx_active_account 100% synced with real Cloud followers/following!
+                        if (key === myActiveKey && rawMe) {
+                            try {
+                                let meParsed = JSON.parse(rawMe);
+                                let syncedMe = Object.assign({}, meParsed, u, { isOnlineNow: true });
+                                syncedMe.followersList = copy.followersList;
+                                syncedMe.followingList = copy.followingList;
+                                safeSetLocalCache('nx_active_account', syncedMe);
+                            } catch (e) {}
+                        }
+                    }
+                });
+
+                this.users = Object.values(map);
+                let lightUsers = this.users.map(u => ({
+                    username: u.username,
+                    name: u.name,
+                    bio: u.bio,
+                    moodNote: u.moodNote || '',
+                    isOnlineNow: u.isOnlineNow,
+                    lastOnline: u.lastOnline,
+                    verified: u.verified,
+                    followersList: u.followersList || [],
+                    followingList: u.followingList || []
+                }));
+                safeSetLocalCache('nx_master_users_v1', lightUsers);
+            },
+
+            init: function() {
+                if (this.initialized) return;
+                this.initialized = true;
+                this.rebuildAllUsersMasterList();
+                this.notifyAll();
+
+                let tapCount = 0, tapTimer = null;
+                const logoEl = document.getElementById('nx-main-logo');
+                if (logoEl) {
+                    logoEl.addEventListener('click', () => {
+                        tapCount++;
+                        clearTimeout(tapTimer);
+                        if (tapCount >= 5) {
+                            tapCount = 0;
+                            window.location.href = 'vault.html';
+                        } else {
+                            tapTimer = setTimeout(() => { tapCount = 0; }, 1200);
+                        }
+                    });
+                }
+
+                if (typeof firebase !== 'undefined') this.connectCloud();
+                else window.addEventListener('load', () => this.connectCloud());
+            },
+
+            connectCloud: function() {
+                if (this.db) return;
+                try {
+                    if (!firebase.apps.length) firebase.initializeApp(this.config);
+                    this.db = firebase.firestore();
+                } catch (e) {
+                    return;
+                }
+
+                let rawMe = localStorage.getItem('nx_active_account');
+                if (rawMe) {
+                    try {
+                        let meObj = JSON.parse(rawMe);
+                        if (meObj && meObj.username) {
+                            this.db.collection("nexus_accounts").doc(meObj.username).set({
+                                isOnlineNow: true,
+                                lastOnline: Date.now(),
+                                lastSeenAt: Date.now()
+                            }, { merge: true });
+                        }
+                    } catch(e) {}
+                }
+
+                // ANTI-LAG ENGINE: Ignore typing timestamps (dmTypingAt / typingAt) so typing NEVER re-renders Home/Profile!
+                this.db.collection("nexus_accounts").onSnapshot(snap => {
+                    this.cloudAccounts = [];
+                    snap.forEach(d => this.cloudAccounts.push(d.data()));
+                    this.rebuildAllUsersMasterList();
+
+                    let currentHash = this.users.map(u =>
+                        `${u.username}:${u.name}:${u.bio}:${u.moodNote || ''}:${u.verified ? 1 : 0}:${(u.followersList || []).length}:${(u.followingList || []).length}:${(u.recentVisitors || []).length}`
+                    ).join('|');
+
+                    if (currentHash !== lastUsersProfileHash) {
+                        lastUsersProfileHash = currentHash;
+                        this.listeners.onUsers.forEach(fn => { try { fn(this.users); } catch(e) {} });
+                    }
+                });
+
+                // INSTANT FEED LOAD: Strip heavy images from localStorage cache & call onPosts ONLY ONCE!
+                this.db.collection("nexus_real_posts").orderBy("createdAt", "desc").limit(35).onSnapshot(snap => {
+                    this.posts = [];
+                    snap.forEach(d => { let p = d.data(); p.id = d.id; this.posts.push(p); });
+                    let ultraLightPosts = this.posts.slice(0, 6).map(p => Object.assign({}, p, {
+                        image: (p.image && p.image.length > 40000) ? '' : p.image
+                    }));
+                    safeSetLocalCache('nx_light_posts_v1', ultraLightPosts);
+                    this.rebuildAllUsersMasterList();
+                    this.listeners.onPosts.forEach(fn => { try { fn(this.posts); } catch(e) {} });
+                });
+            },
+
+            notifyAll: function() {
+                this.listeners.onUsers.forEach(fn => { try { fn(this.users); } catch(e) {} });
+                this.listeners.onPosts.forEach(fn => { try { fn(this.posts); } catch(e) {} });
+            },
+
+            getCurrentUser: function() {
+                let raw = localStorage.getItem('nx_active_account');
+                if (!raw) return null;
+                try {
+                    let acc = JSON.parse(raw);
+                    if (!acc || !acc.username || !acc.name) return null;
+                    let cloudMatch = this.cloudAccounts.find(u => u.username && u.username.toLowerCase() === acc.username.toLowerCase());
+                    if (cloudMatch) {
+                        let merged = Object.assign({}, acc, cloudMatch, { isOnlineNow: true });
+                        merged.followersList = cleanUniqueList(cloudMatch.followersList);
+                        merged.followingList = cleanUniqueList(cloudMatch.followingList);
+                        return merged;
+                    }
+                    return acc;
+                } catch(e) { return null; }
+            },
+
+            switchTab: function(tabId, btnEl) {
+                document.querySelectorAll('.nx-tab-screen').forEach(s => s.classList.remove('active'));
+                const target = document.getElementById(tabId);
+                if (target) target.classList.add('active');
+
+                document.querySelectorAll('.nx-nav-item').forEach(b => b.classList.remove('active'));
+                if (btnEl) btnEl.classList.add('active');
+                else {
+                    const navBtn = document.querySelector(`.nx-nav-item[data-tab="${tabId}"]`);
+                    if (navBtn) navBtn.classList.add('active');
+                }
+                window.scrollTo(0, 0);
+            },
+
+            toast: function(msg) {
+                const t = document.getElementById('nx-toast');
+                if (!t) return;
+                t.innerText = msg;
+                t.style.display = 'block';
+                setTimeout(() => { t.style.display = 'none'; }, 2200);
+            },
+
+            compressImage: function(file, maxW, quality, callback) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let w = img.width, h = img.height;
+                        if (w > maxW) { h = Math.round((h * maxW) / w); w = maxW; }
+                        canvas.width = w; canvas.height = h;
+                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                        callback(canvas.toDataURL('image/jpeg', quality));
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => Nexus.init());
+        setTimeout(() => Nexus.init(), 150);
+    </script>
+
+    <script src="home.js" charset="UTF-8"></script>
+    <script src="chat.js" charset="UTF-8"></script>
+    <script src="post.js" charset="UTF-8"></script>
+    <script src="profile.js" charset="UTF-8"></script>
+    <script src="settings.js" charset="UTF-8"></script>
+    <script src="dm.js" charset="UTF-8"></script>
+    <script src="power.js" charset="UTF-8"></script>
+    <script src="superchat.js" charset="UTF-8"></script>
+    <script src="advance.js" charset="UTF-8"></script>
+    <script src="pro.js" charset="UTF-8"></script>
+    <script src="ultra.js" charset="UTF-8"></script>
+    <script src="emojis.js" charset="UTF-8"></script>
+    <script src="about.js" charset="UTF-8"></script>
+    <script src="core.js" charset="UTF-8"></script>
+</body>
+</html>
+
