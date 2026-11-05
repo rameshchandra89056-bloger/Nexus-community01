@@ -10,7 +10,7 @@
     // 0. 🧩 AUTOMATIC MICRO-MODULE LOADER & ZERO-REFRESH HOT-SWAP ENGINE
     // Automatically loads independent feature files (ai.js, screen.js, voice.js, live.js)
     // =========================================================================
-    const NEXUS_MICRO_MODULES = ['ai.js', 'screen.js', 'voice.js', 'live.js'];
+        const NEXUS_MICRO_MODULES = [         'notify.js',         'dotsmenu.js',         'ai.js',         'screen.js',         'voice.js',         'live.js'     ];
     const moduleEtags = {};
 
     function loadOrUpdateMicroModules(isInitial) {
