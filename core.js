@@ -164,6 +164,8 @@
                 let urlMatch = oc.match(/https?:\/\/[^\s'"]+/) || (el.href ? [el.href] : null);
                 if (urlMatch && urlMatch[0] && !urlMatch[0].includes('netlify.app/#')) {
                     challengerSiteUrl = urlMatch[0];
+                    // challengerSiteUrl = urlMatch[0];
+                    
                 }
                 let parentRow = el.parentElement;
                 if (parentRow && parentRow.id !== 'tab-community' && (parentRow.innerText || '').includes('Live Test Series') && (parentRow.innerText || '').includes('PDF Study Vault')) {
