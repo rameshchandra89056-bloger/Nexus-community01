@@ -1,11 +1,10 @@
-// ================= CARDS.JS (v3.0 NO ANIMATIONS + REAL IN-APP PDF STUDY VAULT & CHALLENGER PORTAL — FIXES SCREENSHOTS 1000073608.jpg & 1000073607.jpg) =================
+// ================= CARDS.JS (v4.0 CAPTURE-PHASE CLICK LOCK + ZERO ANIMATION + IN-APP CHALLENGER WEBSITE & REAL PDF VAULT — FIXES SCREENSHOTS 1000073612, 1000073611 & 1000073608_2) =================
 
 (function() {
     const CHALLENGER_URL = 'https://challengers-live.netlify.app';
     let pdfVaultList = [];
     let pdfVaultUnsub = null;
 
-    // Built-in Starter JEE/NEET Study PDFs + Syncs user-uploaded PDFs from Firestore!
     const DEFAULT_STUDY_PDFS = [
         { title: '📐 JEE Main & Advanced Complete Formula Handbook (PCM)', subject: 'JEE PCM', pages: 'Full Revision PDF', url: 'https://ncert.nic.in/textbook/pdf/keph103.pdf' },
         { title: '⚡ Physics Class 11 & 12 Mechanics + Electrostatics Notes', subject: 'Physics', pages: 'Chapterwise Notes', url: 'https://ncert.nic.in/textbook/pdf/leph101.pdf' },
@@ -13,18 +12,22 @@
         { title: '🧬 NEET Biology NCERT Line-by-Line High Yield Notes', subject: 'NEET Bio', pages: 'Revision Sheet', url: 'https://ncert.nic.in/textbook/pdf/kebo101.pdf' }
     ];
 
-    if (!document.getElementById('nx-cards-mod-style-v3')) {
+    if (!document.getElementById('nx-cards-mod-style-v4')) {
         const st = document.createElement('style');
-        st.id = 'nx-cards-mod-style-v3';
+        st.id = 'nx-cards-mod-style-v4';
         st.innerHTML = `
-            /* Kill all animations on community/chat cards as requested */
-            .nx-card-glow-beam { display: none !important; }
-            #nx-dm-inbox-banner > *:not(#nx-structured-4card-grid), #nx-pro-dm-home-card { display: none !important; }
+            /* Completely disable ALL top line animations on the 4 cards (Fixes 1000073608_2.jpg) */
+            .nx-card-glow-beam, .nx-test-animated-line, .nx-card-glow-beam::after, .nx-test-animated-line::after {
+                display: none !important; animation: none !important;
+            }
+            #nx-dm-inbox-banner > *:not(#nx-structured-4card-grid), #nx-pro-dm-home-card {
+                display: none !important;
+            }
             #nx-structured-4card-grid {
                 display: grid !important; grid-template-columns: 1fr 1fr !important;
                 gap: 10px !important; width: 100% !important; margin-bottom: 10px !important;
             }
-            .nx-half-card {
+            .nx-static-half-card {
                 position: relative; background: #111827;
                 border: 1.5px solid #1e293b; border-radius: 18px; padding: 13px 12px;
                 display: flex; flex-direction: column; justify-content: space-between;
@@ -34,7 +37,38 @@
         document.head.appendChild(st);
     }
 
-    function hideDuplicateRowCompletely() {
+    // CAPTURE-PHASE CLICK INTERCEPTOR: Blocks jee_pcm and notes_lib BEFORE any old script can run!
+    if (!window.__nxCardsCaptureBoundV4) {
+        window.__nxCardsCaptureBoundV4 = true;
+        window.addEventListener('click', function(e) {
+            const cardEl = e.target.closest('.nx-static-half-card, .nx-half-card, .nx-grid-half-card');
+            if (cardEl) {
+                let txt = (cardEl.innerText || '');
+                e.stopImmediatePropagation();
+                e.preventDefault();
+                if (txt.includes('1:1 Personal DM')) {
+                    if (window.NexusDmInbox && NexusDmInbox.openFullScreenDmHub) NexusDmInbox.openFullScreenDmHub();
+                } else if (txt.includes('Private AI Studio')) {
+                    if (window.NexusAI) NexusAI.openStudio();
+                } else if (txt.includes('Live Test Series') || txt.includes('Challenger')) {
+                    window.NexusCards.openChallengerApp();
+                } else if (txt.includes('PDF Study Vault')) {
+                    window.NexusCards.openPdfVaultApp();
+                }
+                return;
+            }
+
+            // Also intercept top-right "📄 PDF" button inside any chat room
+            const pdfBtn = e.target.closest('button');
+            if (pdfBtn && pdfBtn.closest('#nx-chat-room') && (pdfBtn.innerText || '').trim().includes('PDF')) {
+                e.stopImmediatePropagation();
+                e.preventDefault();
+                window.NexusCards.openPdfVaultApp();
+            }
+        }, true);
+    }
+
+    function hideDuplicateRows() {
         const comm = document.getElementById('tab-community');
         if (!comm) return;
         Array.from(comm.querySelectorAll('div')).forEach(div => {
@@ -48,7 +82,7 @@
         });
     }
 
-    function renderFourStaticCards() {
+    function renderCleanStaticFourCards() {
         const banner = document.getElementById('nx-dm-inbox-banner');
         if (!banner) return;
 
@@ -61,12 +95,16 @@
 
         let allUsers = (window.Nexus && Nexus.users || []).filter(u => u && u.username && u.username !== 'nexus_official');
         let onlineCount = allUsers.filter(u => (Date.now() - (u.lastOnline || 0)) < 180000).length;
+        let unread = window.__nxTotalUnreadDms || 0;
+        let sig = `${allUsers.length}_${onlineCount}_${unread}`;
+        if (grid.getAttribute('data-clean-sig-v4') === sig && grid.querySelector('.nx-static-half-card')) return;
+        grid.setAttribute('data-clean-sig-v4', sig);
 
         grid.innerHTML = `
-            <div class="nx-half-card" style="border-color:rgba(16,185,129,0.45);" onclick="if(window.NexusDmInbox && NexusDmInbox.openFullScreenDmHub) NexusDmInbox.openFullScreenDmHub();">
+            <div class="nx-static-half-card" style="border-color:rgba(16,185,129,0.45);">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                     <div style="width:36px; height:36px; border-radius:11px; background:rgba(16,185,129,0.18); border:1px solid #10b981; display:flex; align-items:center; justify-content:center; font-size:18px;">💬</div>
-                    <span style="background:rgba(16,185,129,0.2); color:#10b981; font-size:10px; font-weight:900; padding:2px 7px; border-radius:99px;">${onlineCount} Live</span>
+                    <span style="background:rgba(16,185,129,0.2); color:#10b981; font-size:10px; font-weight:900; padding:2px 7px; border-radius:99px;">${unread > 0 ? unread + ' New' : onlineCount + ' Live'}</span>
                 </div>
                 <div style="margin-top:8px;">
                     <div style="font-size:13.5px; font-weight:900; color:#f8fafc;">1:1 Personal DM</div>
@@ -74,7 +112,7 @@
                 </div>
             </div>
 
-            <div class="nx-half-card" style="border-color:rgba(167,139,250,0.45);" onclick="if(window.NexusAI) NexusAI.openStudio();">
+            <div class="nx-static-half-card" style="border-color:rgba(167,139,250,0.45);">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                     <div style="width:36px; height:36px; border-radius:11px; background:rgba(139,92,246,0.2); border:1px solid #a78bfa; display:flex; align-items:center; justify-content:center; font-size:18px;">🤖</div>
                     <span style="background:rgba(167,139,250,0.2); color:#d8b4fe; font-size:10px; font-weight:900; padding:2px 7px; border-radius:99px;">11 Servers</span>
@@ -85,18 +123,18 @@
                 </div>
             </div>
 
-            <div class="nx-half-card" style="border-color:rgba(245,158,11,0.45);" onclick="NexusCards.openChallengerApp()">
+            <div class="nx-static-half-card" style="border-color:rgba(245,158,11,0.45);">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                     <div style="width:36px; height:36px; border-radius:11px; background:rgba(245,158,11,0.18); border:1px solid #f59e0b; display:flex; align-items:center; justify-content:center; font-size:18px;">📝</div>
                     <span style="background:rgba(245,158,11,0.2); color:#fde047; font-size:10px; font-weight:900; padding:2px 7px; border-radius:99px;">🔥 Challenger</span>
                 </div>
                 <div style="margin-top:8px;">
                     <div style="font-size:13.5px; font-weight:900; color:#f8fafc;">Live Test Series</div>
-                    <div style="font-size:10.5px; color:#fde047; margin-top:2px; font-weight:700;">JEE / NEET Mock Arena →</div>
+                    <div style="font-size:10.5px; color:#fde047; margin-top:2px; font-weight:700;">Open Challenger Website →</div>
                 </div>
             </div>
 
-            <div class="nx-half-card" style="border-color:rgba(56,189,248,0.45);" onclick="NexusCards.openPdfVaultApp()">
+            <div class="nx-static-half-card" style="border-color:rgba(56,189,248,0.45);">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                     <div style="width:36px; height:36px; border-radius:11px; background:rgba(56,189,248,0.18); border:1px solid #38bdf8; display:flex; align-items:center; justify-content:center; font-size:18px;">📚</div>
                     <span style="background:rgba(56,189,248,0.2); color:#38bdf8; font-size:10px; font-weight:900; padding:2px 7px; border-radius:99px;">Free PDFs</span>
@@ -111,11 +149,15 @@
 
     window.NexusCards = {
         openChallengerApp: function() {
+            // If jee_pcm chat accidentally opened earlier, close it immediately
+            const chatRoom = document.getElementById('nx-chat-room');
+            if (chatRoom) chatRoom.style.display = 'none';
+
             let portal = document.getElementById('nx-challenger-inapp-portal');
             if (!portal) {
                 portal = document.createElement('div');
                 portal.id = 'nx-challenger-inapp-portal';
-                portal.style.cssText = 'position:fixed; inset:0; width:100%; max-width:640px; height:100dvh; margin:0 auto; background:#090d16; z-index:100250; display:none; flex-direction:column; overflow:hidden;';
+                portal.style.cssText = 'position:fixed; inset:0; width:100%; max-width:640px; height:100dvh; margin:0 auto; background:#090d16; z-index:100380; display:none; flex-direction:column; overflow:hidden;';
                 document.body.appendChild(portal);
             }
             portal.innerHTML = `
@@ -134,13 +176,17 @@
             portal.style.display = 'flex';
         },
 
-        // 📚 Dedicated Real In-App PDF Study Vault (Never opens notes_lib chat room!)
         openPdfVaultApp: function() {
+            const chatRoom = document.getElementById('nx-chat-room');
+            if (chatRoom && (document.getElementById('nx-room-title')?.innerText || '').includes('notes_lib')) {
+                chatRoom.style.display = 'none';
+            }
+
             let vModal = document.getElementById('nx-dedicated-pdf-vault');
             if (!vModal) {
                 vModal = document.createElement('div');
                 vModal.id = 'nx-dedicated-pdf-vault';
-                vModal.style.cssText = 'position:fixed; inset:0; width:100%; max-width:640px; height:100dvh; margin:0 auto; background:#090d16; z-index:100260; display:none; flex-direction:column; overflow:hidden;';
+                vModal.style.cssText = 'position:fixed; inset:0; width:100%; max-width:640px; height:100dvh; margin:0 auto; background:#090d16; z-index:100380; display:none; flex-direction:column; overflow:hidden;';
                 document.body.appendChild(vModal);
             }
 
@@ -193,7 +239,7 @@
         },
 
         promptAddPdf: async function() {
-            let title = prompt("Enter PDF / Study Note Title (e.g. Rotational Motion Short Notes):");
+            let title = prompt("Enter PDF / Study Note Title:");
             if (!title || !title.trim()) return;
             let url = prompt("Paste Google Drive or Direct PDF Link (https://...):");
             if (!url || !url.trim().startsWith('http')) return;
@@ -211,23 +257,12 @@
         }
     };
 
-    // Also hook top-right "📄 PDF" button inside Group Chat header so it opens this PDF Vault!
-    function bindGroupHeaderPdfBtn() {
-        document.querySelectorAll('#nx-chat-room button').forEach(b => {
-            if ((b.innerText || '').includes('PDF') && !b.getAttribute('data-pdf-v3')) {
-                b.setAttribute('data-pdf-v3', '1');
-                b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); NexusCards.openPdfVaultApp(); };
-            }
-        });
+    if (!window.__nxCardsIntervalV4) {
+        window.__nxCardsIntervalV4 = setInterval(() => {
+            hideDuplicateRows();
+            renderCleanStaticFourCards();
+        }, 450);
     }
-
-    if (!window.__nxCardsIntervalV3) {
-        window.__nxCardsIntervalV3 = setInterval(() => {
-            hideDuplicateRowCompletely();
-            renderFourStaticCards();
-            bindGroupHeaderPdfBtn();
-        }, 600);
-    }
-    hideDuplicateRowCompletely();
-    renderFourStaticCards();
+    hideDuplicateRows();
+    renderCleanStaticFourCards();
 })(); // === END OF CARDS.JS ===
