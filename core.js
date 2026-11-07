@@ -1,9 +1,11 @@
-// === CORE.JS (v25.0 CLEAN MODULE LOADER — LOADS DM.JS, CHAT.JS & ALL MODULES LIVE) ===
+// === CORE.JS (v27.0 NON-DESTRUCTIVE MODULE LOADER — NEVER OVERWRITES DM.JS, CHAT.JS OR POWER.JS) ===
 (function() {
+    const GH_RAW = 'https://raw.githubusercontent.com/rameshchandra89056-bioger/Nexus-community01/main/';
+    // Only loads add-on modules so original dm.js, chat.js, power.js & superchat.js stay 100% intact!
     const MODULES = [
-        'dm.js', 'chat.js', 'cards.js', 'profilefix.js', 'dmtools.js',
-        'voice.js', 'notify.js', 'dminbox.js', 'aifix.js', 'live.js',
-        'ai.js', 'pwa.js', 'dotsmenu.js', 'screen.js', 'board.js'
+        'aifix.js', 'profilefix.js', 'cards.js', 'notify.js',
+        'dmtools.js', 'live.js', 'dminbox.js', 'ai.js',
+        'pwa.js', 'dotsmenu.js', 'screen.js', 'voice.js', 'board.js'
     ];
     const loadedHash = {};
     let typing = false, tTimer = null;
@@ -19,22 +21,29 @@
     }
 
     async function loadModule(file) {
+        let code = '';
         try {
-            const res = await fetch(`${file}?v=${Date.now()}`, { cache: 'no-store' });
-            if (!res.ok) return;
-            const code = await res.text();
-            if (!code || code.trim().startsWith('<!DOCTYPE') || code.trim().startsWith('<html')) return;
-            const sig = hash(code);
-            if (loadedHash[file] === sig) return;
-            loadedHash[file] = sig;
-
-            const old = document.querySelector(`script[data-nx-mod="${file}"]`);
-            if (old) old.remove();
-            const s = document.createElement('script');
-            s.setAttribute('data-nx-mod', file);
-            s.textContent = code;
-            document.body.appendChild(s);
+            const r1 = await fetch(`${GH_RAW}${file}?t=${Date.now()}`, { cache: 'no-store' });
+            if (r1.ok) code = await r1.text();
         } catch (e) {}
+        if (!code || code.trim().startsWith('<!DOCTYPE') || code.trim().startsWith('<html') || code.trim() === '404: Not Found') {
+            try {
+                const r2 = await fetch(`${file}?t=${Date.now()}`, { cache: 'no-store' });
+                if (r2.ok) code = await r2.text();
+            } catch (e) {}
+        }
+        if (!code || code.trim().startsWith('<!DOCTYPE') || code.trim().startsWith('<html') || code.trim() === '404: Not Found') return;
+
+        const sig = hash(code);
+        if (loadedHash[file] === sig) return;
+        loadedHash[file] = sig;
+
+        const old = document.querySelector(`script[data-nx-mod="${file}"]`);
+        if (old) old.remove();
+        const s = document.createElement('script');
+        s.setAttribute('data-nx-mod', file);
+        s.textContent = code;
+        document.body.appendChild(s);
     }
 
     function syncAll(init) {
