@@ -1,23 +1,42 @@
-// ================= DMTOOLS.JS (DEDICATED 1:1 DM MESSAGE ACTION MENU, ➕ 40+ EMOJI REACTIONS & DELETE FOR ME / EVERYONE MODULE) =================
+// ================= DMTOOLS.JS (v2.0 GUARANTEED DELETE FOR EVERYONE + ➕ 40+ EMOJIS + CLEAN DELETED PILL — FIXES SCREENSHOTS 1000073551 & 1000073554) =================
 
 (function() {
+    if (!document.getElementById('nx-dmtools-style-v2')) {
+        const st = document.createElement('style');
+        st.id = 'nx-dmtools-style-v2';
+        st.innerHTML = `
+            .nx-single-deleted-pill {
+                background: rgba(239,68,68,0.14) !important;
+                border: 1.5px dashed rgba(248,113,113,0.65) !important;
+                color: #fecaca !important; padding: 7px 13px !important;
+                border-radius: 12px !important; font-size: 12.5px !important;
+                font-style: italic !important; display: block !important;
+                width: fit-content !important; margin: 3px 0 !important;
+            }
+        `;
+        document.head.appendChild(st);
+    }
+
     function getHiddenSet() {
         let me = window.Nexus && Nexus.getCurrentUser ? Nexus.getCurrentUser() : null;
         let u = me && me.username ? me.username.toLowerCase().trim() : 'guest';
         try { return new Set(JSON.parse(localStorage.getItem('nexus_dm_hidden_for_me_v1_' + encodeURIComponent(u)) || '[]')); } catch (e) { return new Set(); }
     }
 
-    function bindDmTools() {
+    function bindDmToolsV2() {
         if (!window.NexusDM) return;
         let hidden = getHiddenSet();
-        document.querySelectorAll('#nx-dm-msgs-box .nx-dm-bubble-anim').forEach(row => {
+
+        // Style all deleted messages and hidden messages in #nx-dm-msgs-box
+        document.querySelectorAll('#nx-dm-msgs-box .nx-dm-bubble-anim, #nx-dm-msgs-box > div').forEach(row => {
             let id = row.getAttribute('data-message-id') || '';
             if (id && hidden.has(id) && !row.getAttribute('data-hid')) {
                 row.setAttribute('data-hid', '1');
                 row.innerHTML = `<div class="nx-dm-local-deleted">🧹 You deleted this message for yourself</div>`;
-            } else if ((row.innerText || '').includes('This message was deleted by') && !row.classList.contains('nx-deleted-row-clean')) {
-                let raw = (row.innerText || '').trim();
-                row.classList.add('nx-deleted-row-clean');
+                return;
+            }
+            let raw = (row.innerText || '').trim();
+            if (raw.includes('This message was deleted by') && !row.querySelector('.nx-single-deleted-pill')) {
                 row.innerHTML = `<div class="nx-single-deleted-pill">🚫 ${raw.replace(/^🚫\s*/, '')}</div>`;
             }
         });
@@ -26,8 +45,6 @@
             if (!msgId) return;
             let modal = document.getElementById('nx-msg-action-modal');
             if (!modal) return;
-            const row = document.querySelector(`.nx-dm-bubble-anim[data-message-id="${msgId}"]`);
-            let isMine = row ? (row.style.alignItems === 'flex-end') : true;
             let safeId = String(msgId).replace(/'/g, "\\'");
             const mainEmojis = ['❤️', '😂', '🔥', '👍', '🙏', '💯'];
             const extraEmojis = ['🥰','😎','🤩','😭','😡','🤔','🎉','⚡','👑','🙌','💔','🤣','🥺','🤗','🧠','🚀','🎯','🏆','❤️‍🔥','👏','🫡','🤝','✨','💐'];
@@ -44,7 +61,7 @@
                     <button type="button" class="nx-menu-opt-btn" onclick="NexusDmTools.reply('${safeId}')"><span>↩️</span> <span>Reply to Message</span></button>
                     <button type="button" class="nx-menu-opt-btn" onclick="NexusDmTools.copy('${safeId}')"><span>📋</span> <span>Copy Message Text</span></button>
                     <button type="button" class="nx-menu-opt-btn" style="color:#cbd5e1;" onclick="NexusDmTools.deleteForMe('${safeId}')"><span>🧹</span> <span>Delete for Me</span></button>
-                    ${isMine ? `<button type="button" class="nx-menu-opt-btn" style="color:#f87171;" onclick="NexusDmTools.deleteForEveryone('${safeId}')"><span>🗑️</span> <span>Delete for Everyone</span></button>` : ''}
+                    <button type="button" class="nx-menu-opt-btn" style="color:#f87171; border-color:rgba(239,68,68,0.4);" onclick="NexusDmTools.deleteForEveryone('${safeId}')"><span>🗑️</span> <span>Delete for Everyone</span></button>
                     <button type="button" class="nx-menu-opt-btn" style="justify-content:center; background:transparent; border:none; color:#8696a0;" onclick="document.getElementById('nx-msg-action-modal').style.display='none'">Cancel</button>
                 </div>
             `;
@@ -112,21 +129,20 @@
             let lbl = `${me.name || me.username} (@${me.username})`;
             const row = document.querySelector(`.nx-dm-bubble-anim[data-message-id="${msgId}"]`);
             if (row) {
-                row.classList.add('nx-deleted-row-clean');
                 row.innerHTML = `<div class="nx-single-deleted-pill">🚫 This message was deleted by <b>${lbl}</b></div>`;
             }
             Nexus.toast("🗑️ Deleted for everyone!");
             try {
                 await Nexus.db.collection("nexus_private_dms").doc(msgId).set({
                     deleted: true, deletedAt: Date.now(), deletedBy: me.username, deletedByName: lbl,
-                    text: '', imgUrl: '', imgUrls: [], sticker: null, replyTo: null
+                    text: '', imgUrl: '', img: '', image: '', imgUrls: [], audioData: '', sticker: null, replyTo: null
                 }, { merge: true });
             } catch (e) {}
         }
     };
 
-    if (!window.__nxDmToolsInterval) {
-        window.__nxDmToolsInterval = setInterval(bindDmTools, 500);
+    if (!window.__nxDmToolsV2Interval) {
+        window.__nxDmToolsV2Interval = setInterval(bindDmToolsV2, 450);
     }
-    bindDmTools();
+    bindDmToolsV2();
 })(); // === END OF DMTOOLS.JS ===
