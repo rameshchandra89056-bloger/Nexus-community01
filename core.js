@@ -1,72 +1,51 @@
-// ================= CORE.JS (v24.0 ZERO-OVERLAP INSTANT HOT-SWAP LOADER): 🔄 LOADS CLEAN DM.JS, CHAT.JS & ALL MODULAR FEATURE FILES LIVE WITHOUT PAGE REFRESH =================
-
+// === CORE.JS (v25.0 CLEAN MODULE LOADER — LOADS DM.JS, CHAT.JS & ALL MODULES LIVE) ===
 (function() {
     const MODULES = [
-        'dm.js',
-        'chat.js',
-        'aifix.js',
-        'profilefix.js',
-        'cards.js',
-        'dminbox.js',
-        'dmtools.js',
-        'voice.js',
-        'notify.js',
-        'live.js',
-        'ai.js',
-        'pwa.js',
-        'dotsmenu.js',
-        'screen.js',
-        'board.js'
+        'dm.js', 'chat.js', 'cards.js', 'profilefix.js', 'dmtools.js',
+        'voice.js', 'notify.js', 'dminbox.js', 'aifix.js', 'live.js',
+        'ai.js', 'pwa.js', 'dotsmenu.js', 'screen.js', 'board.js'
     ];
+    const loadedHash = {};
+    let typing = false, tTimer = null;
 
-    const signatures = {};
-    let isTyping = false, tTimer = null;
+    const onType = () => { typing = true; clearTimeout(tTimer); tTimer = setTimeout(() => { typing = false; }, 1200); };
+    document.addEventListener('keydown', onType, { passive: true });
+    document.addEventListener('input', onType, { passive: true });
 
-    const markTyping = () => {
-        isTyping = true;
-        clearTimeout(tTimer);
-        tTimer = setTimeout(() => { isTyping = false; }, 1200);
-    };
-    document.addEventListener('keydown', markTyping, { passive: true });
-    document.addEventListener('input', markTyping, { passive: true });
-
-    function hashCode(s) {
+    function hash(s) {
         let h = 0;
         for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
         return h + '_' + s.length;
     }
 
-    async function hotSwapFile(file) {
-        let code = '';
+    async function loadModule(file) {
         try {
-            const r1 = await fetch(`${file}?t=${Date.now()}`, { cache: 'no-store' });
-            if (r1.ok) code = await r1.text();
+            const res = await fetch(`${file}?v=${Date.now()}`, { cache: 'no-store' });
+            if (!res.ok) return;
+            const code = await res.text();
+            if (!code || code.trim().startsWith('<!DOCTYPE') || code.trim().startsWith('<html')) return;
+            const sig = hash(code);
+            if (loadedHash[file] === sig) return;
+            loadedHash[file] = sig;
+
+            const old = document.querySelector(`script[data-nx-mod="${file}"]`);
+            if (old) old.remove();
+            const s = document.createElement('script');
+            s.setAttribute('data-nx-mod', file);
+            s.textContent = code;
+            document.body.appendChild(s);
         } catch (e) {}
-
-        if (!code || code.trim().startsWith('<!DOCTYPE') || code.trim().startsWith('<html')) return;
-
-        const sig = hashCode(code);
-        if (signatures[file] === sig) return;
-        signatures[file] = sig;
-
-        const prev = document.querySelector(`script[data-nx-hot="${file}"]`);
-        if (prev) prev.remove();
-
-        const s = document.createElement('script');
-        s.setAttribute('data-nx-hot', file);
-        s.textContent = code;
-        document.body.appendChild(s);
     }
 
-    function syncAll(initial) {
-        if (!initial && isTyping) return;
-        MODULES.forEach(hotSwapFile);
+    function syncAll(init) {
+        if (!init && typing) return;
+        MODULES.forEach(loadModule);
     }
 
     if ('caches' in window) {
         caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
     }
-
     syncAll(true);
     setInterval(() => syncAll(false), 12000);
-})(); // === END OF CORE.JS ===
+})();
+// === END CORE.JS ===
