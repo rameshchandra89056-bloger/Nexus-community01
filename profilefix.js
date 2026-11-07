@@ -1,85 +1,144 @@
-// ================= PROFILEFIX.JS (v2.0 SINGLE CLEAN MESSAGE BUTTON & GLOBAL SEARCH): 👤 ENSURES STRICTLY 1 '+ FOLLOW' AND 1 '💬 MESSAGE' BUTTON ON EVERY PROFILE (FIXES DOUBLE MESSAGE BUTTON IN SCREENSHOT 1000073548.jpg) =================
+// ================= PROFILEFIX.JS (v3.0 DEDICATED VIP PROFILE MODAL & SEARCH): 👤 COMPLETELY REPLACES OVERLAPPING PROFILE CODE SO ONLY 1 '+ FOLLOW' & 1 '💬 MESSAGE' BUTTON EVER APPEAR (FIXES SCREENSHOT 1000073605.jpg) =================
 
 (function() {
-    function enforceSingleFollowAndMessageButton() {
-        const modal = document.getElementById('nx-global-modal');
-        if (!modal || modal.style.display === 'none') return;
+    // 1. Dedicated Isolated Profile Modal (Old dm.js/pro.js intervals cannot touch this!)
+    function openCleanVipProfile(rawUsername) {
+        if (!rawUsername || !window.Nexus) return;
+        let cleanU = String(rawUsername).replace(/^@/, '').trim();
 
-        const allBtns = Array.from(modal.querySelectorAll('button'));
-        const followBtn = allBtns.find(b => {
-            let t = (b.innerText || '').replace(/\s+/g, ' ').trim();
-            let oc = b.getAttribute('onclick') || '';
-            return t === '+ Follow' || t === 'Following' || t === '✓ Following' || t === 'Unfollow' || oc.includes('toggleFollow');
-        });
-        if (!followBtn) return;
+        // Hide #nx-global-modal if any old script opened it
+        const oldModal = document.getElementById('nx-global-modal');
+        if (oldModal) oldModal.style.display = 'none';
 
-        let targetUser = '';
-        let oc = followBtn.getAttribute('onclick') || '';
-        let m = oc.match(/'([^']+)'/);
-        if (m && m[1]) targetUser = m[1];
-        if (!targetUser) {
-            let atMatch = (modal.innerText || '').match(/@([a-zA-Z0-9_.-]+)/);
-            if (atMatch && atMatch[1]) targetUser = atMatch[1];
-        }
-        if (!targetUser) return;
-
-        let uObj = (window.Nexus && Nexus.users || []).find(u => u && u.username && u.username.toLowerCase() === targetUser.toLowerCase());
-        let targetName = (uObj && uObj.name) ? uObj.name : targetUser;
-        let safeU = targetUser.replace(/'/g, "\\'");
-        let safeN = targetName.replace(/'/g, "\\'");
-
-        // Remove ANY duplicate "Message" buttons inside the modal first!
-        allBtns.forEach(b => {
-            if (b !== followBtn && !b.classList.contains('nx-single-msg-btn-v2')) {
-                let txt = (b.innerText || '').trim();
-                let id = b.id || '';
-                if (txt.includes('Message') || id === 'nx-dm-trigger-btn') {
-                    b.remove();
-                }
-            }
-        });
-
-        let parent = followBtn.parentElement;
-        if (!parent) return;
-
-        parent.style.setProperty('display', 'flex', 'important');
-        parent.style.setProperty('gap', '10px', 'important');
-        parent.style.setProperty('width', '100%', 'important');
-        parent.style.setProperty('align-items', 'center', 'important');
-
-        followBtn.style.setProperty('flex', '1', 'important');
-        followBtn.style.setProperty('width', 'auto', 'important');
-        followBtn.style.setProperty('margin', '0', 'important');
-        followBtn.style.setProperty('height', '44px', 'important');
-
-        let existingMsgBtn = parent.querySelector('.nx-single-msg-btn-v2');
-        if (!existingMsgBtn) {
-            existingMsgBtn = document.createElement('button');
-            existingMsgBtn.type = 'button';
-            existingMsgBtn.className = 'nx-single-msg-btn-v2';
-            existingMsgBtn.style.cssText = 'flex:1 !important; height:44px !important; background:linear-gradient(135deg,#10b981,#059669) !important; color:#020617 !important; border:none !important; padding:0 12px !important; border-radius:12px !important; font-weight:900 !important; font-size:13.5px !important; cursor:pointer !important; display:inline-flex !important; align-items:center !important; justify-content:center !important; gap:6px !important; box-shadow:0 4px 14px rgba(16,185,129,0.3) !important;';
-            existingMsgBtn.innerHTML = `💬 Message`;
-            parent.appendChild(existingMsgBtn);
-        }
-
-        existingMsgBtn.onclick = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            modal.style.display = 'none';
-            if (window.NexusDM) NexusDM.openDirectChat(safeU, safeN, '');
+        let me = Nexus.getCurrentUser ? Nexus.getCurrentUser() : null;
+        let uObj = (Nexus.users || []).find(u => u && u.username && u.username.toLowerCase() === cleanU.toLowerCase()) || {
+            username: cleanU,
+            name: cleanU,
+            bio: 'Nexus Member',
+            followers: 0,
+            following: 0
         };
 
-        // Keep a hidden dummy span so legacy dm.js never throws a null error
-        if (!document.getElementById('nx-dm-trigger-btn')) {
-            const dummy = document.createElement('span');
-            dummy.id = 'nx-dm-trigger-btn';
-            dummy.style.display = 'none';
-            modal.appendChild(dummy);
+        let userPosts = (Nexus.posts || []).filter(p =>
+            p && ((p.username && p.username.toLowerCase() === cleanU.toLowerCase()) ||
+                  (p.author && uObj.name && p.author.toLowerCase() === uObj.name.toLowerCase()))
+        );
+
+        let isFollowing = me && Array.isArray(me.followingList) && me.followingList.some(f => String(f).toLowerCase() === cleanU.toLowerCase());
+        let safeU = uObj.username.replace(/'/g, "\\'");
+        let safeN = (uObj.name || uObj.username).replace(/'/g, "\\'");
+        let avatarLetter = (uObj.name || uObj.username || 'U').charAt(0).toUpperCase();
+
+        let vipModal = document.getElementById('nx-vip-profile-modal');
+        if (!vipModal) {
+            vipModal = document.createElement('div');
+            vipModal.id = 'nx-vip-profile-modal';
+            vipModal.style.cssText = 'position:fixed; inset:0; background:rgba(2,6,23,0.88); backdrop-filter:blur(8px); z-index:100350; display:none; align-items:center; justify-content:center; padding:14px;';
+            vipModal.onclick = (e) => { if (e.target === vipModal) vipModal.style.display = 'none'; };
+            document.body.appendChild(vipModal);
+        }
+
+        vipModal.innerHTML = `
+            <div style="width:100%; max-width:410px; max-height:86dvh; background:#090d16; border:1.5px solid #38bdf8; border-radius:22px; padding:16px; display:flex; flex-direction:column; overflow-y:auto; box-shadow:0 20px 50px rgba(0,0,0,0.95);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <span style="font-size:13.5px; font-weight:900; color:#38bdf8;">👤 Member Full Profile</span>
+                    <button type="button" onclick="document.getElementById('nx-vip-profile-modal').style.display='none'" style="width:32px; height:32px; border-radius:50%; background:#1e293b; border:none; color:#94a3b8; font-size:16px; font-weight:900; cursor:pointer;">✕</button>
+                </div>
+
+                <div style="background:#111827; border:1px solid #1e293b; border-radius:18px; padding:14px; margin-bottom:12px;">
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+                        <div style="width:64px; height:64px; border-radius:50%; background:linear-gradient(135deg,#2563eb,#10b981); padding:2px; flex-shrink:0;">
+                            ${uObj.dp
+                                ? `<img src="${uObj.dp}" style="width:100%; height:100%; border-radius:50%; object-fit:cover; background:#090d16;">`
+                                : `<div style="width:100%; height:100%; border-radius:50%; background:#2563eb; color:#fff; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:900;">${avatarLetter}</div>`
+                            }
+                        </div>
+                        <div style="min-width:0; flex:1;">
+                            <div style="font-size:17px; font-weight:900; color:#f8fafc; display:flex; align-items:center; gap:5px;">
+                                <span>${(uObj.name \vert{}\vert{} uObj.username).replace(/</g, '&lt;')}</span>${uObj.verified ? `<span style="color:#10b981; font-size:14px;">✓</span>` : ''}
+                            </div>
+                            <div style="font-size:12px; color:#10b981; font-weight:800;">@${uObj.username} • 💬 DM Open</div>
+                            <div style="font-size:12px; color:#38bdf8; margin-top:2px;">${(uObj.bio || 'Student').replace(/</g, '&lt;')}</div>
+                        </div>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:repeat(3, 1fr); text-align:center; background:#090d16; border:1px solid #1e293b; border-radius:12px; padding:8px 4px; margin-bottom:12px;">
+                        <div>
+                            <div style="font-size:15px; font-weight:900; color:#fff;">${userPosts.length}</div>
+                            <div style="font-size:10.5px; color:#94a3b8;">Posts</div>
+                        </div>
+                        <div style="border-left:1px solid #1e293b; border-right:1px solid #1e293b;">
+                            <div style="font-size:15px; font-weight:900; color:#38bdf8;">${uObj.followers || 0}</div>
+                            <div style="font-size:10.5px; color:#94a3b8;">Followers</div>
+                        </div>
+                        <div>
+                            <div style="font-size:15px; font-weight:900; color:#38bdf8;">${uObj.following || 0}</div>
+                            <div style="font-size:10.5px; color:#94a3b8;">Following</div>
+                        </div>
+                    </div>
+
+                    <!-- STRICTLY 2 EQUAL BUTTONS: 1 FOLLOW + 1 MESSAGE (NO DUPLICATES EVER!) -->
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%;">
+                        <button type="button" onclick="NexusProfileFix.toggleFollowInstant('${safeU}')" style="height:44px; background:${isFollowing ? '#1e293b' : '#2563eb'}; color:#ffffff; border:${isFollowing ? '1.5px solid #38bdf8' : 'none'}; border-radius:12px; font-weight:900; font-size:13.5px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
+                            ${isFollowing ? '✓ Following' : '+ Follow'}
+                        </button>
+                        <button type="button" onclick="document.getElementById('nx-vip-profile-modal').style.display='none'; if(window.NexusDM) NexusDM.openDirectChat('${safeU}', '${safeN}', '');" style="height:44px; background:#10b981; color:#020617; border:none; border-radius:12px; font-weight:900; font-size:13.5px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
+                            💬 Message
+                        </button>
+                    </div>
+                </div>
+
+                <div style="font-size:11.5px; font-weight:900; color:#94a3b8; margin-bottom:8px;">⊞ SHARED POSTS (${userPosts.length})</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    ${userPosts.length === 0
+                        ? `<div style="grid-column:span 2; text-align:center; padding:18px; color:#64748b; font-size:12.5px;">No posts shared yet.</div>`
+                        : userPosts.slice(0, 8).map(p => `
+                            <div onclick="document.getElementById('nx-vip-profile-modal').style.display='none'; Nexus.openSinglePostModal('${p.id}');" style="background:#111827; border:1px solid #1e293b; border-radius:12px; padding:8px; cursor:pointer; display:flex; flex-direction:column; justify-content:space-between; min-height:110px;">
+                                ${p.img
+                                    ? `<img src="${p.img}" style="width:100%; height:90px; object-fit:cover; border-radius:8px; margin-bottom:6px;">`
+                                    : `<div style="flex:1; display:flex; align-items:center; justify-content:center; text-align:center; font-size:11.5px; color:#e2e8f0; padding:6px;">${(p.text || '').substring(0, 55).replace(/</g, '&lt;')}</div>`
+                                }
+                                <div style="display:flex; justify-content:space-between; font-size:10.5px; color:#38bdf8; font-weight:800;">
+                                    <span>❤️ ${(p.likedBy && p.likedBy.length) || p.likes || 0} • 💬 ${(p.comments && p.comments.length) || 0}</span>
+                                    <span>Open ↗</span>
+                                </div>
+                            </div>
+                        `).join('')
+                    }
+                </div>
+            </div>
+        `;
+        vipModal.style.display = 'flex';
+    }
+
+    function bindProfileAndSearch() {
+        if (!window.Nexus) return;
+        Nexus.openPublicProfile = openCleanVipProfile;
+
+        // Also clean up #nx-global-modal if it ever opens a profile
+        const gm = document.getElementById('nx-global-modal');
+        if (gm && gm.style.display !== 'none' && (gm.innerText || '').includes('Member Full Profile')) {
+            let m = (gm.innerText || '').match(/@([a-zA-Z0-9_.-]+)/);
+            if (m && m[1]) {
+                gm.style.display = 'none';
+                openCleanVipProfile(m[1]);
+            }
         }
     }
 
-    if (!window.__nxProfileFixV2Interval) {
-        window.__nxProfileFixV2Interval = setInterval(enforceSingleFollowAndMessageButton, 400);
+    window.NexusProfileFix = {
+        openProfile: openCleanVipProfile,
+        toggleFollowInstant: function(username) {
+            if (window.Nexus && Nexus.toggleFollow) {
+                Nexus.toggleFollow(username);
+                setTimeout(() => openCleanVipProfile(username), 80);
+            }
+        }
+    };
+
+    if (!window.__nxProfileFixV3Timer) {
+        window.__nxProfileFixV3Timer = setInterval(bindProfileAndSearch, 300);
     }
-    enforceSingleFollowAndMessageButton();
+    bindProfileAndSearch();
 })(); // === END OF PROFILEFIX.JS ===
+                
