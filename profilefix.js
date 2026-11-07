@@ -1,12 +1,10 @@
-// ================= PROFILEFIX.JS (v3.0 DEDICATED VIP PROFILE MODAL & SEARCH): 👤 COMPLETELY REPLACES OVERLAPPING PROFILE CODE SO ONLY 1 '+ FOLLOW' & 1 '💬 MESSAGE' BUTTON EVER APPEAR (FIXES SCREENSHOT 1000073605.jpg) =================
+// ================= PROFILEFIX.JS (v4.0 CAPTURE-PHASE DP LOCK & VIP PROFILE MODAL — FIXES SCREENSHOTS 1000073610.jpg & 1000073609.jpg) =================
 
 (function() {
-    // 1. Dedicated Isolated Profile Modal (Old dm.js/pro.js intervals cannot touch this!)
-    function openCleanVipProfile(rawUsername) {
+    function openIsolatedVipProfile(rawUsername) {
         if (!rawUsername || !window.Nexus) return;
         let cleanU = String(rawUsername).replace(/^@/, '').trim();
 
-        // Hide #nx-global-modal if any old script opened it
         const oldModal = document.getElementById('nx-global-modal');
         if (oldModal) oldModal.style.display = 'none';
 
@@ -33,7 +31,7 @@
         if (!vipModal) {
             vipModal = document.createElement('div');
             vipModal.id = 'nx-vip-profile-modal';
-            vipModal.style.cssText = 'position:fixed; inset:0; background:rgba(2,6,23,0.88); backdrop-filter:blur(8px); z-index:100350; display:none; align-items:center; justify-content:center; padding:14px;';
+            vipModal.style.cssText = 'position:fixed; inset:0; background:rgba(2,6,23,0.9); backdrop-filter:blur(8px); z-index:100420; display:none; align-items:center; justify-content:center; padding:14px;';
             vipModal.onclick = (e) => { if (e.target === vipModal) vipModal.style.display = 'none'; };
             document.body.appendChild(vipModal);
         }
@@ -55,7 +53,8 @@
                         </div>
                         <div style="min-width:0; flex:1;">
                             <div style="font-size:17px; font-weight:900; color:#f8fafc; display:flex; align-items:center; gap:5px;">
-                                <span>${(uObj.name \vert{}\vert{} uObj.username).replace(/</g, '&lt;')}</span>${uObj.verified ? `<span style="color:#10b981; font-size:14px;">✓</span>` : ''}
+                                <span>${(uObj.name || uObj.username).replace(/</g, '&lt;')}</span>
+                                ${uObj.verified ? `<span style="color:#10b981; font-size:14px;">✓</span>` : ''}
                             </div>
                             <div style="font-size:12px; color:#10b981; font-weight:800;">@${uObj.username} • 💬 DM Open</div>
                             <div style="font-size:12px; color:#38bdf8; margin-top:2px;">${(uObj.bio || 'Student').replace(/</g, '&lt;')}</div>
@@ -77,7 +76,7 @@
                         </div>
                     </div>
 
-                    <!-- STRICTLY 2 EQUAL BUTTONS: 1 FOLLOW + 1 MESSAGE (NO DUPLICATES EVER!) -->
+                    <!-- ALWAYS SHOWS BOTH BUTTONS SIDE-BY-SIDE (50% - 50%): 1 FOLLOW + 1 MESSAGE -->
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%;">
                         <button type="button" onclick="NexusProfileFix.toggleFollowInstant('${safeU}')" style="height:44px; background:${isFollowing ? '#1e293b' : '#2563eb'}; color:#ffffff; border:${isFollowing ? '1.5px solid #38bdf8' : 'none'}; border-radius:12px; font-weight:900; font-size:13.5px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
                             ${isFollowing ? '✓ Following' : '+ Follow'}
@@ -111,34 +110,49 @@
         vipModal.style.display = 'flex';
     }
 
-    function bindProfileAndSearch() {
-        if (!window.Nexus) return;
-        Nexus.openPublicProfile = openCleanVipProfile;
+    // CAPTURE-PHASE CLICK INTERCEPTOR FOR ANY PROFILE / DP CLICK!
+    if (!window.__nxProfileCaptureBoundV4) {
+        window.__nxProfileCaptureBoundV4 = true;
+        window.addEventListener('click', function(e) {
+            const el = e.target.closest('[onclick*="openPublicProfile"]');
+            if (el) {
+                let oc = el.getAttribute('onclick') || '';
+                let m = oc.match(/openPublicProfile\(['"]([^'"]+)['"]\)/);
+                if (m && m[1]) {
+                    e.stopImmediatePropagation();
+                    e.preventDefault();
+                    openIsolatedVipProfile(m[1]);
+                }
+            }
+        }, true);
+    }
 
-        // Also clean up #nx-global-modal if it ever opens a profile
+    function enforceVipProfileLock() {
+        if (window.Nexus) {
+            Nexus.openPublicProfile = openIsolatedVipProfile;
+        }
         const gm = document.getElementById('nx-global-modal');
         if (gm && gm.style.display !== 'none' && (gm.innerText || '').includes('Member Full Profile')) {
             let m = (gm.innerText || '').match(/@([a-zA-Z0-9_.-]+)/);
             if (m && m[1]) {
                 gm.style.display = 'none';
-                openCleanVipProfile(m[1]);
+                openIsolatedVipProfile(m[1]);
             }
         }
     }
 
     window.NexusProfileFix = {
-        openProfile: openCleanVipProfile,
+        openProfile: openIsolatedVipProfile,
         toggleFollowInstant: function(username) {
             if (window.Nexus && Nexus.toggleFollow) {
                 Nexus.toggleFollow(username);
-                setTimeout(() => openCleanVipProfile(username), 80);
+                setTimeout(() => openIsolatedVipProfile(username), 80);
             }
         }
     };
 
-    if (!window.__nxProfileFixV3Timer) {
-        window.__nxProfileFixV3Timer = setInterval(bindProfileAndSearch, 300);
+    if (!window.__nxProfileFixV4Timer) {
+        window.__nxProfileFixV4Timer = setInterval(enforceVipProfileLock, 250);
     }
-    bindProfileAndSearch();
+    enforceVipProfileLock();
 })(); // === END OF PROFILEFIX.JS ===
-                
