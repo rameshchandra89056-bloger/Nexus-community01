@@ -1,11 +1,11 @@
-// ================= CARDS.JS (DEDICATED 4 GLOWING COMMUNITY CARDS + CHALLENGER LIVE TEST PORTAL https://challengers-live.netlify.app + DUPLICATE REMOVER) =================
+// ================= CARDS.JS (v2.0 4 GLOWING CARDS & COMPLETE DUPLICATE ROW REMOVER — FIXES SCREENSHOT 1000073549.jpg) =================
 
 (function() {
     const CHALLENGER_URL = 'https://challengers-live.netlify.app';
 
-    if (!document.getElementById('nx-cards-mod-style')) {
+    if (!document.getElementById('nx-cards-mod-style-v2')) {
         const st = document.createElement('style');
-        st.id = 'nx-cards-mod-style';
+        st.id = 'nx-cards-mod-style-v2';
         st.innerHTML = `
             #nx-dm-inbox-banner > *:not(#nx-structured-4card-grid), #nx-pro-dm-home-card { display: none !important; }
             #nx-structured-4card-grid {
@@ -37,18 +37,22 @@
         document.head.appendChild(st);
     }
 
-    function hideDuplicateBottomCards() {
+    // Completely hide the duplicate 2-card row below #nx-dm-inbox-banner (Screenshot 1000073549.jpg)
+    function hideDuplicateRowCompletely() {
         const comm = document.getElementById('tab-community');
         if (!comm) return;
-        comm.querySelectorAll('div, button, a').forEach(el => {
-            if (el.closest('#nx-structured-4card-grid') || el.id === 'nx-structured-4card-grid') return;
-            let txt = (el.innerText || '').trim();
-            if ((txt === 'Live Test Series' || txt.startsWith('PDF Study Vault')) && el.tagName !== 'BODY') {
-                let p = el.parentElement;
-                if (p && p.id !== 'tab-community' && (p.innerText || '').includes('Live Test Series') && (p.innerText || '').includes('PDF Study Vault')) {
-                    p.style.setProperty('display', 'none', 'important');
-                } else {
-                    el.style.setProperty('display', 'none', 'important');
+
+        // Check direct children of #tab-community or containers holding the old Live Test Series button
+        Array.from(comm.querySelectorAll('div')).forEach(div => {
+            if (div.id === 'nx-dm-inbox-banner' || div.id === 'nx-structured-4card-grid' || div.closest('#nx-structured-4card-grid')) return;
+            if (div.id === 'nx-community-rooms-list' || div.id === 'nx-channel-filters') return;
+            if (div.querySelector('#nx-dm-inbox-banner') || div.querySelector('#nx-community-rooms-list')) return;
+
+            let txt = (div.innerText || '').trim();
+            if (txt.includes('Live Test Series') || txt.includes('PDF Study Vault')) {
+                div.style.setProperty('display', 'none', 'important');
+                if (div.parentElement && div.parentElement !== comm && !div.parentElement.querySelector('#nx-dm-inbox-banner') && !div.parentElement.querySelector('#nx-community-rooms-list')) {
+                    div.parentElement.style.setProperty('display', 'none', 'important');
                 }
             }
         });
@@ -145,12 +149,12 @@
         }
     };
 
-    if (!window.__nxCardsInterval) {
-        window.__nxCardsInterval = setInterval(() => {
-            hideDuplicateBottomCards();
+    if (!window.__nxCardsIntervalV2) {
+        window.__nxCardsIntervalV2 = setInterval(() => {
+            hideDuplicateRowCompletely();
             renderFourCommunityCards();
-        }, 700);
+        }, 500);
     }
-    hideDuplicateBottomCards();
+    hideDuplicateRowCompletely();
     renderFourCommunityCards();
 })(); // === END OF CARDS.JS ===
