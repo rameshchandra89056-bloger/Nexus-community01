@@ -1,64 +1,54 @@
-// ================= CARDS.JS (v2.0 4 GLOWING CARDS & COMPLETE DUPLICATE ROW REMOVER — FIXES SCREENSHOT 1000073549.jpg) =================
+// ================= CARDS.JS (v3.0 NO ANIMATIONS + REAL IN-APP PDF STUDY VAULT & CHALLENGER PORTAL — FIXES SCREENSHOTS 1000073608.jpg & 1000073607.jpg) =================
 
 (function() {
     const CHALLENGER_URL = 'https://challengers-live.netlify.app';
+    let pdfVaultList = [];
+    let pdfVaultUnsub = null;
 
-    if (!document.getElementById('nx-cards-mod-style-v2')) {
+    // Built-in Starter JEE/NEET Study PDFs + Syncs user-uploaded PDFs from Firestore!
+    const DEFAULT_STUDY_PDFS = [
+        { title: '📐 JEE Main & Advanced Complete Formula Handbook (PCM)', subject: 'JEE PCM', pages: 'Full Revision PDF', url: 'https://ncert.nic.in/textbook/pdf/keph103.pdf' },
+        { title: '⚡ Physics Class 11 & 12 Mechanics + Electrostatics Notes', subject: 'Physics', pages: 'Chapterwise Notes', url: 'https://ncert.nic.in/textbook/pdf/leph101.pdf' },
+        { title: '🧪 Organic & Physical Chemistry Named Reactions Sheet', subject: 'Chemistry', pages: 'Quick Chart PDF', url: 'https://ncert.nic.in/textbook/pdf/lech201.pdf' },
+        { title: '🧬 NEET Biology NCERT Line-by-Line High Yield Notes', subject: 'NEET Bio', pages: 'Revision Sheet', url: 'https://ncert.nic.in/textbook/pdf/kebo101.pdf' }
+    ];
+
+    if (!document.getElementById('nx-cards-mod-style-v3')) {
         const st = document.createElement('style');
-        st.id = 'nx-cards-mod-style-v2';
+        st.id = 'nx-cards-mod-style-v3';
         st.innerHTML = `
+            /* Kill all animations on community/chat cards as requested */
+            .nx-card-glow-beam { display: none !important; }
             #nx-dm-inbox-banner > *:not(#nx-structured-4card-grid), #nx-pro-dm-home-card { display: none !important; }
             #nx-structured-4card-grid {
                 display: grid !important; grid-template-columns: 1fr 1fr !important;
                 gap: 10px !important; width: 100% !important; margin-bottom: 10px !important;
             }
             .nx-half-card {
-                position: relative; background: linear-gradient(145deg, #111827 0%, #090d16 100%);
+                position: relative; background: #111827;
                 border: 1.5px solid #1e293b; border-radius: 18px; padding: 13px 12px;
                 display: flex; flex-direction: column; justify-content: space-between;
-                min-height: 110px; cursor: pointer; overflow: hidden;
-                transition: transform 0.16s ease; box-shadow: 0 8px 22px rgba(0,0,0,0.55);
-            }
-            .nx-half-card:active { transform: scale(0.96); }
-            @keyframes nxBeamRun {
-                0% { transform: translateX(-100%); }
-                100% { transform: translateX(200%); }
-            }
-            .nx-card-glow-beam {
-                position: absolute; top: 0; left: 0; right: 0; height: 3px;
-                background: rgba(255, 255, 255, 0.08); overflow: hidden;
-            }
-            .nx-card-glow-beam::after {
-                content: ''; position: absolute; top: 0; left: 0; width: 55%; height: 100%;
-                background: linear-gradient(90deg, transparent, var(--beam-color, #10b981), #ffffff, transparent);
-                animation: nxBeamRun 2.5s linear infinite;
+                min-height: 108px; cursor: pointer; overflow: hidden;
             }
         `;
         document.head.appendChild(st);
     }
 
-    // Completely hide the duplicate 2-card row below #nx-dm-inbox-banner (Screenshot 1000073549.jpg)
     function hideDuplicateRowCompletely() {
         const comm = document.getElementById('tab-community');
         if (!comm) return;
-
-        // Check direct children of #tab-community or containers holding the old Live Test Series button
         Array.from(comm.querySelectorAll('div')).forEach(div => {
             if (div.id === 'nx-dm-inbox-banner' || div.id === 'nx-structured-4card-grid' || div.closest('#nx-structured-4card-grid')) return;
             if (div.id === 'nx-community-rooms-list' || div.id === 'nx-channel-filters') return;
             if (div.querySelector('#nx-dm-inbox-banner') || div.querySelector('#nx-community-rooms-list')) return;
-
             let txt = (div.innerText || '').trim();
             if (txt.includes('Live Test Series') || txt.includes('PDF Study Vault')) {
                 div.style.setProperty('display', 'none', 'important');
-                if (div.parentElement && div.parentElement !== comm && !div.parentElement.querySelector('#nx-dm-inbox-banner') && !div.parentElement.querySelector('#nx-community-rooms-list')) {
-                    div.parentElement.style.setProperty('display', 'none', 'important');
-                }
             }
         });
     }
 
-    function renderFourCommunityCards() {
+    function renderFourStaticCards() {
         const banner = document.getElementById('nx-dm-inbox-banner');
         if (!banner) return;
 
@@ -73,8 +63,7 @@
         let onlineCount = allUsers.filter(u => (Date.now() - (u.lastOnline || 0)) < 180000).length;
 
         grid.innerHTML = `
-            <div class="nx-half-card" style="border-color:rgba(16,185,129,0.5);" onclick="if(window.NexusDmInbox && NexusDmInbox.openFullScreenDmHub) NexusDmInbox.openFullScreenDmHub(); else if(window.NexusDM && allUsers.length) NexusDM.openDirectChat('${allUsers[0] ? allUsers[0].username : 'mohiy'}', '${allUsers[0] ? (allUsers[0].name || allUsers[0].username) : 'Chat'}', '');">
-                <div class="nx-card-glow-beam" style="--beam-color:#10b981;"></div>
+            <div class="nx-half-card" style="border-color:rgba(16,185,129,0.45);" onclick="if(window.NexusDmInbox && NexusDmInbox.openFullScreenDmHub) NexusDmInbox.openFullScreenDmHub();">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                     <div style="width:36px; height:36px; border-radius:11px; background:rgba(16,185,129,0.18); border:1px solid #10b981; display:flex; align-items:center; justify-content:center; font-size:18px;">💬</div>
                     <span style="background:rgba(16,185,129,0.2); color:#10b981; font-size:10px; font-weight:900; padding:2px 7px; border-radius:99px;">${onlineCount} Live</span>
@@ -85,8 +74,7 @@
                 </div>
             </div>
 
-            <div class="nx-half-card" style="border-color:rgba(167,139,250,0.5);" onclick="if(window.NexusAI) NexusAI.openStudio();">
-                <div class="nx-card-glow-beam" style="--beam-color:#a78bfa;"></div>
+            <div class="nx-half-card" style="border-color:rgba(167,139,250,0.45);" onclick="if(window.NexusAI) NexusAI.openStudio();">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                     <div style="width:36px; height:36px; border-radius:11px; background:rgba(139,92,246,0.2); border:1px solid #a78bfa; display:flex; align-items:center; justify-content:center; font-size:18px;">🤖</div>
                     <span style="background:rgba(167,139,250,0.2); color:#d8b4fe; font-size:10px; font-weight:900; padding:2px 7px; border-radius:99px;">11 Servers</span>
@@ -97,20 +85,18 @@
                 </div>
             </div>
 
-            <div class="nx-half-card" style="border-color:rgba(245,158,11,0.5);" onclick="NexusCards.openChallengerApp()">
-                <div class="nx-card-glow-beam" style="--beam-color:#f59e0b;"></div>
+            <div class="nx-half-card" style="border-color:rgba(245,158,11,0.45);" onclick="NexusCards.openChallengerApp()">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                     <div style="width:36px; height:36px; border-radius:11px; background:rgba(245,158,11,0.18); border:1px solid #f59e0b; display:flex; align-items:center; justify-content:center; font-size:18px;">📝</div>
                     <span style="background:rgba(245,158,11,0.2); color:#fde047; font-size:10px; font-weight:900; padding:2px 7px; border-radius:99px;">🔥 Challenger</span>
                 </div>
                 <div style="margin-top:8px;">
                     <div style="font-size:13.5px; font-weight:900; color:#f8fafc;">Live Test Series</div>
-                    <div style="font-size:10.5px; color:#fde047; margin-top:2px; font-weight:700;">Open Challenger App →</div>
+                    <div style="font-size:10.5px; color:#fde047; margin-top:2px; font-weight:700;">JEE / NEET Mock Arena →</div>
                 </div>
             </div>
 
-            <div class="nx-half-card" style="border-color:rgba(56,189,248,0.5);" onclick="if(window.NexusUltra && NexusUltra.openPdfLibraryModal) NexusUltra.openPdfLibraryModal(); else if(window.NexusChat) NexusChat.openChatRoom('notes_lib', '📚 PDF Study Vault', 'Notes, Books & PYQs');">
-                <div class="nx-card-glow-beam" style="--beam-color:#38bdf8;"></div>
+            <div class="nx-half-card" style="border-color:rgba(56,189,248,0.45);" onclick="NexusCards.openPdfVaultApp()">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                     <div style="width:36px; height:36px; border-radius:11px; background:rgba(56,189,248,0.18); border:1px solid #38bdf8; display:flex; align-items:center; justify-content:center; font-size:18px;">📚</div>
                     <span style="background:rgba(56,189,248,0.2); color:#38bdf8; font-size:10px; font-weight:900; padding:2px 7px; border-radius:99px;">Free PDFs</span>
@@ -146,15 +132,102 @@
                 <iframe src="${CHALLENGER_URL}" style="flex:1; width:100%; border:none; background:#090d16;" allow="fullscreen; clipboard-write"></iframe>
             `;
             portal.style.display = 'flex';
+        },
+
+        // 📚 Dedicated Real In-App PDF Study Vault (Never opens notes_lib chat room!)
+        openPdfVaultApp: function() {
+            let vModal = document.getElementById('nx-dedicated-pdf-vault');
+            if (!vModal) {
+                vModal = document.createElement('div');
+                vModal.id = 'nx-dedicated-pdf-vault';
+                vModal.style.cssText = 'position:fixed; inset:0; width:100%; max-width:640px; height:100dvh; margin:0 auto; background:#090d16; z-index:100260; display:none; flex-direction:column; overflow:hidden;';
+                document.body.appendChild(vModal);
+            }
+
+            if (window.Nexus && Nexus.db && !pdfVaultUnsub) {
+                pdfVaultUnsub = Nexus.db.collection("nexus_pdf_vault").orderBy("createdAt", "desc").limit(30).onSnapshot(snap => {
+                    let cloudPdfs = [];
+                    snap.forEach(d => cloudPdfs.push(d.data()));
+                    pdfVaultList = [...cloudPdfs, ...DEFAULT_STUDY_PDFS];
+                    NexusCards.renderPdfListUI();
+                }, () => {
+                    pdfVaultList = [...DEFAULT_STUDY_PDFS];
+                    NexusCards.renderPdfListUI();
+                });
+            } else if (pdfVaultList.length === 0) {
+                pdfVaultList = [...DEFAULT_STUDY_PDFS];
+            }
+
+            vModal.innerHTML = `
+                <div style="height:56px; background:#0f172a; border-bottom:1.5px solid #38bdf8; display:flex; align-items:center; justify-content:space-between; padding:0 14px; flex-shrink:0;">
+                    <div style="display:flex; align-items:center; gap:9px;">
+                        <button type="button" onclick="document.getElementById('nx-dedicated-pdf-vault').style.display='none'" style="background:none; border:none; color:#fff; font-size:20px; cursor:pointer;">←</button>
+                        <div>
+                            <div style="font-size:15px; font-weight:900; color:#f8fafc;">📚 Nexus PDF Study Vault</div>
+                            <div style="font-size:10.5px; color:#38bdf8; font-weight:700;">JEE / NEET Notes, Formula Sheets &amp; PYQs</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <button type="button" onclick="NexusCards.promptAddPdf()" style="background:#10b981; color:#020617; border:none; padding:6px 11px; border-radius:9px; font-size:11px; font-weight:900; cursor:pointer;">+ Add PDF</button>
+                        <button type="button" onclick="document.getElementById('nx-dedicated-pdf-vault').style.display='none'" style="background:#1e293b; border:1px solid #334155; color:#cbd5e1; padding:6px 10px; border-radius:9px; font-size:11px; font-weight:800; cursor:pointer;">✕</button>
+                    </div>
+                </div>
+                <div id="nx-pdf-vault-items-box" style="flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px;"></div>
+            `;
+            vModal.style.display = 'flex';
+            this.renderPdfListUI();
+        },
+
+        renderPdfListUI: function() {
+            const box = document.getElementById('nx-pdf-vault-items-box');
+            if (!box) return;
+            box.innerHTML = pdfVaultList.map(item => `
+                <div style="background:#111827; border:1px solid #1e293b; border-left:4px solid #38bdf8; border-radius:14px; padding:12px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                    <div style="min-width:0; flex:1;">
+                        <div style="font-size:13.5px; font-weight:900; color:#f8fafc; margin-bottom:3px;">${(item.title || 'Study PDF').replace(/</g, '&lt;')}</div>
+                        <div style="font-size:11px; color:#10b981; font-weight:800;">🏷️ ${(item.subject || 'Notes').replace(/</g, '&lt;')} • 📄 ${(item.pages || 'PDF').replace(/</g, '&lt;')}</div>
+                    </div>
+                    <a href="${item.url}" target="_blank" style="background:#38bdf8; color:#020617; text-decoration:none; padding:8px 13px; border-radius:10px; font-size:11.5px; font-weight:900; flex-shrink:0;">Open PDF ↗</a>
+                </div>
+            `).join('');
+        },
+
+        promptAddPdf: async function() {
+            let title = prompt("Enter PDF / Study Note Title (e.g. Rotational Motion Short Notes):");
+            if (!title || !title.trim()) return;
+            let url = prompt("Paste Google Drive or Direct PDF Link (https://...):");
+            if (!url || !url.trim().startsWith('http')) return;
+            let me = window.Nexus && Nexus.getCurrentUser ? Nexus.getCurrentUser() : null;
+            if (window.Nexus && Nexus.db) {
+                await Nexus.db.collection("nexus_pdf_vault").add({
+                    title: title.trim(),
+                    subject: me ? `Shared by @${me.username}` : 'Community PDF',
+                    pages: 'Cloud PDF',
+                    url: url.trim(),
+                    createdAt: Date.now()
+                });
+                Nexus.toast("📚 PDF Added to Vault!");
+            }
         }
     };
 
-    if (!window.__nxCardsIntervalV2) {
-        window.__nxCardsIntervalV2 = setInterval(() => {
+    // Also hook top-right "📄 PDF" button inside Group Chat header so it opens this PDF Vault!
+    function bindGroupHeaderPdfBtn() {
+        document.querySelectorAll('#nx-chat-room button').forEach(b => {
+            if ((b.innerText || '').includes('PDF') && !b.getAttribute('data-pdf-v3')) {
+                b.setAttribute('data-pdf-v3', '1');
+                b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); NexusCards.openPdfVaultApp(); };
+            }
+        });
+    }
+
+    if (!window.__nxCardsIntervalV3) {
+        window.__nxCardsIntervalV3 = setInterval(() => {
             hideDuplicateRowCompletely();
-            renderFourCommunityCards();
-        }, 500);
+            renderFourStaticCards();
+            bindGroupHeaderPdfBtn();
+        }, 600);
     }
     hideDuplicateRowCompletely();
-    renderFourCommunityCards();
+    renderFourStaticCards();
 })(); // === END OF CARDS.JS ===
