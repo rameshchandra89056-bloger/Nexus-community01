@@ -1,101 +1,72 @@
-// ================= CORE.JS (v22.0 PURE ZERO-REFRESH HOT-SWAP ENGINE): 🔄 CHECKS ALL SEPARATE FEATURE FILES EVERY 12 SECONDS & UPDATES ACTIVE USERS LIVE WITHOUT PAGE REFRESH =================
+// ================= CORE.JS (v24.0 ZERO-OVERLAP INSTANT HOT-SWAP LOADER): 🔄 LOADS CLEAN DM.JS, CHAT.JS & ALL MODULAR FEATURE FILES LIVE WITHOUT PAGE REFRESH =================
 
 (function() {
-    // 1. All Independent Feature Micro-Modules
-    const NEXUS_MODULES = [
+    const MODULES = [
+        'dm.js',
+        'chat.js',
         'aifix.js',
         'profilefix.js',
         'cards.js',
-        'notify.js',
-        'dmtools.js',
-        'live.js',
         'dminbox.js',
+        'dmtools.js',
+        'voice.js',
+        'notify.js',
+        'live.js',
         'ai.js',
         'pwa.js',
         'dotsmenu.js',
         'screen.js',
-        'voice.js',
         'board.js'
     ];
 
-    const loadedCodeSignatures = {};
-    let isUserTypingNow = false;
-    let typingTimer = null;
+    const signatures = {};
+    let isTyping = false, tTimer = null;
 
     const markTyping = () => {
-        isUserTypingNow = true;
-        clearTimeout(typingTimer);
-        typingTimer = setTimeout(() => { isUserTypingNow = false; }, 1200);
+        isTyping = true;
+        clearTimeout(tTimer);
+        tTimer = setTimeout(() => { isTyping = false; }, 1200);
     };
     document.addEventListener('keydown', markTyping, { passive: true });
     document.addEventListener('input', markTyping, { passive: true });
 
-    // 2. Clear old blocking Service Worker caches automatically
-    function flushOldCaches() {
-        if ('caches' in window) {
-            caches.keys().then(names => {
-                names.forEach(n => {
-                    if (n !== 'nexus-turbo-v21') caches.delete(n);
-                });
-            }).catch(() => {});
-        }
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(regs => {
-                regs.forEach(r => { try { r.update(); } catch (e) {} });
-            }).catch(() => {});
-        }
-    }
-
-    // 3. Fast String Hash to detect even a 1-character change in any GitHub file!
-    function getFastHash(str) {
+    function hashCode(s) {
         let h = 0;
-        for (let i = 0; i < str.length; i++) {
-            h = ((h << 5) - h) + str.charCodeAt(i);
-            h |= 0;
-        }
-        return h + '_' + str.length;
+        for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
+        return h + '_' + s.length;
     }
 
-    // 4. Zero-Refresh Hot-Swapper: Fetches fresh JS & executes immediately in RAM without reloading page!
-    async function syncAndHotSwapModule(file, isInitialLoad) {
+    async function hotSwapFile(file) {
+        let code = '';
         try {
-            const res = await fetch(`${file}?nocache=${Date.now()}`, { cache: 'no-store' });
-            if (!res.ok) return;
-            const codeText = await res.text();
-            if (!codeText || codeText.trim().startsWith('<!DOCTYPE') || codeText.trim().startsWith('<html')) return;
-
-            const newSig = getFastHash(codeText);
-            if (loadedCodeSignatures[file] === newSig) return; // No change in this file
-
-            const hadOldVersion = Boolean(loadedCodeSignatures[file]);
-            loadedCodeSignatures[file] = newSig;
-
-            // Remove old script tag for this module if present
-            const oldScript = document.querySelector(`script[data-nx-live-mod="${file}"]`);
-            if (oldScript) oldScript.remove();
-
-            // Inject & execute new updated module code seamlessly without page refresh
-            const s = document.createElement('script');
-            s.setAttribute('data-nx-live-mod', file);
-            s.textContent = codeText;
-            document.body.appendChild(s);
-
-            if (hadOldVersion && !isInitialLoad && window.Nexus && Nexus.toast) {
-                console.log(`[Nexus Hot-Swap] Live updated ${file} without refresh!`);
-            }
+            const r1 = await fetch(`${file}?t=${Date.now()}`, { cache: 'no-store' });
+            if (r1.ok) code = await r1.text();
         } catch (e) {}
+
+        if (!code || code.trim().startsWith('<!DOCTYPE') || code.trim().startsWith('<html')) return;
+
+        const sig = hashCode(code);
+        if (signatures[file] === sig) return;
+        signatures[file] = sig;
+
+        const prev = document.querySelector(`script[data-nx-hot="${file}"]`);
+        if (prev) prev.remove();
+
+        const s = document.createElement('script');
+        s.setAttribute('data-nx-hot', file);
+        s.textContent = code;
+        document.body.appendChild(s);
     }
 
-    function checkAllModulesLive(isInitial) {
-        if (!isInitial && isUserTypingNow) return;
-        NEXUS_MODULES.forEach(file => {
-            syncAndHotSwapModule(file, isInitial);
-        });
+    function syncAll(initial) {
+        if (!initial && isTyping) return;
+        MODULES.forEach(hotSwapFile);
     }
 
-    // Initial instant boot + 12-second live background hot-swap loop
-    flushOldCaches();
-    checkAllModulesLive(true);
-    setInterval(() => checkAllModulesLive(false), 12000);
-    setInterval(flushOldCaches, 45000);
+    if ('caches' in window) {
+        caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
+    }
+
+    syncAll(true);
+    setInterval(() => syncAll(false), 12000);
 })(); // === END OF CORE.JS ===
