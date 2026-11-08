@@ -112,12 +112,19 @@
             scroll-behavior: smooth;
             background-color: #050811;
         }
+        :root {
+            /* Keep the app navigation above Netlify's injected bottom-right badge. */
+            --nx-nav-height: 64px;
+            --nx-netlify-clearance: 72px;
+            --nx-safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
         body {
             background-color: #090d16;
             color: #f8fafc;
             overflow-x: hidden;
             padding-top: 56px;
-            padding-bottom: 78px;
+            /* Reserve room for the raised navigation and the badge-clearance area. */
+            padding-bottom: calc(var(--nx-nav-height) + var(--nx-netlify-clearance) + 24px + var(--nx-safe-bottom));
             max-width: 640px;
             margin: 0 auto;
             min-height: 100dvh;
@@ -202,7 +209,7 @@
         }
         .nx-tab-screen {
             display: none;
-            min-height: calc(100dvh - 124px);
+            min-height: calc(100dvh - 56px - var(--nx-nav-height) - var(--nx-netlify-clearance) - var(--nx-safe-bottom));
             padding-bottom: 28px;
         }
         .nx-tab-screen.active {
@@ -210,12 +217,13 @@
         }
         .nx-bottom-nav {
             position: fixed;
-            bottom: 0;
+            /* Lift the whole bar clear of Netlify's fixed bottom-right badge. */
+            bottom: calc(var(--nx-netlify-clearance) + var(--nx-safe-bottom));
             left: 50%;
             transform: translateX(-50%);
             width: 100%;
             max-width: 640px;
-            height: 64px;
+            height: var(--nx-nav-height);
             background: rgba(15, 23, 42, 0.98);
             border-top: 1px solid #1e293b;
             display: grid;
@@ -299,7 +307,8 @@
         }
         #nx-toast {
             position: fixed;
-            bottom: 76px;
+            /* Keep toast messages above the raised navigation instead of over it. */
+            bottom: calc(var(--nx-nav-height) + var(--nx-netlify-clearance) + 12px + var(--nx-safe-bottom));
             left: 50%;
             transform: translateX(-50%);
             background: #10b981;
