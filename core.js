@@ -1,60 +1,85 @@
-// === CORE.JS (v27.0 NON-DESTRUCTIVE MODULE LOADER — NEVER OVERWRITES DM.JS, CHAT.JS OR POWER.JS) ===
+// ================= CORE.JS (v45.0 ULTRA-FAST LIVE GITHUB BRIDGE — ZERO NETLIFY CREDITS & INSTANT LIVE UPDATES WITHOUT REFRESH!) =================
+
 (function() {
     const GH_RAW = 'https://raw.githubusercontent.com/rameshchandra89056-bioger/Nexus-community01/main/';
-    // Only loads add-on modules so original dm.js, chat.js, power.js & superchat.js stay 100% intact!
     const MODULES = [
         'aifix.js', 'profilefix.js', 'cards.js', 'notify.js',
         'dmtools.js', 'live.js', 'dminbox.js', 'ai.js',
-        'pwa.js', 'dotsmenu.js', 'screen.js', 'voice.js', 'board.js'
+        'pwa.js', 'dotsmenu.js', 'screen.js', 'voice.js',
+        'board.js', 'ytparty.js'
     ];
     const loadedHash = {};
-    let typing = false, tTimer = null;
+    let isTyping = false, typingTimer = null;
 
-    const onType = () => { typing = true; clearTimeout(tTimer); tTimer = setTimeout(() => { typing = false; }, 1200); };
-    document.addEventListener('keydown', onType, { passive: true });
-    document.addEventListener('input', onType, { passive: true });
+    const markTyping = () => {
+        isTyping = true;
+        clearTimeout(typingTimer);
+        typingTimer = setTimeout(() => { isTyping = false; }, 1000);
+    };
+    document.addEventListener('keydown', markTyping, { passive: true });
+    document.addEventListener('input', markTyping, { passive: true });
 
-    function hash(s) {
+    function fastHash(str) {
         let h = 0;
-        for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
-        return h + '_' + s.length;
+        for (let i = 0; i < str.length; i++) {
+            h = ((h << 5) - h) + str.charCodeAt(i);
+            h |= 0;
+        }
+        return h + '_' + str.length;
     }
 
-    async function loadModule(file) {
+    async function hotReloadModule(file) {
         let code = '';
+        const bust = Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+
+        // 1. Primary: Fetch directly from GitHub Raw Server (Bypasses paused Netlify builds 100%!)
         try {
-            const r1 = await fetch(`${GH_RAW}${file}?t=${Date.now()}`, { cache: 'no-store' });
-            if (r1.ok) code = await r1.text();
+            const res = await fetch(`${GH_RAW}${file}?v=${bust}`, {
+                cache: 'no-store',
+                headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+            });
+            if (res.ok) code = await res.text();
         } catch (e) {}
+
+        // 2. Fallback: Local relative file if offline/local
         if (!code || code.trim().startsWith('<!DOCTYPE') || code.trim().startsWith('<html') || code.trim() === '404: Not Found') {
             try {
-                const r2 = await fetch(`${file}?t=${Date.now()}`, { cache: 'no-store' });
-                if (r2.ok) code = await r2.text();
+                const res2 = await fetch(`${file}?v=${bust}`, { cache: 'no-store' });
+                if (res2.ok) code = await res2.text();
             } catch (e) {}
         }
+
         if (!code || code.trim().startsWith('<!DOCTYPE') || code.trim().startsWith('<html') || code.trim() === '404: Not Found') return;
 
-        const sig = hash(code);
+        const sig = fastHash(code);
         if (loadedHash[file] === sig) return;
         loadedHash[file] = sig;
 
-        const old = document.querySelector(`script[data-nx-mod="${file}"]`);
-        if (old) old.remove();
+        const prevScript = document.querySelector(`script[data-nx-live-mod="${file}"]`);
+        if (prevScript) prevScript.remove();
+
         const s = document.createElement('script');
-        s.setAttribute('data-nx-mod', file);
+        s.setAttribute('data-nx-live-mod', file);
         s.textContent = code;
         document.body.appendChild(s);
     }
 
-    function syncAll(init) {
-        if (!init && typing) return;
-        MODULES.forEach(loadModule);
+    function syncAllModules(forceNow) {
+        if (!forceNow && isTyping) return;
+        MODULES.forEach(hotReloadModule);
     }
 
+    // Clear any stale Service Worker caches so old files never get stuck
     if ('caches' in window) {
         caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
     }
-    syncAll(true);
-    setInterval(() => syncAll(false), 12000);
+
+    // Initial instant load + Fast 4-second live background sync + Instant sync on tab focus
+    syncAllModules(true);
+    setInterval(() => syncAllModules(false), 4000);
+    window.addEventListener('focus', () => syncAllModules(true));
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) syncAllModules(true);
+    });
 })();
-// === END CORE.JS ===
+// === END OF CORE.JS ===
