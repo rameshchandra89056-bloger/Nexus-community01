@@ -1,9 +1,9 @@
-// ================= DMTOOLS.JS (v40.0): ADMIN-ONLY OFFICIAL DM + USER-TO-USER DIWALI GIFT SENDER (1000073944.jpg FIX) + 1:1 DM REACTION & DELETE FIX + FLOATING '+' TRAY (ZERO OVERLAP) =================
+// ================= DMTOOLS.JS (v50.0 FINAL MASTER): 👑 ADMIN-ONLY OFFICIAL DM STUDIO (WITH PHOTO + 36MB VIDEO + VAULT.HTML SENDER) + 🎁 USER-TO-USER GIFT SENDER + 🛑 NON-BLINKING '+' TRAY + ❤️ 1:1 DM REACTIONS & DELETE FIX =================
 
 (function() {
-    if (!document.getElementById('nx-dmtools-v40-style')) {
+    if (!document.getElementById('nx-dmtools-v50-style')) {
         const st = document.createElement('style');
-        st.id = 'nx-dmtools-v40-style';
+        st.id = 'nx-dmtools-v50-style';
         st.innerHTML = `
             #nx-msg-action-modal, #nx-cmsg-action-modal, #nx-diwali-custom-modal {
                 position: fixed !important; inset: 0 !important;
@@ -35,7 +35,7 @@
                 text-align: left !important; cursor: pointer !important;
             }
 
-            /* FLOATING '+' TRAY — NEVER PUSHES OR OVERLAPS CHAT MESSAGES UP AND DOWN! */
+            /* STABLE FLOATING '+' TRAY — NO BLINKING, NO JUMPING! */
             #nx-dm-bottom-tray, #nx-grp-bottom-tray {
                 position: fixed !important;
                 left: 50% !important;
@@ -43,7 +43,7 @@
                 bottom: 62px !important;
                 width: calc(100% - 16px) !important;
                 max-width: 620px !important;
-                max-height: 230px !important;
+                max-height: 235px !important;
                 overflow-y: auto !important;
                 background: #111b21 !important;
                 border: 1.5px solid #10b981 !important;
@@ -52,14 +52,7 @@
                 grid-template-columns: repeat(4, 1fr) !important;
                 gap: 8px !important;
                 z-index: 200100 !important;
-                box-shadow: 0 -12px 35px rgba(0,0,0,0.9) !important;
-            }
-
-            /* GPU Acceleration for Smooth Chat Scrolling (Anti-Hang) */
-            #nx-dm-msgs-box, #nx-room-messages {
-                scroll-behavior: auto !important;
-                -webkit-overflow-scrolling: touch !important;
-                overscroll-behavior-y: contain !important;
+                box-shadow: 0 -12px 35px rgba(0,0,0,0.92) !important;
             }
 
             /* Diwali Compact Bar */
@@ -101,16 +94,20 @@
     }
 
     function getMe() {
-        try { if (window.Nexus && Nexus.getCurrentUser) { let u = Nexus.getCurrentUser(); if (u) return u; } } catch (e) {}
-        try { let s = localStorage.getItem('nexus_current_user') || localStorage.getItem('nexus_user'); if (s) return JSON.parse(s); } catch (e) {}
+        try { if (window.Nexus && Nexus.getCurrentUser) { let u = Nexus.getCurrentUser(); if (u && u.username) return u; } } catch (e) {}
+        try {
+            let s = localStorage.getItem('nexus_current_user') || localStorage.getItem('nexus_user') || localStorage.getItem('nx_user');
+            if (s) return JSON.parse(s);
+        } catch (e) {}
         return { username: 'guest', name: 'Student' };
     }
 
+    // STRICT ADMIN CHECK: Only Mohit (@mohiy / Mohit_01) or Admin PIN unlocked session can use Official DM Studio!
     function isAdminUser() {
         const me = getMe();
         const u = String(me && me.username || '').toLowerCase().trim();
         const n = String(me && me.name || '').toLowerCase().trim();
-        return u === 'mohiy' || u === 'mohit_01' || u === 'nexus_official' || n.includes('mohit_01');
+        return u === 'mohiy' || u === 'mohit_01' || u === 'nexus_official' || n.includes('mohit_01') || localStorage.getItem('nx_mohit_admin_unlocked') === '1';
     }
 
     function getRoomKey(u1, u2) {
@@ -123,7 +120,7 @@
         const span = row.querySelector('.nx-dm-msg-text');
         if (span) return (span.innerText || '').trim();
         let clone = row.cloneNode(true);
-        clone.querySelectorAll('button, audio, img').forEach(e => e.remove());
+        clone.querySelectorAll('button, audio, img, video').forEach(e => e.remove());
         return (clone.innerText || '').replace(/\d{1,2}:\d{2}.*$/s, '').replace(/\(edited\)/gi, '').trim();
     }
 
@@ -155,10 +152,10 @@
                 <div class="nx-msg-action-sheet" onclick="event.stopPropagation();">
                     <div class="nx-emoji-bar">
                         ${emojis.map(em => `<button type="button" class="nx-emoji-btn" onclick="NexusDmTools.react('${safeId}','${em}')">${em}</button>`).join('')}
-                        <button type="button" class="nx-emoji-btn" style="border:1.5px dashed #10b981 !important; color:#10b981 !important; font-size:14px !important; border-radius:8px; padding:3px 7px !important;" onclick="const b=document.getElementById('nx-kb-em-v40');if(b){b.style.display='flex';document.getElementById('nx-kb-in-v40').focus();}">➕</button>
+                        <button type="button" class="nx-emoji-btn" style="border:1.5px dashed #10b981 !important; color:#10b981 !important; font-size:14px !important; border-radius:8px; padding:3px 7px !important;" onclick="const b=document.getElementById('nx-kb-em-v50');if(b){b.style.display='flex';document.getElementById('nx-kb-in-v50').focus();}">➕</button>
                     </div>
-                    <div id="nx-kb-em-v40" style="display:none; background:#090d16; border:1.5px solid #10b981; border-radius:10px; padding:6px 10px;">
-                        <input type="text" id="nx-kb-in-v40" placeholder="Type any emoji 😊..." oninput="if(this.value.trim()) NexusDmTools.react('${safeId}', this.value.trim())" style="width:100%; background:none; border:none; color:#fff; font-size:14px; outline:none;">
+                    <div id="nx-kb-em-v50" style="display:none; background:#090d16; border:1.5px solid #10b981; border-radius:10px; padding:6px 10px;">
+                        <input type="text" id="nx-kb-in-v50" placeholder="Type any emoji 😊..." oninput="if(this.value.trim()) NexusDmTools.react('${safeId}', this.value.trim())" style="width:100%; background:none; border:none; color:#fff; font-size:14px; outline:none;">
                     </div>
                     <button type="button" class="nx-menu-opt-btn" onclick="NexusDmTools.reply('${safeId}')"><span>↩️</span> <span>Reply to Message</span></button>
                     <button type="button" class="nx-menu-opt-btn" onclick="NexusDmTools.copy('${safeId}')"><span>📋</span> <span>Copy Message Text</span></button>
@@ -177,7 +174,6 @@
             if (!msgId || !emoji) return;
             const me = getMe();
 
-            // 1. Immediately show reaction badge inside 1:1 DM bubble DOM
             const row = document.querySelector(`.nx-dm-bubble-anim[data-message-id="${msgId}"]`);
             if (row) {
                 let badge = row.querySelector('.nx-live-dm-react');
@@ -190,7 +186,6 @@
                 badge.innerHTML = `${emoji} 1`;
             }
 
-            // 2. Save to Firestore nexus_private_dms with likes array so dm.js renders it permanently
             if (window.Nexus && Nexus.db) {
                 try {
                     const ref = Nexus.db.collection("nexus_private_dms").doc(msgId);
@@ -256,6 +251,7 @@
                     text: '',
                     imgUrl: '',
                     imgUrls: [],
+                    videoUrl: '',
                     audioData: '',
                     sticker: null
                 }, { merge: true }).catch(() => {});
@@ -264,14 +260,11 @@
         }
     };
 
-    // ================= 2. ANTI-HANG CHAT OPTIMIZER & '+' TRAY STABILIZER =================
     function optimizeChatAndTrays() {
         if (window.NexusDM) {
             NexusDM.openMsgActionMenu = (id) => NexusDmTools.openMenu(id);
             NexusDM.reactToDM = (id, em) => NexusDmTools.react(id, em);
         }
-
-        // Prevent chat hang when 80+ messages accumulate in DOM by hiding oldest offscreen nodes
         ['#nx-dm-msgs-box', '#nx-room-messages'].forEach(sel => {
             const box = document.querySelector(sel);
             if (!box) return;
@@ -283,23 +276,10 @@
                 }
             }
         });
-
-        // Close '+' tray automatically when clicking outside or clicking an item
-        ['nx-dm-bottom-tray', 'nx-grp-bottom-tray'].forEach(tId => {
-            const tray = document.getElementById(tId);
-            if (tray && !tray.getAttribute('data-v40-bound')) {
-                tray.setAttribute('data-v40-bound', '1');
-                tray.addEventListener('click', e => {
-                    if (e.target.closest('button')) {
-                        setTimeout(() => { tray.style.display = 'none'; }, 100);
-                    }
-                });
-            }
-        });
     }
 
-    // ================= 3. DIWALI HUB: ADMIN-ONLY OFFICIAL DM + USER-TO-USER FRIEND GIFT SENDER =================
-    let diwaliCount = parseInt(localStorage.getItem('nx_diwali_diyas_v1') || '165', 10);
+    // ================= 2. DIWALI HUB + ADMIN OFFICIAL DM STUDIO (WITH PHOTO, 36MB VIDEO & VAULT.HTML SENDER) =================
+    let diwaliCount = parseInt(localStorage.getItem('nx_diwali_diyas_v1') || '203', 10);
     let litScreenDiyas = parseInt(localStorage.getItem('nx_screen_lit_diyas_v1') || '0', 10);
 
     function renderOnScreenDiyaAltar() {
@@ -341,7 +321,7 @@
             hub.innerHTML = `
                 <div style="display:flex; align-items:center; justify-content:space-between;">
                     <div style="display:flex; align-items:center; gap:7px;">
-                        <span style="font-size:20px;">🪔</span>
+                        <span style="font-size:20px;" ondblclick="NexusDiwali.unlockAdminByPin()">🪔</span>
                         <div>
                             <div style="font-size:13px; font-weight:900; color:#fef08a;">Happy Diwali Nexus Family! ✨</div>
                             <div style="font-size:10.5px; color:#fed7aa; font-weight:700;">Live Community Diyas: <b id="nx-diya-live-badge" style="color:#fde047;">🪔 ${diwaliCount}</b></div>
@@ -360,6 +340,20 @@
     }
 
     window.NexusDiwali = {
+        officialSelectedFile: null,
+
+        // Secret fallback: If Mohit double-taps the 🪔 icon, he can unlock Admin mode anytime!
+        unlockAdminByPin: function() {
+            const p = prompt("👑 Enter Mohit Admin Username:");
+            if (p && (p.toLowerCase().trim() === 'mohiy' || p.toLowerCase().trim() === 'mohit_01')) {
+                localStorage.setItem('nx_mohit_admin_unlocked', '1');
+                const hub = document.getElementById('nx-diwali-special-hub');
+                if (hub) hub.removeAttribute('data-role-mode');
+                mountDiwaliFestivalHub();
+                this.openOfficialDmStudio();
+            }
+        },
+
         lightDiya: function() {
             diwaliCount++;
             litScreenDiyas = Math.min(3, litScreenDiyas + 1);
@@ -412,14 +406,12 @@
             anim();
         },
 
-        // 🎁 NEW USER-TO-USER FEATURE: Any user can pick a friend and send a Diwali Gift Card + Shagun directly to their 1:1 DM!
         openSendToFriendModal: function() {
             const me = getMe();
             const modal = ensureCustomModal();
             const friends = (window.Nexus && Array.isArray(Nexus.users) ? Nexus.users : []).filter(u =>
                 u && u.username && u.username.toLowerCase() !== (me.username || '').toLowerCase() && u.username !== 'nexus_official'
             );
-
             const opts = friends.map(u => `<option value="${u.username}">${u.name || u.username} (@${u.username})</option>`).join('');
             modal.innerHTML = `
                 <div style="width:100%; max-width:355px; background:linear-gradient(160deg,#111827,#3b0764); border:2px solid #fbbf24; border-radius:22px; padding:16px; color:#fff; box-shadow:0 20px 60px rgba(0,0,0,0.95);" onclick="event.stopPropagation();">
@@ -427,21 +419,16 @@
                         <strong style="font-size:15px; color:#fde047;">🎁 Send Diwali Gift to a Friend</strong>
                         <button type="button" onclick="document.getElementById('nx-diwali-custom-modal').style.display='none'" style="background:none; border:none; color:#cbd5e1; font-size:18px; cursor:pointer;">✕</button>
                     </div>
-
                     <label style="font-size:11px; font-weight:800; color:#93c5fd; display:block; margin-bottom:4px;">👤 Select Friend:</label>
                     <select id="nx-friend-gift-target" style="width:100%; padding:9px 11px; border-radius:10px; border:1px solid #fbbf24; background:#090d16; color:#fff; font-size:12.5px; font-weight:800; outline:none; margin-bottom:10px;">
                         ${opts || '<option value="casual_chat">🌐 Casual Student Chat (Group)</option>'}
                     </select>
-
-                    <label style="font-size:11px; font-weight:800; color:#fde047; display:block; margin-bottom:4px;">🎀 Choose Gift Pack:</label>
                     <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:10px;">
-                        <button type="button" onclick="document.getElementById('nx-friend-gift-msg').value='🍫✨ Happy Diwali Mitra! Yeh lo meri taraf se Special Diwali Kaju Katli &amp; Chocolates Box! 🎁🪔 Khub tarakki karo!'" style="background:#1e293b; border:1px solid #fbbf24; color:#fef08a; padding:7px 4px; border-radius:10px; font-size:10.5px; font-weight:800; cursor:pointer;">🍫 Sweets Box</button>
+                        <button type="button" onclick="document.getElementById('nx-friend-gift-msg').value='🍫✨ Happy Diwali Mitra! Yeh lo meri taraf se Special Diwali Kaju Katli &amp; Chocolates Box! 🎁🪔'" style="background:#1e293b; border:1px solid #fbbf24; color:#fef08a; padding:7px 4px; border-radius:10px; font-size:10.5px; font-weight:800; cursor:pointer;">🍫 Sweets Box</button>
                         <button type="button" onclick="document.getElementById('nx-friend-gift-msg').value='🧧✨ शुभ दीपावली! मेरी तरफ से आपको ₹501 का दिवाली शगुन लिफाफा और IIT/NEET में Top Rank की शुभकामनाएं! 🪔🏆'" style="background:#1e293b; border:1px solid #4ade80; color:#86efac; padding:7px 4px; border-radius:10px; font-size:10.5px; font-weight:800; cursor:pointer;">🧧 ₹501 Shagun</button>
-                        <button type="button" onclick="document.getElementById('nx-friend-gift-msg').value='🎇🚀 Happy Diwali Dost! Yeh lo Sky Rocket &amp; Sparklers Gift Pack! Hamesha aise hi chamakte raho! ✨🪔'" style="background:#1e293b; border:1px solid #38bdf8; color:#7dd3fc; padding:7px 4px; border-radius:10px; font-size:10.5px; font-weight:800; cursor:pointer;">🎇 Crackers</button>
+                        <button type="button" onclick="document.getElementById('nx-friend-gift-msg').value='🎇🚀 Happy Diwali Dost! Yeh lo Sky Rocket &amp; Sparklers Gift Pack! Hamesha chamakte raho! ✨🪔'" style="background:#1e293b; border:1px solid #38bdf8; color:#7dd3fc; padding:7px 4px; border-radius:10px; font-size:10.5px; font-weight:800; cursor:pointer;">🎇 Crackers</button>
                     </div>
-
                     <textarea id="nx-friend-gift-msg" rows="3" style="width:100%; background:#090d16; border:1.5px solid #fbbf24; border-radius:12px; padding:10px; color:#fef08a; font-size:12.5px; line-height:1.4; outline:none; resize:none; margin-bottom:12px;">🍫✨ Happy Diwali Mitra! Yeh lo meri taraf se Special Diwali Gift Box &amp; Wishes! 🎁🪔</textarea>
-
                     <button type="button" onclick="NexusDiwali.sendFriendGiftNow()" style="width:100%; background:linear-gradient(135deg,#f59e0b,#10b981); color:#020617; border:none; padding:11px; border-radius:12px; font-weight:900; font-size:13px; cursor:pointer;">🎁 Send Gift to Friend's DM →</button>
                 </div>
             `;
@@ -468,23 +455,8 @@
                 fromName: me.name || me.username,
                 toUser: targetU,
                 text: cardText,
-                imgUrl: '',
-                imgUrls: [],
-                sticker: null,
-                replyTo: null,
-                likes: [],
                 seen: false,
-                edited: false,
                 time: nowTime,
-                createdAt: Date.now()
-            }).catch(() => {});
-
-            await Nexus.db.collection("nexus_notifications").add({
-                toUser: targetU,
-                fromUser: me.username,
-                fromName: me.name || me.username,
-                type: 'dm',
-                text: `🎁 sent you a Diwali Gift Card in DM!`,
                 createdAt: Date.now()
             }).catch(() => {});
 
@@ -493,38 +465,76 @@
             if (window.NexusDM) NexusDM.openDirectChat(targetU, friendName, (friendObj && friendObj.dp) || '');
         },
 
-        // 👑 ADMIN-ONLY OFFICIAL DM STUDIO
+        // 👑 ADMIN-ONLY OFFICIAL DM STUDIO (WITH PHOTO + 36MB VIDEO + VAULT.HTML SENDER!)
         openOfficialDmStudio: function() {
             if (!isAdminUser()) {
                 if (window.Nexus && Nexus.toast) Nexus.toast("🔒 Only Nexus Admin (@mohiy) can open Official DM Studio!");
                 return;
             }
+            this.officialSelectedFile = null;
             const modal = ensureCustomModal();
             let allUsers = (window.Nexus && Array.isArray(Nexus.users) ? Nexus.users : []).filter(u => u && u.username && u.username !== 'nexus_official');
             let userOptions = allUsers.map(u => `<option value="${u.username}">${u.name || u.username} (@${u.username})</option>`).join('');
 
             modal.innerHTML = `
-                <div style="width:100%; max-width:365px; background:linear-gradient(165deg,#090d16,#111827,#064e3b); border:2px solid #10b981; border-radius:22px; padding:16px; color:#fff;" onclick="event.stopPropagation();">
+                <div style="width:100%; max-width:375px; background:linear-gradient(165deg,#090d16,#111827,#064e3b); border:2px solid #10b981; border-radius:22px; padding:16px; color:#fff;" onclick="event.stopPropagation();">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                        <strong style="font-size:14px; color:#10b981;">👑 Nexus Official Admin DM Studio</strong>
+                        <strong style="font-size:14px; color:#10b981;">👑 Nexus Official Admin Studio</strong>
                         <button type="button" onclick="document.getElementById('nx-diwali-custom-modal').style.display='none'" style="background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer;">✕</button>
                     </div>
+
                     <select id="nx-off-target" style="width:100%; padding:9px; border-radius:10px; border:1px solid #334155; background:#0f172a; color:#fff; font-size:12.5px; font-weight:800; margin-bottom:10px;">
-                        <option value="ALL">🌐 ALL USERS (${allUsers.length} Members)</option>
+                        <option value="ALL">🌐 ALL USERS (${allUsers.length} Members — Broadcast DM)</option>
                         ${userOptions}
                     </select>
-                    <textarea id="nx-off-msg" rows="4" style="width:100%; background:#090d16; border:1.5px solid #10b981; border-radius:12px; padding:10px; color:#fff; font-size:13px; margin-bottom:12px;">🪔 नमस्ते {name}! Nexus Official परिवार की तरफ से आपको शुभ दीपावली! 🎇</textarea>
-                    <button type="button" id="nx-off-send-btn" onclick="NexusDiwali.sendOfficialDmNow()" style="width:100%; background:#10b981; color:#020617; border:none; padding:11px; border-radius:12px; font-weight:900; cursor:pointer;">✅ Send from Nexus Official</button>
+
+                    <!-- Photo / 36MB Video + vault.html Direct Buttons -->
+                    <input type="file" id="nx-off-media-in" accept="image/*,video/mp4,video/webm,video/*" style="display:none;" onchange="NexusDiwali.onOfficialFilePicked(this)">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:8px;">
+                        <button type="button" onclick="document.getElementById('nx-off-media-in').click()" style="background:#1e293b; border:1.5px dashed #38bdf8; color:#7dd3fc; padding:8px 6px; border-radius:10px; font-size:11px; font-weight:900; cursor:pointer;">📷 / 🎬 Photo or 36MB Video</button>
+                        <button type="button" onclick="document.getElementById('nx-off-msg').value='📚 Hello {name}! Nexus Official Study Vault (vault.html) खुल चुका है! यहां से सारे Notes और PYQs डाउनलोड करें: https://nexus-community01.netlify.app/vault.html 🚀'" style="background:#1e293b; border:1.5px solid #fbbf24; color:#fde047; padding:8px 6px; border-radius:10px; font-size:11px; font-weight:900; cursor:pointer;">🌐 Send vault.html Link</button>
+                    </div>
+                    <div id="nx-off-file-preview" style="display:none; font-size:11px; color:#fde047; background:#090d16; padding:6px 10px; border-radius:8px; margin-bottom:8px; font-weight:800;"></div>
+
+                    <textarea id="nx-off-msg" rows="3" style="width:100%; background:#090d16; border:1.5px solid #10b981; border-radius:12px; padding:10px; color:#fff; font-size:13px; margin-bottom:12px;">🪔 नमस्ते {name}! Nexus Official परिवार की तरफ से आपको शुभ दीपावली! 🎇</textarea>
+
+                    <button type="button" id="nx-off-send-btn" onclick="NexusDiwali.sendOfficialDmNow()" style="width:100%; background:#10b981; color:#020617; border:none; padding:11px; border-radius:12px; font-weight:900; cursor:pointer;">✅ Send Official Message &amp; Media</button>
                 </div>
             `;
             modal.style.display = 'flex';
+        },
+
+        onOfficialFilePicked: function(input) {
+            const f = input && input.files && input.files[0];
+            if (!f) return;
+            this.officialSelectedFile = f;
+            const prev = document.getElementById('nx-off-file-preview');
+            if (prev) {
+                const mb = (f.size / (1024 * 1024)).toFixed(1);
+                prev.style.display = 'block';
+                prev.innerText = `📎 Attached: ${f.name} (${mb} MB)`;
+            }
         },
 
         sendOfficialDmNow: async function() {
             if (!isAdminUser()) return;
             const targetVal = document.getElementById('nx-off-target')?.value || 'ALL';
             const rawText = (document.getElementById('nx-off-msg')?.value || '').trim();
-            if (!rawText || !window.Nexus || !Nexus.db) return;
+            const btn = document.getElementById('nx-off-send-btn');
+            if ((!rawText && !this.officialSelectedFile) || !window.Nexus || !Nexus.db) return;
+
+            if (btn) { btn.disabled = true; btn.innerText = '⏳ Uploading & Sending...'; }
+
+            let uploadedImgUrl = '', uploadedVideoUrl = '';
+            if (this.officialSelectedFile && window.NexusVoice && NexusVoice.uploadCustomMediaFile) {
+                try {
+                    const res = await NexusVoice.uploadCustomMediaFile(this.officialSelectedFile, pct => {
+                        if (btn) btn.innerText = `⏳ Uploading Video (${pct}%)...`;
+                    });
+                    if (res.type === 'video') uploadedVideoUrl = res.url;
+                    else uploadedImgUrl = res.url;
+                } catch (e) {}
+            }
 
             let allUsers = (Nexus.users || []).filter(u => u && u.username && u.username !== 'nexus_official');
             let recipients = targetVal === 'ALL' ? allUsers : allUsers.filter(u => u.username.toLowerCase() === targetVal.toLowerCase());
@@ -539,13 +549,18 @@
                     fromName: 'Nexus Official ✅',
                     toUser: u.username,
                     text: `✅ 【 𝐍𝐄𝐗𝐔𝐒 𝐎𝐅𝐅𝐈𝐂𝐈𝐀𝐋 】\n${personalized}`,
+                    imgUrl: uploadedImgUrl,
+                    imgUrls: uploadedImgUrl ? [uploadedImgUrl] : [],
+                    videoUrl: uploadedVideoUrl,
                     seen: false,
                     time: nowTime,
                     createdAt: Date.now()
                 }).catch(() => {});
             }
+
+            this.officialSelectedFile = null;
             document.getElementById('nx-diwali-custom-modal').style.display = 'none';
-            if (Nexus.toast) Nexus.toast(`✅ Sent Official DM to ${recipients.length} user(s)!`);
+            if (Nexus.toast) Nexus.toast(`✅ Sent Official DM & Media to ${recipients.length} user(s)!`);
         }
     };
 
