@@ -1,0 +1,13 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Nexus V2 security baseline.
+    // Intentionally deny every client request until Firebase Auth,
+    // document ownership, membership checks, and schema-specific rules
+    // have been implemented and tested.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
