@@ -55,47 +55,17 @@
             };
         }
 
-        // 2. SILENT LIVE HOT-RELOAD & TYPING DRAFT PROTECTOR (Updates JS files without refreshing page!)
+        // Preserve typed chat drafts and remove Netlify-only navigation clearance on Cloudflare/custom hosts.
         (function() {
-            let currentAppVersion = null;
+            const host = (location.hostname || '').toLowerCase();
+            const isNetlify = host === 'nexus-community01.netlify.app' || host.endsWith('.netlify.app');
+            if (!isNetlify) document.documentElement.classList.add('nx-cloud-host');
 
-            // Protect user's typed text so it is never lost
             document.addEventListener('input', function(e) {
                 if (e.target && (e.target.id === 'nx-dm-input' || e.target.id === 'nx-chat-msg-in')) {
                     try { sessionStorage.setItem('nx_draft_' + e.target.id, e.target.value); } catch (err) {}
                 }
             }, { passive: true });
-
-            // Hot-swap updated JS files silently in background when Admin triggers an update
-            window.hotReloadNexusModule = function(fileName) {
-                const oldScript = document.querySelector(`script[src^="${fileName}"]`);
-                const newScript = document.createElement('script');
-                newScript.src = `${fileName}?v=${Date.now()}`;
-                newScript.charset = 'UTF-8';
-                document.body.appendChild(newScript);
-                if (oldScript) setTimeout(() => oldScript.remove(), 1500);
-            };
-
-            window.addEventListener('load', function() {
-                setTimeout(function() {
-                    if (!window.Nexus || !Nexus.db) return;
-                    Nexus.db.collection("nexus_config").doc("live_version").onSnapshot(function(doc) {
-                        if (!doc.exists) return;
-                        let data = doc.data();
-                        if (!currentAppVersion) {
-                            currentAppVersion = data.versionId;
-                            return;
-                        }
-                        if (data.versionId && data.versionId !== currentAppVersion) {
-                            currentAppVersion = data.versionId;
-                            let targetFiles = Array.isArray(data.files) && data.files.length
-                                ? data.files
-                                : ['core.js', 'home.js', 'chat.js', 'dm.js'];
-                            targetFiles.forEach(function(f) { window.hotReloadNexusModule(f); });
-                        }
-                    });
-                }, 2500);
-            });
         })();
     </script>
 
@@ -113,10 +83,13 @@
             background-color: #050811;
         }
         :root {
-            /* Keep the app navigation above Netlify's injected bottom-right badge. */
             --nx-nav-height: 64px;
             --nx-netlify-clearance: 72px;
             --nx-safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
+        /* Cloudflare/custom hosts do not inject the Netlify badge. */
+        .nx-cloud-host {
+            --nx-netlify-clearance: 0px;
         }
         body {
             background-color: #090d16;
@@ -233,6 +206,7 @@
             z-index: 1000;
         }
         .nx-nav-item {
+            min-width: 0;
             background: none;
             border: 1px solid transparent;
             color: #64748b;
@@ -260,6 +234,7 @@
             border-color: rgba(59, 130, 246, 0.35);
         }
         .nx-fab-post {
+            flex-shrink: 0;
             width: 48px;
             height: 48px;
             border-radius: 50%;
@@ -291,7 +266,9 @@
             display: none;
             align-items: center;
             justify-content: center;
-            padding: 16px;
+            padding: max(16px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px));
+            overflow-y: auto;
+            overscroll-behavior: contain;
         }
         .nx-modal-box {
             background: #0f172a;
@@ -301,8 +278,10 @@
             max-width: 400px;
             padding: 18px;
             color: white;
-            max-height: 86dvh;
+            max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
             overflow-y: auto;
+            overscroll-behavior: contain;
+            -webkit-overflow-scrolling: touch;
             box-shadow: 0 12px 32px rgba(0,0,0,0.5);
         }
         #nx-toast {
@@ -610,6 +589,8 @@
                         lastUsersProfileHash = currentHash;
                         this.listeners.onUsers.forEach(fn => { try { fn(this.users); } catch(e) {} });
                     }
+                }, err => {
+                    console.error('[Nexus] Account/profile read failed:', err && (err.code || err.message));
                 });
 
                 this.db.collection("nexus_real_posts").orderBy("createdAt", "desc").limit(50).onSnapshot(snap => {
@@ -621,6 +602,11 @@
                     safeSetLocalCache('nx_light_posts_v1', ultraLightPosts);
                     this.rebuildAllUsersMasterList();
                     this.listeners.onPosts.forEach(fn => { try { fn(this.posts); } catch(e) {} });
+                }, err => {
+                    console.error('[Nexus] Public post feed read failed:', err && (err.code || err.message));
+                    if (err && err.code === 'permission-denied') {
+                        console.warn('[Nexus] Feed is blocked by Firestore Rules. Existing posts remain in the database; client access is currently denied.');
+                    }
                 });
             },
 

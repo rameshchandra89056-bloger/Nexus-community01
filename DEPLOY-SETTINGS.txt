@@ -1,0 +1,22 @@
+NEXUS COMMUNITY — ORIGINAL UI CLOUDFLARE STAGING PREVIEW
+
+Cloudflare Pages settings:
+Framework preset: None
+Build command: exit 0
+Build output directory: .
+Root directory: nexus-v2
+Production branch: create/use a separate staging branch
+
+The deployed index.html is the original Nexus entry page and currently
+contains the original Firebase project configuration (nexus-community-bf99c)
+so it targets the previous database rather than a blank new staging database.
+
+IMPORTANT:
+- Do NOT deploy to the old production domain until Firestore Rules and Google Auth migration are complete.
+- If the old production Firestore Rules are deny-all, the old posts/accounts will NOT load. The data is not deleted; client read access is blocked.
+- Do NOT restore allow read, write: if true.
+- The legacy PIN/localStorage login is not secure and is not converted to Google UID authentication by this frontend patch.
+- Private DMs, groups, media uploads and Watch Party require suitable Firestore/Storage permissions; the current deny-all rules block their backend operations.
+- The legacy admin Vault is temporarily replaced with a maintenance screen because its old client-side code exposes PINs and private messages. Original file is preserved as VAULT-LEGACY-BACKUP.html outside the deploy folder.
+- YouTube/MP3 Watch Party uses live.js as the active engine. ytparty.js is retained but not auto-loaded because both files define window.NexusWatchParty and overwrite each other.
+- watchparty.js is retained and syntax-repaired but not auto-loaded; it is a legacy duplicate engine.
