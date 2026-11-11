@@ -316,3 +316,140 @@
     }, 400);
 })();
 // === END OF AIFIX.JS ===
+
+/* ==========================================================
+   NEXUS ULTIMATE FIX: DOMAIN REDIRECT, LOADER, VAULT & PWA
+   ========================================================== */
+
+(function() {
+    const NEW_DOMAIN_URL = "https://nexus-community01.vercel.app";
+    const ADMIN_SECRET_PIN = "2026"; // Apna Secret Admin PIN yahan badal sakte hain
+
+    // 1. NETLIFY PAR ENERGETIC POSTER DIKHANA (Vercel par nahi dikhega)
+    if (window.location.hostname.includes("netlify.app")) {
+        document.addEventListener("DOMContentLoaded", () => {
+            const poster = document.createElement("div");
+            poster.style.cssText = `
+                position: fixed; inset: 0; z-index: 999999;
+                background: radial-gradient(circle at top, #1e1b4b, #090d16);
+                display: flex; flex-direction: column; align-items: center;
+                justify-content: center; padding: 24px; text-align: center;
+                color: #ffffff; font-family: sans-serif;
+            `;
+            poster.innerHTML = `
+                <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(99,102,241,0.4); border-radius: 24px; padding: 32px 24px; max-width: 380px; box-shadow: 0 20px 50px rgba(0,0,0,0.6); backdrop-filter: blur(12px);">
+                    <div style="font-size: 48px; margin-bottom: 12px;">🚀</div>
+                    <h1 style="font-size: 26px; font-weight: 800; margin: 0 0 10px; background: linear-gradient(90deg, #60a5fa, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                        NEXUS 2.0 IS LIVE!
+                    </h1>
+                    <p style="color: #cbd5e1; font-size: 15px; line-height: 1.6; margin-bottom: 24px;">
+                        Humari purani website ab superfast naye server par shift ho gayi hai! Naye features, fast chat aur voice rooms ke liye abhi naye link par aayein.
+                    </p>
+                    <a href="${NEW_DOMAIN_URL}" style="display: block; background: linear-gradient(90deg, #4f46e5, #7c3aed); color: #fff; text-decoration: none; padding: 14px 20px; border-radius: 14px; font-weight: 700; font-size: 16px; box-shadow: 0 8px 20px rgba(99,102,241,0.5);">
+                        ⚡ Open New Nexus Website
+                    </a>
+                </div>
+            `;
+            document.body.appendChild(poster);
+        });
+        return; // Netlify par aage ka code rok dega
+    }
+
+    // 2. SLOW INTERNET BLACK SCREEN FIX (Smart Skeleton Loader)
+    document.addEventListener("DOMContentLoaded", () => {
+        const loader = document.createElement("div");
+        loader.id = "nexus-smart-loader";
+        loader.style.cssText = `
+            position: fixed; top: 60px; bottom: 70px; left: 0; right: 0;
+            background: #0b0f19; z-index: 999; display: flex;
+            flex-direction: column; align-items: center; justify-content: center;
+            color: #94a3b8; font-family: sans-serif; transition: opacity 0.4s ease;
+        `;
+        loader.innerHTML = `
+            <div style="width: 45px; height: 45px; border: 4px solid rgba(99,102,241,0.2); border-top-color: #6366f1; border-radius: 50%; animation: nxSpin 0.8s linear infinite;"></div>
+            <p style="margin-top: 14px; font-size: 14px; font-weight: 600; color: #e2e8f0;">Nexus Connect ho raha hai...</p>
+            <p id="nx-slow-msg" style="margin-top: 6px; font-size: 12px; color: #64748b; display: none;">Internet slow hai, kripya thoda intezar karein...</p>
+            <style>@keyframes nxSpin { to { transform: rotate(360deg); } }</style>
+        `;
+        document.body.appendChild(loader);
+
+        // Agar 3 second tak load na ho toh slow internet message dikhao
+        setTimeout(() => {
+            const slowMsg = document.getElementById("nx-slow-msg");
+            if (slowMsg) slowMsg.style.display = "block";
+        }, 3000);
+
+        // Jab page ya data load ho jaye toh loader hata do
+        const hideLoader = () => {
+            const el = document.getElementById("nexus-smart-loader");
+            if (el) {
+                el.style.opacity = "0";
+                setTimeout(() => el.remove(), 400);
+            }
+        };
+        window.addEventListener("load", () => setTimeout(hideLoader, 800));
+        setTimeout(hideLoader, 6000); // Max 6 sec baad apne aap hat jayega
+    });
+
+    // 3. SAFE WHATSAPP INVITE LINK (Koi dusre ka account open nahi kar payega)
+    const urlParams = new URLSearchParams(window.location.search);
+    const sharedUser = urlParams.get("user") || urlParams.get("invite") || urlParams.get("uid");
+    if (sharedUser) {
+        // URL ko clean karo taaki auto-login exploit na ho
+        window.history.replaceState({}, document.title, window.location.pathname);
+        sessionStorage.setItem("nexus_invited_by", sharedUser);
+    }
+
+    // 4. MASTER VAULT (vault.html) SECRET OPEN (Nexus logo par 5 baar tap karein)
+    let tapCount = 0;
+    let tapTimer;
+    document.addEventListener("click", (e) => {
+        const targetText = (e.target.innerText || "").trim();
+        if (targetText.includes("Nexus")) {
+            tapCount++;
+            clearTimeout(tapTimer);
+            tapTimer = setTimeout(() => { tapCount = 0; }, 1500);
+
+            if (tapCount >= 5) {
+                tapCount = 0;
+                const pin = prompt("🔐 Master Vault Admin PIN darj karein:");
+                if (pin === ADMIN_SECRET_PIN) {
+                    window.location.href = "/vault.html";
+                } else if (pin !== null) {
+                    alert("❌ Galat PIN! Sirf Admin hi Master Vault khol sakte hain.");
+                }
+            }
+        }
+    });
+
+    // 5. APP DOWNLOAD (PWA INSTALL) 100% WORKING FIX
+    let deferredPrompt = null;
+    window.addEventListener("beforeinstallprompt", (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+    });
+
+    window.installNexusApp = async function() {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === "accepted") {
+                deferredPrompt = null;
+            }
+        } else {
+            alert("📲 App Download karne ke liye:\n\n1. Browser ke upar koone mein 3-dots (⋮) par click karein.\n2. 'Install App' ya 'Add to Home Screen' par tap karein!\n\n(Agar aapne pehle se download kiya hai, toh apne phone ki Home Screen check karein).");
+        }
+    };
+
+    // Kisi bhi Download / Install button par click hone par yeh function chalega
+    document.addEventListener("click", (e) => {
+        const btn = e.target.closest("button, a, div");
+        if (!btn) return;
+        const txt = (btn.innerText || "").toLowerCase();
+        if (txt.includes("download app") || txt.includes("install app") || btn.id === "installAppBtn" || btn.id === "pwa-install-btn") {
+            e.preventDefault();
+            window.installNexusApp();
+        }
+    });
+})();
+
