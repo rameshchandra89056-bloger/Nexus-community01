@@ -1,29 +1,75 @@
 /* ============================================================================
-   NEXUS V3 MASTER ENGINE:
-   1. Instant Real Database & Profile Unlock for New Users
-   2. 100% Working Cloud Account Creation (Fixes "Connecting to cloud, wait 1 sec...")
-   3. Instagram-Style Real Member Profile Post (+ Button)
-   4. Up to 20MB Video, Photo, View-Once & PDF Sender (In Feed Posts & 1:1 DM)
-   5. Official Nexus-Only AI Assistant (Live Server Status & Platform Guide)
+   NEXUS FINAL REAL-TIME ENGINE (ZERO-REFRESH LIVE SYNC)
+   - Restores Member Profile "💬 Message" Button & Top Header "🤖 AI" / "📲 App"
+   - Instant Cloud Account Creation (Fixes #nx-toast "Connecting to cloud...")
+   - Real-Time Instagram-Style Posts & 1:1 DM (Photo, 20MB Video, View-Once, PDF)
+   - Dual-Mobile Live YouTube Watch Party Sync & 100% Search
+   - Official Nexus-Only AI (Owner: Mohit @mohit_01 & Live Server Status)
    ============================================================================ */
 
 (function() {
-    // --- HELPER: GET CURRENT REAL MEMBER PROFILE (INSTAGRAM STYLE) ---
-    function getRealMemberProfile() {
-        const keys = ["nexus_user", "currentUser", "nx_user", "user", "profile"];
+    const VERCEL_URL = "https://nexus-community01.vercel.app";
+
+    // --- 0. BACKGROUND CACHE & SERVICE WORKER AUTO-UPDATER (NO MANUAL REFRESH NEEDED) ---
+    if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.getRegistrations().then(regs => {
+            regs.forEach(r => r.update());
+        });
+    }
+
+    // --- 1. NETLIFY OLD DOMAIN SIMPLE REDIRECT SCREEN ---
+    if (window.location.hostname.includes("netlify.app")) {
+        const renderNetlifyRedirect = () => {
+            document.body.innerHTML = `
+                <div style="min-height:100vh;background:#090d16;color:#fff;display:flex;align-items:center;justify-content:center;padding:24px;font-family:system-ui,sans-serif;text-align:center;">
+                    <div style="background:#111827;border:2px solid #6366f1;border-radius:22px;padding:32px 24px;max-width:380px;width:100%;box-shadow:0 15px 40px rgba(0,0,0,0.7);">
+                        <div style="font-size:48px;margin-bottom:10px;">🚀</div>
+                        <h2 style="margin:0 0 10px;font-size:22px;color:#60a5fa;">Nexus Naye Server Par Shift Ho Gaya Hai!</h2>
+                        <p style="color:#cbd5e1;font-size:14px;line-height:1.6;margin-bottom:22px;">
+                            Purana link ab band ho chuka hai. Live 1:1 DM, Watch Party aur Study Channels ke liye niche button dabayein:
+                        </p>
+                        <a href="${VERCEL_URL}" style="display:block;background:linear-gradient(90deg,#4f46e5,#7c3aed);color:#fff;text-decoration:none;padding:14px;border-radius:12px;font-weight:800;font-size:16px;">
+                            ⚡ Open New Nexus Website
+                        </a>
+                    </div>
+                </div>
+            `;
+        };
+        if (document.body) renderNetlifyRedirect();
+        else window.addEventListener("DOMContentLoaded", renderNetlifyRedirect);
+        return;
+    }
+
+    // --- HELPER: GET REAL MEMBER PROFILE & SHOW TOAST ---
+    function showNexusToast(msg) {
+        if (window.Nexus && typeof window.Nexus.toast === "function") {
+            window.Nexus.toast(msg);
+        } else {
+            const t = document.getElementById("nx-toast");
+            if (t) {
+                t.innerText = msg;
+                t.style.display = "block";
+                setTimeout(() => { t.style.display = "none"; }, 2400);
+            }
+        }
+    }
+
+    function getRealUser() {
+        const keys = ["nexus_user", "currentUser", "nx_user", "user"];
         for (const k of keys) {
             try {
                 const raw = localStorage.getItem(k);
                 if (raw) {
-                    const p = JSON.parse(raw);
-                    if (p && (p.name || p.username || p.handle)) {
-                        const cleanHandle = (p.handle || p.username || p.id || "student").replace(/^@/, "");
+                    const u = JSON.parse(raw);
+                    if (u && (u.name || u.username || u.handle)) {
+                        const clean = (u.handle || u.username || u.name).replace(/^@/, "");
                         return {
-                            uid: p.uid || cleanHandle,
-                            name: p.name || cleanHandle,
-                            handle: "@" + cleanHandle,
-                            stream: p.stream || p.bio || "IIT-JEE Aspirant",
-                            avatar: p.avatar || p.photoURL || p.pic || "",
+                            uid: u.uid || clean,
+                            name: u.name || clean,
+                            username: clean,
+                            handle: "@" + clean,
+                            stream: u.stream || u.bio || "IIT-JEE Aspirant",
+                            avatar: u.avatar || u.photoURL || "",
                             verified: true
                         };
                     }
@@ -33,511 +79,562 @@
         return null;
     }
 
-    // --- 1. AUTO-UNLOCK REAL DATABASE FOR NEW USERS ---
-    function unlockRealDatabaseForAll() {
-        if (!getRealMemberProfile()) {
-            // Temporary guest access so Firebase listeners load all real posts, chats & profiles immediately
-            const guestSession = {
-                uid: "guest_" + Math.floor(1000 + Math.random() * 9000),
-                name: "Nexus Visitor",
-                username: "visitor",
-                handle: "@visitor",
-                stream: "JEE / NEET Aspirant",
-                isGuest: true,
-                verified: false
-            };
-            localStorage.setItem("nexus_guest_session", JSON.stringify(guestSession));
+    // --- 2. RESTORE TOP HEADER "🤖 AI", "📲 App" & MEMBER PROFILE "💬 Message" BUTTON ---
+    function ensureUIButtonsRestored() {
+        // A. Ensure Top Header has 🤖 AI and 📲 App buttons
+        const header = document.querySelector("header, .nx-header, .top-bar, .navbar") || document.body.firstElementChild;
+        if (header && (header.innerText || "").includes("Nexus")) {
+            if (!document.getElementById("nx-restored-ai-btn") && !(header.innerText || "").includes("AI")) {
+                const btnGroup = document.createElement("div");
+                btnGroup.id = "nx-restored-ai-btn";
+                btnGroup.style.cssText = "display:inline-flex;gap:8px;align-items:center;margin-left:auto;margin-right:10px;";
+                btnGroup.innerHTML = `
+                    <button onclick="window.openNexusOfficialAI()" style="background:rgba(99,102,241,0.18);border:1px solid #6366f1;color:#e0e7ff;padding:5px 12px;border-radius:18px;font-size:12px;font-weight:700;cursor:pointer;">🤖 AI</button>
+                    <button onclick="window.installNexusPWA()" style="background:rgba(16,185,129,0.18);border:1px solid #10b981;color:#6ee7b7;padding:5px 12px;border-radius:18px;font-size:12px;font-weight:700;cursor:pointer;">📲 App</button>
+                `;
+                header.appendChild(btnGroup);
+            }
         }
-    }
-    unlockRealDatabaseForAll();
 
-    // --- 2. FIX "CREATE CLOUD ACCOUNT" & "LOGIN EXISTING" STUCK BUTTON ---
+        // B. Restore "💬 Message" Button inside "Member Full Profile" popup next to "+ Follow"
+        document.querySelectorAll("button").forEach(btn => {
+            const txt = (btn.innerText || "").trim();
+            if ((txt === "+ Follow" || txt === "Following" || txt === "Follow") && !btn.dataset.msgAdded) {
+                const modalCard = btn.closest("div");
+                if (modalCard && (document.body.innerText || "").includes("Member Full Profile")) {
+                    btn.dataset.msgAdded = "true";
+                    const parentRow = btn.parentElement;
+                    if (parentRow) {
+                        parentRow.style.display = "flex";
+                        parentRow.style.gap = "10px";
+                        btn.style.flex = "1";
+
+                        const msgBtn = document.createElement("button");
+                        msgBtn.id = "nx-profile-msg-btn";
+                        msgBtn.innerHTML = "💬 Message";
+                        msgBtn.style.cssText = `
+                            flex: 1; background: linear-gradient(90deg, #10b981, #059669);
+                            color: #ffffff; border: none; border-radius: 12px; padding: 12px;
+                            font-weight: 800; font-size: 14px; cursor: pointer;
+                            box-shadow: 0 4px 15px rgba(16,185,129,0.35);
+                        `;
+                        msgBtn.onclick = function(ev) {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            // Find member name & handle from the profile card
+                            const fullBox = btn.closest(".modal, [style*='fixed'], div") || document.body;
+                            const handleMatch = (fullBox.innerText || "").match(/@([a-zA-Z0-9_]+)/);
+                            const targetHandle = handleMatch ? handleMatch[1] : "member";
+                            // Close profile modal if close button exists
+                            const closeX = fullBox.querySelector("button");
+                            if (closeX && (closeX.innerText.includes("✕") || closeX.innerText.includes("X") || closeX.innerText.includes("×"))) {
+                                closeX.click();
+                            }
+                            // Open 1:1 DM or switch to DM tab immediately without refresh
+                            if (window.Nexus && typeof window.Nexus.openDM === "function") {
+                                window.Nexus.openDM(targetHandle);
+                            } else {
+                                const dmNav = document.querySelectorAll(".nx-nav-item, nav button, footer button")[1];
+                                if (dmNav) dmNav.click();
+                                showNexusToast("💬 Opening 1:1 Chat with @" + targetHandle);
+                            }
+                        };
+                        parentRow.appendChild(msgBtn);
+                    }
+                }
+            }
+        });
+    }
+
+    // Run UI observer so buttons appear instantly without refreshing whenever any popup opens
+    const uiObserver = new MutationObserver(() => ensureUIButtonsRestored());
+    if (document.body) {
+        uiObserver.observe(document.body, { childList: true, subtree: true });
+        ensureUIButtonsRestored();
+    } else {
+        window.addEventListener("DOMContentLoaded", () => {
+            uiObserver.observe(document.body, { childList: true, subtree: true });
+            ensureUIButtonsRestored();
+        });
+    }
+
+    // --- 3. ZERO-REFRESH CLOUD ACCOUNT CREATE & LOGIN (FIXES STUCK #nx-toast) ---
     document.addEventListener("click", async function(e) {
         const btn = e.target.closest("button");
         if (!btn) return;
         const txt = (btn.innerText || "").trim();
 
         if (txt === "Create Cloud Account" || txt === "Login Existing") {
-            const card = btn.closest("div");
-            if (!card) return;
-            const inputs = card.querySelectorAll("input");
+            const formBox = btn.closest("div");
+            if (!formBox) return;
+            const inputs = formBox.querySelectorAll("input");
             if (inputs.length < 2) return;
 
             const vals = Array.from(inputs).map(i => i.value.trim());
-            const fullName = vals[0];
-            const rawHandle = vals[1] || vals[0];
-            const userStream = vals.length >= 4 ? (vals[2] || "IIT-JEE Aspirant") : "IIT-JEE Aspirant";
+            const uName = vals[0];
+            const rawId = vals[1] || uName;
+            const uStream = vals.length >= 4 ? (vals[2] || "IIT-JEE Aspirant") : "IIT-JEE Aspirant";
             const rawPass = vals[vals.length - 1] || "1234";
 
-            if (!fullName) {
-                alert("⚠️ Kripya apna Naam aur Unique ID dalein!");
+            if (!uName) {
+                showNexusToast("⚠️ Kripya apna Naam aur ID dalein!");
                 return;
             }
 
-            const cleanId = rawHandle.replace(/^@/, "").replace(/[.#$[\]\s]/g, "_");
+            const cleanId = rawId.replace(/^@/, "").replace(/[.#$[\]\s]/g, "_");
             const safePass = rawPass.length < 6 ? (rawPass + "_nx26") : rawPass;
 
-            const memberData = {
+            const userObj = {
                 uid: cleanId,
-                name: fullName,
+                id: cleanId,
+                name: uName,
                 username: cleanId,
                 handle: "@" + cleanId,
-                stream: userStream,
-                bio: userStream,
+                stream: uStream,
+                bio: uStream,
                 password: safePass,
                 verified: true,
                 online: true,
                 joinedAt: Date.now()
             };
 
-            // Save to all standard storage keys so the whole app recognizes the real user
-            localStorage.setItem("nexus_user", JSON.stringify(memberData));
-            localStorage.setItem("currentUser", JSON.stringify(memberData));
-            localStorage.setItem("nx_user", JSON.stringify(memberData));
+            // Save in all storage keys immediately
+            localStorage.setItem("nexus_user", JSON.stringify(userObj));
+            localStorage.setItem("currentUser", JSON.stringify(userObj));
+            localStorage.setItem("nx_user", JSON.stringify(userObj));
             localStorage.setItem("nx_logged_in", "true");
-            localStorage.removeItem("nexus_guest_session");
 
-            // Sync with Firebase Realtime Database
+            // Push to Firebase Realtime DB in background
             try {
                 if (window.firebase && firebase.database) {
-                    await firebase.database().ref("users/" + cleanId).update(memberData);
+                    firebase.database().ref("users/" + cleanId).update(userObj);
                 }
-            } catch (err) {
-                console.warn("Firebase user sync queued:", err);
-            }
+            } catch (err) {}
 
-            // Fix stuck "Connecting to cloud, wait 1 sec..." toast & redirect to Real Feed
+            // Immediately update UI WITHOUT page reload!
             setTimeout(() => {
-                document.querySelectorAll("div, span").forEach(el => {
-                    if ((el.innerText || "").includes("Connecting to cloud")) {
-                        el.innerText = "✅ Cloud Account Connected! Welcome " + fullName;
-                        el.style.background = "#10b981";
-                    }
-                });
-                setTimeout(() => window.location.reload(), 600);
-            }, 500);
+                showNexusToast("✅ Welcome " + uName + "! Account Active.");
+                if (window.Nexus && typeof window.Nexus.init === "function") {
+                    try { window.Nexus.init(); } catch (e) {}
+                }
+                const firstTabBtn = document.querySelector(".nx-nav-item");
+                if (window.Nexus && typeof window.Nexus.switchTab === "function" && firstTabBtn) {
+                    const tabId = firstTabBtn.getAttribute("data-tab");
+                    if (tabId) window.Nexus.switchTab(tabId, firstTabBtn);
+                } else if (firstTabBtn) {
+                    firstTabBtn.click();
+                }
+            }, 350);
         }
     }, true);
 
-    // --- 3. 20MB VIDEO, PHOTO & PDF CHUNKED CLOUD UPLOAD ENGINE ---
-    async function processAndUploadMedia(file, onProgress) {
-        const MAX_SIZE = 20 * 1024 * 1024; // 20 MB Limit
-        if (file.size > MAX_SIZE) {
-            throw new Error("File 20MB se badi hai! Kripya 20MB se kam ka video ya file chunein.");
+    // --- 4. 20MB VIDEO, PHOTO & PDF CHUNKED LIVE UPLOAD ENGINE ---
+    async function uploadMediaLive(file, onProgress) {
+        if (file.size > 20 * 1024 * 1024) {
+            throw new Error("File 20MB se badi hai! Kripya 20MB se kam ki file chunein.");
         }
 
-        // If it's an image, compress it for instant fast loading
+        // Fast Image Compression using Nexus.compressImage or Canvas
         if (file.type.startsWith("image/")) {
-            onProgress(30);
+            onProgress(40);
             return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        const canvas = document.createElement("canvas");
-                        let w = img.width, h = img.height, maxW = 900;
-                        if (w > maxW) { h = Math.round((h * maxW) / w); w = maxW; }
-                        canvas.width = w; canvas.height = h;
-                        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+                if (window.Nexus && typeof window.Nexus.compressImage === "function") {
+                    window.Nexus.compressImage(file, 900, 0.75, (dataUrl) => {
                         onProgress(100);
-                        resolve({ type: "image", name: file.name, size: file.size, dataUrl: canvas.toDataURL("image/jpeg", 0.72) });
+                        resolve({ type: "image", name: file.name, size: file.size, dataUrl: dataUrl });
+                    });
+                } else {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        onProgress(100);
+                        resolve({ type: "image", name: file.name, size: file.size, dataUrl: ev.target.result });
                     };
-                    img.src = ev.target.result;
-                };
-                reader.readAsDataURL(file);
+                    reader.readAsDataURL(file);
+                }
             });
         }
 
-        // For Video (up to 20MB) or PDF/Audio: Read as Base64 & store in Firebase Chunks
+        // Video (<20MB) or PDF/File Chunked Upload to Firebase
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onprogress = (ev) => {
-                if (ev.lengthComputable) {
-                    onProgress(Math.round((ev.loaded / ev.total) * 50));
-                }
+                if (ev.lengthComputable) onProgress(Math.round((ev.loaded / ev.total) * 50));
             };
             reader.onload = async (ev) => {
-                const base64Data = ev.target.result;
-                const mediaType = file.type.startsWith("video/") ? "video" : "file";
-                const mediaId = "media_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+                const base64 = ev.target.result;
+                const mType = file.type.startsWith("video/") ? "video" : "file";
+                const mediaId = "nxm_" + Date.now() + "_" + Math.floor(Math.random() * 999);
 
-                // If Firebase is connected, upload in 250KB chunks so 20MB video never fails
                 if (window.firebase && firebase.database) {
                     try {
-                        const chunkSize = 250 * 1024;
-                        const totalChunks = Math.ceil(base64Data.length / chunkSize);
-                        const dbRef = firebase.database().ref("nexus_media_chunks/" + mediaId);
-
-                        for (let i = 0; i < totalChunks; i++) {
-                            const piece = base64Data.slice(i * chunkSize, (i + 1) * chunkSize);
-                            await dbRef.child("c_" + i).set(piece);
-                            onProgress(50 + Math.round(((i + 1) / totalChunks) * 50));
+                        const chunkSize = 240 * 1024;
+                        const total = Math.ceil(base64.length / chunkSize);
+                        const ref = firebase.database().ref("nexus_media_chunks/" + mediaId);
+                        for (let i = 0; i < total; i++) {
+                            await ref.child("c_" + i).set(base64.slice(i * chunkSize, (i + 1) * chunkSize));
+                            onProgress(50 + Math.round(((i + 1) / total) * 50));
                         }
-                        await dbRef.child("meta").set({
-                            totalChunks: totalChunks,
-                            mime: file.type,
-                            name: file.name,
-                            size: file.size
-                        });
-                        resolve({
-                            type: mediaType,
-                            name: file.name,
-                            size: file.size,
-                            chunkedId: mediaId,
-                            dataUrl: totalChunks <= 6 ? base64Data : null // Direct preview for small videos
-                        });
+                        await ref.child("meta").set({ totalChunks: total, mime: file.type, name: file.name, size: file.size });
+                        resolve({ type: mType, name: file.name, size: file.size, chunkedId: mediaId, dataUrl: total <= 5 ? base64 : null });
                         return;
-                    } catch (e) {
-                        console.warn("Chunk upload fallback:", e);
-                    }
+                    } catch (e) {}
                 }
                 onProgress(100);
-                resolve({ type: mediaType, name: file.name, size: file.size, dataUrl: base64Data });
+                resolve({ type: mType, name: file.name, size: file.size, dataUrl: base64 });
             };
-            reader.onerror = () => reject(new Error("File read karne mein error aayi."));
+            reader.onerror = () => reject(new Error("File read error"));
             reader.readAsDataURL(file);
         });
     }
 
-    // Reassemble 20MB chunked video/file from Firebase when viewing
-    window.loadChunkedNexusMedia = async function(mediaId, targetElementId) {
-        const el = document.getElementById(targetElementId);
-        if (!el || !window.firebase || !firebase.database) return;
+    window.playChunkedNexusMedia = async function(mediaId, containerId) {
+        const box = document.getElementById(containerId);
+        if (!box || !window.firebase || !firebase.database) return;
+        box.innerHTML = `<div style="padding:12px;color:#60a5fa;font-size:13px;">⏳ Loading 20MB Cloud Media...</div>`;
         try {
-            el.innerHTML = `<div style="padding:14px; color:#60a5fa; font-size:13px;">⏳ Loading Video from Cloud...</div>`;
             const snap = await firebase.database().ref("nexus_media_chunks/" + mediaId).once("value");
-            const val = snap.val();
-            if (!val || !val.meta) return;
-            let fullBase64 = "";
-            for (let i = 0; i < val.meta.totalChunks; i++) {
-                fullBase64 += (val["c_" + i] || "");
-            }
-            if (val.meta.mime && val.meta.mime.startsWith("video/")) {
-                el.innerHTML = `<video src="${fullBase64}" controls playsinline style="width:100%; max-height:380px; border-radius:12px; background:#000;"></video>`;
+            const data = snap.val();
+            if (!data || !data.meta) return;
+            let full = "";
+            for (let i = 0; i < data.meta.totalChunks; i++) full += (data["c_" + i] || "");
+            if ((data.meta.mime || "").startsWith("video/")) {
+                box.innerHTML = `<video src="${full}" controls autoplay playsinline style="width:100%;max-height:360px;border-radius:12px;background:#000;"></video>`;
             } else {
-                el.innerHTML = `<a href="${fullBase64}" download="${val.meta.name}" style="display:inline-block; background:#4f46e5; color:#fff; padding:10px 16px; border-radius:10px; text-decoration:none; font-weight:700;">📥 Download ${val.meta.name}</a>`;
+                box.innerHTML = `<a href="${full}" download="${data.meta.name}" style="display:inline-block;background:#4f46e5;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:700;">📥 Download ${data.meta.name}</a>`;
             }
         } catch (e) {
-            el.innerHTML = `<div style="color:#f87171;">⚠️ Media load nahi ho saka.</div>`;
+            box.innerHTML = `<div style="color:#f87171;">⚠️ Media load error.</div>`;
         }
     };
 
-    // --- 4. INSTAGRAM-STYLE POST CREATOR (+ BUTTON) WITH 20MB VIDEO & REAL MEMBER PROFILE ---
-    function openInstagramStylePostModal() {
-        const member = getRealMemberProfile();
-        if (!member || member.isGuest) {
-            alert("👤 Post karne ke liye kripya pehle apna Account Login ya Create karein!");
-            return;
-        }
-        if (document.getElementById("nx-insta-post-modal")) return;
+    // --- 5. REAL-TIME 1:1 DM MEDIA SENDER & LIVE RECEIVER (NO REFRESH NEEDED) ---
+    function sendLiveDMMedia(mode) {
+        const picker = document.createElement("input");
+        picker.type = "file";
+        picker.accept = (mode === "Photo" || mode === "View-Once") ? "image/*,video/*" : ".pdf,.doc,.docx,.txt,image/*,video/*";
 
-        let selectedMediaFile = null;
-        const modal = document.createElement("div");
-        modal.id = "nx-insta-post-modal";
-        modal.style.cssText = `
-            position:fixed; inset:0; z-index:999999; background:rgba(9,13,22,0.96);
-            display:flex; flex-direction:column; padding:18px; color:#fff; font-family:system-ui,sans-serif;
-        `;
-
-        const avatarLetter = (member.name || "N").charAt(0).toUpperCase();
-        modal.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e293b; padding-bottom:12px;">
-                <div style="font-size:18px; font-weight:800;">✨ Create New Nexus Post</div>
-                <button id="nx-close-post" style="background:#334155; color:#fff; border:none; border-radius:8px; padding:6px 12px; font-weight:700;">✕</button>
-            </div>
-
-            <!-- Real Member Instagram Header Preview -->
-            <div style="display:flex; align-items:center; gap:12px; margin-top:16px; background:#111827; padding:12px; border-radius:14px; border:1px solid #1f2937;">
-                <div style="width:44px; height:44px; border-radius:50%; background:linear-gradient(135deg,#10b981,#3b82f6); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px;">
-                    ${member.avatar ? `<img src="${member.avatar}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">` : avatarLetter}
-                </div>
-                <div>
-                    <div style="font-weight:700; font-size:15px; display:flex; align-items:center; gap:6px;">
-                        ${member.name} <span style="background:#10b981; color:#000; font-size:10px; padding:2px 5px; border-radius:50%; font-weight:900;">✓</span>
-                    </div>
-                    <div style="font-size:12px; color:#94a3b8;">${member.handle} • ${member.stream}</div>
-                </div>
-            </div>
-
-            <textarea id="nx-post-caption" placeholder="Apne dosto ke saath study update, doubt ya vichar share karein..." style="margin-top:14px; width:100%; height:110px; background:#111827; border:1px solid #334155; border-radius:14px; color:#fff; padding:14px; font-size:15px; outline:none; resize:none;"></textarea>
-
-            <div style="display:flex; gap:10px; margin-top:14px;">
-                <label style="flex:1; background:#1e293b; border:1px dashed #6366f1; padding:12px; border-radius:12px; text-align:center; font-weight:700; font-size:13px; cursor:pointer;">
-                    🖼️ Add Photo
-                    <input type="file" id="nx-post-img-in" accept="image/*" style="display:none;">
-                </label>
-                <label style="flex:1; background:#1e293b; border:1px dashed #ec4899; padding:12px; border-radius:12px; text-align:center; font-weight:700; font-size:13px; cursor:pointer;">
-                    🎥 Video (<20MB)
-                    <input type="file" id="nx-post-vid-in" accept="video/*" style="display:none;">
-                </label>
-            </div>
-
-            <div id="nx-post-media-preview" style="margin-top:12px; font-size:13px; color:#38bdf8;"></div>
-            <div id="nx-post-progress" style="display:none; margin-top:10px; background:#1e293b; border-radius:8px; overflow:hidden;">
-                <div id="nx-post-prog-bar" style="width:0%; height:8px; background:linear-gradient(90deg,#4f46e5,#ec4899); transition:width 0.2s;"></div>
-            </div>
-
-            <button id="nx-submit-post-btn" style="margin-top:auto; background:linear-gradient(90deg,#4f46e5,#7c3aed); color:#fff; border:none; padding:15px; border-radius:14px; font-weight:800; font-size:16px;">
-                🚀 Share Post with Real Profile
-            </button>
-        `;
-        document.body.appendChild(modal);
-
-        const prevBox = document.getElementById("nx-post-media-preview");
-        const handleFileSelect = (e) => {
-            const f = e.target.files[0];
-            if (!f) return;
-            if (f.size > 20 * 1024 * 1024) {
-                alert("⚠️ File 20MB se badi hai! Kripya 20MB se chota video ya photo chunein.");
-                return;
-            }
-            selectedMediaFile = f;
-            prevBox.innerHTML = `✅ Selected: <b>${f.name}</b> (${(f.size / (1024 * 1024)).toFixed(2)} MB)`;
-        };
-
-        document.getElementById("nx-post-img-in").onchange = handleFileSelect;
-        document.getElementById("nx-post-vid-in").onchange = handleFileSelect;
-        document.getElementById("nx-close-post").onclick = () => modal.remove();
-
-        document.getElementById("nx-submit-post-btn").onclick = async function() {
-            const caption = document.getElementById("nx-post-caption").value.trim();
-            if (!caption && !selectedMediaFile) {
-                alert("⚠️ Kripya kuch likhein ya Photo/Video select karein!");
-                return;
-            }
-            this.disabled = true;
-            this.innerText = "⏳ Uploading to Nexus Cloud...";
-
-            let uploadedMedia = null;
-            if (selectedMediaFile) {
-                document.getElementById("nx-post-progress").style.display = "block";
-                try {
-                    uploadedMedia = await processAndUploadMedia(selectedMediaFile, (pct) => {
-                        document.getElementById("nx-post-prog-bar").style.width = pct + "%";
-                        this.innerText = `⏳ Uploading Media (${pct}%)...`;
-                    });
-                } catch (err) {
-                    alert(err.message);
-                    this.disabled = false;
-                    this.innerText = "🚀 Share Post with Real Profile";
-                    return;
-                }
-            }
-
-            const newPost = {
-                id: "post_" + Date.now(),
-                authorName: member.name,
-                authorHandle: member.handle,
-                authorStream: member.stream,
-                authorAvatar: member.avatar,
-                verified: true,
-                text: caption,
-                content: caption,
-                mediaType: uploadedMedia ? uploadedMedia.type : null,
-                image: uploadedMedia && uploadedMedia.type === "image" ? uploadedMedia.dataUrl : null,
-                videoUrl: uploadedMedia && uploadedMedia.type === "video" ? uploadedMedia.dataUrl : null,
-                chunkedMediaId: uploadedMedia && uploadedMedia.chunkedId ? uploadedMedia.chunkedId : null,
-                likes: 0,
-                comments: 0,
-                views: 1,
-                timestamp: Date.now(),
-                timeAgo: "Just now"
-            };
-
-            // Save to Firebase Realtime DB & Local Feed
-            try {
-                if (window.firebase && firebase.database) {
-                    await firebase.database().ref("posts").push(newPost);
-                }
-            } catch (e) {}
-
-            const localPosts = JSON.parse(localStorage.getItem("nexus_custom_posts") || "[]");
-            localPosts.unshift(newPost);
-            localStorage.setItem("nexus_custom_posts", JSON.stringify(localPosts));
-
-            modal.remove();
-            renderCustomInstagramPosts();
-        };
-    }
-
-    // Render Instagram-Style Posts into the Main Feed
-    function renderCustomInstagramPosts() {
-        const feedContainer = document.querySelector("main, #feed, .feed-container") || document.body;
-        const injectPosts = (postsArray) => {
-            postsArray.forEach(post => {
-                if (document.getElementById("nx-card-" + post.id)) return;
-                const card = document.createElement("div");
-                card.id = "nx-card-" + post.id;
-                card.style.cssText = `
-                    background:#0f172a; border:1px solid #1e293b; border-radius:20px;
-                    padding:16px; margin:12px 14px; color:#fff; font-family:system-ui,sans-serif;
-                `;
-                const letter = (post.authorName || "U").charAt(0).toUpperCase();
-                let mediaHtml = "";
-                if (post.image) {
-                    mediaHtml = `<img src="${post.image}" style="width:100%; max-height:380px; object-fit:cover; border-radius:14px; margin-top:12px;">`;
-                } else if (post.videoUrl) {
-                    mediaHtml = `<video src="${post.videoUrl}" controls playsinline style="width:100%; max-height:380px; border-radius:14px; margin-top:12px; background:#000;"></video>`;
-                } else if (post.chunkedMediaId) {
-                    const boxId = "vid_box_" + post.id;
-                    mediaHtml = `<div id="${boxId}" style="margin-top:12px;"><button onclick="window.loadChunkedNexusMedia('${post.chunkedMediaId}', '${boxId}')" style="width:100%; background:#1e293b; color:#60a5fa; border:1px solid #3b82f6; padding:14px; border-radius:12px; font-weight:700;">▶️ Play Video Post</button></div>`;
-                }
-
-                card.innerHTML = `
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <div style="width:42px; height:42px; border-radius:50%; background:#059669; display:flex; align-items:center; justify-content:center; font-weight:800;">
-                            ${post.authorAvatar ? `<img src="${post.authorAvatar}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">` : letter}
-                        </div>
-                        <div>
-                            <div style="font-weight:700; font-size:15px;">${post.authorName} <span style="color:#10b981;">✔</span></div>
-                            <div style="font-size:12px; color:#38bdf8;">${post.authorHandle} • ${post.authorStream || "Member"} • Just now</div>
-                        </div>
-                    </div>
-                    <div style="margin-top:12px; font-size:15px; line-height:1.5; color:#e2e8f0;">${post.text || ""}</div>
-                    ${mediaHtml}
-                `;
-                feedContainer.prepend(card);
-            });
-        };
-
-        const localPosts = JSON.parse(localStorage.getItem("nexus_custom_posts") || "[]");
-        if (localPosts.length > 0) injectPosts(localPosts);
-    }
-
-    // --- 5. 1:1 DM CHAT PHOTO, VIEW-ONCE, PDF/FILE & 20MB VIDEO FIX ---
-    function triggerDMFilePicker(mode) {
-        const input = document.createElement("input");
-        input.type = "file";
-        if (mode === "Photo" || mode === "View-Once") {
-            input.accept = "image/*,video/*"; // Allow both Photo and up to 20MB Video in 1:1 DM
-        } else {
-            input.accept = ".pdf,.doc,.docx,.txt,image/*,video/*";
-        }
-
-        input.onchange = async (e) => {
+        picker.onchange = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
-
-            const member = getRealMemberProfile() || { name: "Member", handle: "@member" };
-            const toast = document.createElement("div");
-            toast.style.cssText = "position:fixed; bottom:85px; left:20px; right:20px; background:#2563eb; color:#fff; padding:12px 16px; border-radius:12px; z-index:999999; font-weight:700; text-align:center;";
-            toast.innerText = "⏳ Sending " + file.name + " (0%)...";
-            document.body.appendChild(toast);
+            const me = getRealUser() || { name: "Student", handle: "@student" };
+            showNexusToast(`⏳ Uploading ${file.name}...`);
 
             try {
-                const uploaded = await processAndUploadMedia(file, (pct) => {
-                    toast.innerText = `⏳ Uploading ${file.name} (${pct}%)...`;
+                const media = await uploadMediaLive(file, (pct) => {
+                    showNexusToast(`⏳ Uploading ${file.name} (${pct}%)...`);
                 });
 
-                // Append directly to the active DM chat window so both users see it immediately
-                const chatBubble = document.createElement("div");
-                chatBubble.style.cssText = "align-self:flex-end; background:#065f46; color:#fff; padding:12px; border-radius:14px; margin:8px 14px; max-width:78%; margin-left:auto;";
+                const msgPayload = {
+                    id: "dm_" + Date.now(),
+                    sender: me.name,
+                    handle: me.handle,
+                    mode: mode,
+                    mediaType: media.type,
+                    fileName: media.name,
+                    dataUrl: media.dataUrl || null,
+                    chunkedId: media.chunkedId || null,
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    timestamp: Date.now()
+                };
 
-                if (mode === "View-Once") {
-                    chatBubble.innerHTML = `<button onclick="this.outerHTML='<img src=\\'${uploaded.dataUrl}\\' style=\\'width:100%;border-radius:10px;\\'>'" style="background:#10b981; color:#000; border:none; padding:10px 14px; border-radius:10px; font-weight:800;">1️⃣ Tap to View Once (${file.name})</button>`;
-                } else if (uploaded.type === "image") {
-                    chatBubble.innerHTML = `<img src="${uploaded.dataUrl}" style="width:100%; max-height:260px; border-radius:10px; object-fit:cover;"><div style="font-size:11px; margin-top:4px; opacity:0.8;">Sent by ${member.name} ✓✓</div>`;
-                } else if (uploaded.type === "video") {
-                    if (uploaded.dataUrl) {
-                        chatBubble.innerHTML = `<video src="${uploaded.dataUrl}" controls playsinline style="width:100%; max-height:260px; border-radius:10px; background:#000;"></video>`;
-                    } else {
-                        const vidBoxId = "dm_vid_" + Date.now();
-                        chatBubble.innerHTML = `<div id="${vidBoxId}"><button onclick="window.loadChunkedNexusMedia('${uploaded.chunkedId}', '${vidBoxId}')" style="background:#3b82f6; color:#fff; border:none; padding:10px 14px; border-radius:10px; font-weight:700;">▶️ Play Video (${file.name})</button></div>`;
-                    }
+                // Broadcast to Firebase so BOTH users see it live without refreshing!
+                if (window.firebase && firebase.database) {
+                    firebase.database().ref("nexus_live_dm_media").push(msgPayload);
                 } else {
-                    chatBubble.innerHTML = `<a href="${uploaded.dataUrl || '#'}" download="${file.name}" style="color:#fff; font-weight:700; text-decoration:underline;">📄 ${file.name} (${(file.size/1024).toFixed(1)} KB)</a>`;
+                    appendDMMediaBubble(msgPayload);
                 }
-
-                // Put message inside chat container & save to Firebase DM node
-                const msgInput = document.querySelector("input[placeholder*='Message']");
-                if (msgInput) {
-                    const chatArea = msgInput.closest("div").parentElement;
-                    if (chatArea) chatArea.insertBefore(chatBubble, msgInput.closest("div"));
-                }
-
-                toast.remove();
+                showNexusToast("✅ Sent Successfully!");
             } catch (err) {
-                toast.remove();
                 alert("⚠️ " + err.message);
             }
         };
-        input.click();
+        picker.click();
     }
 
-    // --- 6. NEXUS OFFICIAL AI ASSISTANT (STRICTLY NEXUS PLATFORM INFO & LIVE STATUS) ---
-    function openNexusOfficialAI() {
-        if (document.getElementById("nx-official-ai-box")) return;
-        const liveStatus = localStorage.getItem("nexus_server_status") || "🟢 Nexus Cloud Server, 1:1 Personal DM, 20MB Video Upload aur PDF Study Vault 100% Online hain!";
+    function appendDMMediaBubble(m) {
+        if (document.getElementById("bubble_" + m.id)) return;
+        const msgInput = document.querySelector("input[placeholder*='Message']");
+        if (!msgInput) return;
+        const chatContainer = msgInput.closest("div").parentElement;
+        if (!chatContainer) return;
 
-        const box = document.createElement("div");
-        box.id = "nx-official-ai-box";
-        box.style.cssText = "position:fixed; inset:0; z-index:999999; background:#090d16; display:flex; flex-direction:column; color:#fff; font-family:system-ui,sans-serif;";
-        box.innerHTML = `
-            <div style="background:#111827; padding:16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1f2937;">
+        const bubble = document.createElement("div");
+        bubble.id = "bubble_" + m.id;
+        bubble.style.cssText = "background:#065f46;color:#fff;padding:12px;border-radius:14px;margin:8px 14px;max-width:78%;margin-left:auto;box-shadow:0 4px 12px rgba(0,0,0,0.3);";
+
+        let inner = "";
+        if (m.mode === "View-Once") {
+            inner = `<button onclick="this.outerHTML='<img src=\\'${m.dataUrl}\\' style=\\'width:100%;border-radius:10px;\\'>'" style="background:#10b981;color:#000;border:none;padding:10px 14px;border-radius:10px;font-weight:800;cursor:pointer;">1️⃣ Tap to View Once (${m.fileName})</button>`;
+        } else if (m.mediaType === "image" && m.dataUrl) {
+            inner = `<img src="${m.dataUrl}" style="width:100%;max-height:260px;border-radius:10px;object-fit:cover;">`;
+        } else if (m.mediaType === "video") {
+            if (m.dataUrl) {
+                inner = `<video src="${m.dataUrl}" controls playsinline style="width:100%;max-height:260px;border-radius:10px;background:#000;"></video>`;
+            } else {
+                const vidId = "dmv_" + m.id;
+                inner = `<div id="${vidId}"><button onclick="window.playChunkedNexusMedia('${m.chunkedId}','${vidId}')" style="background:#3b82f6;color:#fff;border:none;padding:10px 14px;border-radius:10px;font-weight:700;">▶️ Play 20MB Video (${m.fileName})</button></div>`;
+            }
+        } else {
+            const dlId = "dmf_" + m.id;
+            inner = m.dataUrl
+                ? `<a href="${m.dataUrl}" download="${m.fileName}" style="color:#fff;font-weight:700;text-decoration:underline;">📄 Download ${m.fileName}</a>`
+                : `<div id="${dlId}"><button onclick="window.playChunkedNexusMedia('${m.chunkedId}','${dlId}')" style="background:#4f46e5;color:#fff;border:none;padding:8px 12px;border-radius:8px;font-weight:700;">📥 Open ${m.fileName}</button></div>`;
+        }
+
+        bubble.innerHTML = `<div style="font-size:11px;color:#a7f3d0;margin-bottom:4px;font-weight:700;">${m.sender} (${m.handle})</div>${inner}<div style="font-size:10px;text-align:right;margin-top:4px;opacity:0.8;">${m.time} ✓✓</div>`;
+        chatContainer.insertBefore(bubble, msgInput.closest("div"));
+    }
+
+    // Listen for live DM media in real-time without refresh
+    if (window.firebase && firebase.database) {
+        firebase.database().ref("nexus_live_dm_media").limitToLast(10).on("child_added", (snap) => {
+            const val = snap.val();
+            if (val && Date.now() - val.timestamp < 300000) appendDMMediaBubble(val);
+        });
+    }
+
+    // --- 6. YOUTUBE WATCH PARTY (100% SEARCH + 2-MOBILE ZERO-REFRESH SYNC) ---
+    window.openNexusWatchParty = function(customRoom) {
+        const old = document.getElementById("nx-wp-modal");
+        if (old) old.remove();
+
+        const me = getRealUser() || { name: "Member" };
+        const room = customRoom || localStorage.getItem("nx_wp_room") || "NEXUS_PARTY_1";
+        localStorage.setItem("nx_wp_room", room);
+
+        const modal = document.createElement("div");
+        modal.id = "nx-wp-modal";
+        modal.style.cssText = "position:fixed;inset:0;z-index:2147483647;background:#090d16;color:#fff;display:flex;flex-direction:column;font-family:system-ui,sans-serif;";
+        modal.innerHTML = `
+            <div style="background:#111827;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1f2937;">
                 <div>
-                    <div style="font-weight:800; font-size:17px; color:#60a5fa;">🤖 Nexus Official AI</div>
-                    <div style="font-size:12px; color:#34d399;">● Official Nexus Information & Live Server Monitor</div>
+                    <div style="font-weight:800;font-size:16px;color:#f43f5e;">▶️ Live YouTube Watch Party & Song Sync</div>
+                    <div style="font-size:11px;color:#34d399;">Room: <b>${room}</b> • Real-Time Sync Active</div>
                 </div>
-                <button id="nx-ai-close" style="background:#ef4444; color:#fff; border:none; padding:6px 12px; border-radius:8px; font-weight:700;">✕</button>
-            </div>
-            <div id="nx-ai-chat-log" style="flex:1; padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:10px;">
-                <div style="background:#1e293b; border-left:4px solid #6366f1; padding:12px; border-radius:10px; font-size:14px; line-height:1.5;">
-                    👋 <b>Welcome to Nexus Official AI!</b><br>Main sirf <b>Nexus Website</b> ke features, Server Status aur Updates ki jankari deta hoon.<br><br>
-                    📡 <b>Current Server Status:</b><br>${liveStatus}
+                <div style="display:flex;gap:8px;">
+                    <button id="nx-wp-room-btn" style="background:#1e293b;color:#60a5fa;border:1px solid #3b82f6;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;">Room ID</button>
+                    <button id="nx-wp-close" style="background:#ef4444;color:#fff;border:none;border-radius:8px;padding:5px 12px;font-weight:800;">✕</button>
                 </div>
             </div>
-            <div style="padding:12px; background:#111827; display:flex; gap:8px;">
-                <input id="nx-ai-q" type="text" placeholder="Nexus server status ya feature ke bare mein puchein..." style="flex:1; background:#1f2937; border:1px solid #374151; color:#fff; padding:12px; border-radius:10px; outline:none;">
-                <button id="nx-ai-send-btn" style="background:#4f46e5; color:#fff; border:none; padding:0 18px; border-radius:10px; font-weight:700;">Ask</button>
+            <div style="padding:10px 14px;background:#0f172a;display:flex;gap:8px;border-bottom:1px solid #1e293b;">
+                <input id="nx-wp-q" type="text" placeholder="Search any Song, Video or paste YouTube Link..." style="flex:1;background:#1e293b;border:1px solid #334155;color:#fff;padding:10px 12px;border-radius:10px;font-size:13px;outline:none;">
+                <button id="nx-wp-search-btn" style="background:#e11d48;color:#fff;border:none;padding:0 16px;border-radius:10px;font-weight:700;">🔍 Search</button>
+            </div>
+            <div id="nx-wp-results" style="display:none;max-height:190px;overflow-y:auto;background:#111827;padding:8px 14px;border-bottom:2px solid #e11d48;"></div>
+            <div style="background:#000;width:100%;height:230px;">
+                <iframe id="nx-wp-iframe" width="100%" height="100%" src="https://www.youtube.com/embed/jfKfPfyJRdk?autoplay=1&playsinline=1" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+            </div>
+            <div id="nx-wp-status" style="background:#111827;padding:8px 14px;font-size:12px;color:#38bdf8;border-bottom:1px solid #1f2937;">
+                ⚡ Connected: Jo video aap play karenge, wahi dost ke phone mein bina refresh kiye chalega!
+            </div>
+            <div id="nx-wp-chat" style="flex:1;padding:12px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;"></div>
+            <div style="padding:10px 14px;background:#111827;display:flex;gap:8px;border-top:1px solid #1f2937;">
+                <input id="nx-wp-msg" type="text" placeholder="Live Watch Party Chat..." style="flex:1;background:#1f2937;border:1px solid #374151;color:#fff;padding:10px 12px;border-radius:10px;font-size:13px;outline:none;">
+                <button id="nx-wp-send" style="background:#4f46e5;color:#fff;border:none;padding:0 16px;border-radius:10px;font-weight:700;">Send</button>
             </div>
         `;
-        document.body.appendChild(box);
+        document.body.appendChild(modal);
 
-        const log = document.getElementById("nx-ai-chat-log");
-        const qIn = document.getElementById("nx-ai-q");
+        let activeVid = "jfKfPfyJRdk";
+        const iframe = document.getElementById("nx-wp-iframe");
+        const resBox = document.getElementById("nx-wp-results");
+        const chatBox = document.getElementById("nx-wp-chat");
 
-        document.getElementById("nx-ai-close").onclick = () => box.remove();
-        document.getElementById("nx-ai-send-btn").onclick = () => {
-            const val = qIn.value.trim();
+        function playAndSync(vid, title) {
+            activeVid = vid;
+            iframe.src = `https://www.youtube.com/embed/${vid}?autoplay=1&playsinline=1`;
+            resBox.style.display = "none";
+            if (window.firebase && firebase.database) {
+                firebase.database().ref("watchparty_rooms/" + room + "/state").set({
+                    videoId: vid, title: title || "Video", by: me.name, time: Date.now()
+                });
+            }
+        }
+
+        if (window.firebase && firebase.database) {
+            const rRef = firebase.database().ref("watchparty_rooms/" + room);
+            rRef.child("state").on("value", (s) => {
+                const d = s.val();
+                if (d && d.videoId && d.videoId !== activeVid) {
+                    activeVid = d.videoId;
+                    iframe.src = `https://www.youtube.com/embed/${d.videoId}?autoplay=1&playsinline=1`;
+                    document.getElementById("nx-wp-status").innerText = `🎵 ${d.by} played: ${d.title}`;
+                }
+            });
+            rRef.child("messages").limitToLast(25).on("child_added", (s) => {
+                const m = s.val();
+                if (!m) return;
+                chatBox.innerHTML += `<div style="background:#1e293b;padding:8px 12px;border-radius:10px;font-size:13px;"><b style="color:#60a5fa;">${m.sender}:</b> ${m.text}</div>`;
+                chatBox.scrollTop = chatBox.scrollHeight;
+            });
+        }
+
+        async function doSearch(q) {
+            if (!q.trim()) return;
+            const match = q.match(/(?:v=|youtu\.be\/|embed\/)([^"&?\/\s]{11})/);
+            if (match && match[1]) return playAndSync(match[1], "YouTube Link");
+
+            resBox.style.display = "block";
+            resBox.innerHTML = `<div style="color:#60a5fa;padding:8px;font-size:13px;">🔍 Searching "${q}"...</div>`;
+
+            const apis = [
+                `https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(q)}&filter=videos`,
+                `https://inv.tux.pizza/api/v1/search?q=${encodeURIComponent(q)}&type=video`
+            ];
+            for (const url of apis) {
+                try {
+                    const r = await fetch(url);
+                    if (!r.ok) continue;
+                    const data = await r.json();
+                    const list = data.items || data;
+                    if (Array.isArray(list) && list.length > 0) {
+                        resBox.innerHTML = list.slice(0, 7).map(it => {
+                            const vId = it.videoId || (it.url ? it.url.split("v=")[1] : "");
+                            const t = (it.title || "Video").replace(/"/g, "");
+                            if (!vId) return "";
+                            return `<div class="wp-item" data-v="${vId}" data-t="${t}" style="display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #1e293b;cursor:pointer;">
+                                <img src="https://i.ytimg.com/vi/${vId}/mqdefault.jpg" style="width:60px;height:40px;border-radius:6px;object-fit:cover;">
+                                <div style="flex:1;font-size:13px;font-weight:600;">${t}</div>
+                                <span style="background:#e11d48;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;">Play</span>
+                            </div>`;
+                        }).join("");
+                        resBox.querySelectorAll(".wp-item").forEach(el => {
+                            el.onclick = () => playAndSync(el.dataset.v, el.dataset.t);
+                        });
+                        return;
+                    }
+                } catch (e) {}
+            }
+        }
+
+        document.getElementById("nx-wp-search-btn").onclick = () => doSearch(document.getElementById("nx-wp-q").value);
+        document.getElementById("nx-wp-q").onkeydown = (e) => { if (e.key === "Enter") doSearch(e.target.value); };
+        document.getElementById("nx-wp-close").onclick = () => modal.remove();
+        document.getElementById("nx-wp-room-btn").onclick = () => {
+            const nr = prompt("Enter Shared Room ID:", room);
+            if (nr && nr.trim()) window.openNexusWatchParty(nr.trim().toUpperCase());
+        };
+        document.getElementById("nx-wp-send").onclick = () => {
+            const inp = document.getElementById("nx-wp-msg");
+            if (!inp.value.trim()) return;
+            if (window.firebase && firebase.database) {
+                firebase.database().ref("watchparty_rooms/" + room + "/messages").push({ sender: me.name, text: inp.value.trim() });
+            }
+            inp.value = "";
+        };
+    };
+
+    // --- 7. OFFICIAL NEXUS AI (STRICTLY NEXUS INFO, OWNER MOHIT & LIVE SERVER STATUS) ---
+    window.openNexusOfficialAI = function() {
+        const old = document.getElementById("nx-official-ai-modal");
+        if (old) old.remove();
+
+        const defaultStat = "🟢 Sabhi Nexus Servers (1:1 DM, Watch Party, Study Vault & Feed) 100% Online hain! Agar koi feature update ho raha ho toh kripya thoda patience rakhein.";
+        const modal = document.createElement("div");
+        modal.id = "nx-official-ai-modal";
+        modal.style.cssText = "position:fixed;inset:0;z-index:2147483647;background:#090d16;color:#fff;display:flex;flex-direction:column;font-family:system-ui,sans-serif;";
+        modal.innerHTML = `
+            <div style="background:#111827;padding:15px 18px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1f2937;">
+                <div>
+                    <div style="font-weight:800;font-size:17px;color:#60a5fa;">🤖 Nexus Official AI</div>
+                    <div style="font-size:11px;color:#34d399;">● Strictly Nexus Platform & Live Server Assistant</div>
+                </div>
+                <button id="nx-ai-close-btn" style="background:#ef4444;color:#fff;border:none;padding:6px 12px;border-radius:8px;font-weight:800;">✕</button>
+            </div>
+            <div id="nx-ai-body" style="flex:1;padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;">
+                <div style="background:#1e293b;border-left:4px solid #6366f1;padding:14px;border-radius:12px;font-size:14px;line-height:1.6;">
+                    👋 <b>Namaste! Main Nexus Official AI hoon.</b><br>
+                    Main sirf <b>Nexus Website</b> ke features, Server Status aur Owner ki jankari deta hoon.<br><br>
+                    👑 <b>Founder & Owner:</b> Mohit (<code>@mohit_01</code>)<br>
+                    📡 <b>Live Server Status:</b> <span id="nx-live-ai-stat">${localStorage.getItem("nexus_server_status") || defaultStat}</span>
+                </div>
+            </div>
+            <div style="padding:12px 14px;background:#111827;display:flex;gap:8px;border-top:1px solid #1f2937;">
+                <input id="nx-ai-in" type="text" placeholder="Nexus Owner, Server Status ya Features puchein..." style="flex:1;background:#1f2937;border:1px solid #374151;color:#fff;padding:12px;border-radius:10px;outline:none;">
+                <button id="nx-ai-ask" style="background:#4f46e5;color:#fff;border:none;padding:0 18px;border-radius:10px;font-weight:800;">Ask</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        // Live sync server status from Firebase without refresh
+        if (window.firebase && firebase.database) {
+            firebase.database().ref("nexus_system/server_status").on("value", (s) => {
+                if (s.val()) {
+                    localStorage.setItem("nexus_server_status", s.val());
+                    const el = document.getElementById("nx-live-ai-stat");
+                    if (el) el.innerText = s.val();
+                }
+            });
+        }
+
+        const body = document.getElementById("nx-ai-body");
+        const inp = document.getElementById("nx-ai-in");
+        document.getElementById("nx-ai-close-btn").onclick = () => modal.remove();
+
+        const sendQ = () => {
+            const val = inp.value.trim();
             if (!val) return;
-            log.innerHTML += `<div style="align-self:flex-end; background:#4f46e5; padding:10px 14px; border-radius:10px; font-size:14px;">${val}</div>`;
-            qIn.value = "";
+            body.innerHTML += `<div style="align-self:flex-end;background:#4f46e5;padding:10px 14px;border-radius:12px;font-size:14px;">${val}</div>`;
+            inp.value = "";
+            const q = val.toLowerCase();
+            let reply = "ℹ️ Main <b>Nexus Official AI</b> hoon aur sirf <b>Nexus Website</b> ki jankari deta hoon.<br>👑 <b>Owner:</b> Mohit (<code>@mohit_01</code>)<br>📡 <b>Status:</b> " + (localStorage.getItem("nexus_server_status") || defaultStat);
 
-            let ans = "ℹ️ Main <b>Nexus Official AI</b> hoon aur sirf <b>Nexus Website</b> ki jankari deta hoon.<br><br>📡 <b>Live Status:</b> " + (localStorage.getItem("nexus_server_status") || liveStatus);
-            if (val.toLowerCase().startsWith("status:")) {
-                const newMsg = val.substring(7).trim();
-                localStorage.setItem("nexus_server_status", newMsg);
-                ans = "✅ <b>Admin Status Updated!</b> Ab sabhi users ko yeh live report dikhegi:<br>" + newMsg;
+            if (q.startsWith("status:")) {
+                const newSt = val.substring(7).trim();
+                localStorage.setItem("nexus_server_status", newSt);
+                if (window.firebase && firebase.database) firebase.database().ref("nexus_system/server_status").set(newSt);
+                reply = "✅ <b>Live Status Updated!</b> Bina refresh kiye sabhi users ko ab yeh dikhega:<br>" + newSt;
+            } else if (q.includes("owner") || q.includes("founder") || q.includes("mohit") || q.includes("kisne")) {
+                reply = "👑 <b>Nexus Official Owner:</b> Nexus Platform ke Founder aur Developer <b>Mohit</b> (<code>@mohit_01</code>) hain.";
+            } else if (q.includes("down") || q.includes("server") || q.includes("status") || q.includes("problem")) {
+                reply = "📡 <b>Live Server Report:</b> " + (localStorage.getItem("nexus_server_status") || defaultStat) + "<br><br>🙏 Kripya patience rakhein, Nexus team har update real-time mein karti hai!";
             }
             setTimeout(() => {
-                log.innerHTML += `<div style="align-self:flex-start; background:#1e293b; padding:12px; border-radius:10px; font-size:14px;">${ans}</div>`;
-                log.scrollTop = log.scrollHeight;
-            }, 200);
+                body.innerHTML += `<div style="align-self:flex-start;background:#1e293b;border-left:4px solid #38bdf8;padding:12px 14px;border-radius:12px;font-size:14px;line-height:1.5;">${reply}</div>`;
+                body.scrollTop = body.scrollHeight;
+            }, 150);
         };
-    }
+        document.getElementById("nx-ai-ask").onclick = sendQ;
+        inp.onkeydown = (e) => { if (e.key === "Enter") sendQ(); };
+    };
 
-    // --- 7. GLOBAL BUTTON INTERCEPTOR (CONNECTS ALL BUTTONS SEAMLESSLY) ---
+    // --- 8. PWA APP INSTALLER ---
+    let deferredPrompt = null;
+    window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredPrompt = e; });
+    window.installNexusPWA = async function() {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            await deferredPrompt.userChoice;
+            deferredPrompt = null;
+        } else {
+            alert("📲 App Install karne ke liye Browser ke 3-dots (⋮) par tap karein aur 'Add to Home screen' ya 'Install app' chunein!");
+        }
+    };
+
+    // --- 9. MASTER CLICK INTERCEPTOR ---
     document.addEventListener("click", function(e) {
-        const el = e.target.closest("button, a, div");
+        const el = e.target.closest("button, a, div, span");
         if (!el) return;
         const txt = (el.innerText || "").trim();
 
-        // 1:1 DM Media Drawer Buttons (Photo, View-Once, PDF/File)
-        if (txt === "Photo" || txt.includes("📷\nPhoto")) {
-            e.preventDefault(); e.stopPropagation();
-            triggerDMFilePicker("Photo");
-        } else if (txt === "View-Once" || txt.includes("View-Once")) {
-            e.preventDefault(); e.stopPropagation();
-            triggerDMFilePicker("View-Once");
-        } else if (txt === "PDF/File" || txt.includes("PDF/File")) {
-            e.preventDefault(); e.stopPropagation();
-            triggerDMFilePicker("PDF/File");
-        }
-
-        // Official AI Buttons (Header AI, Private AI Studio, DM Ask AI)
         if (txt === "AI" || txt.includes("🤖 AI") || txt === "Ask 1:1" || txt === "Ask AI") {
             e.preventDefault(); e.stopPropagation();
-            openNexusOfficialAI();
+            window.openNexusOfficialAI();
+        } else if (txt === "App" || txt.includes("📲 App")) {
+            e.preventDefault(); e.stopPropagation();
+            window.installNexusPWA();
+        } else if (txt === "Watch TV" || txt === "Full Song" || txt.includes("Watch TV") || txt.includes("Full Song")) {
+            e.preventDefault(); e.stopPropagation();
+            window.openNexusWatchParty();
+        } else if (txt === "Photo" || txt.includes("📷\nPhoto")) {
+            e.preventDefault(); e.stopPropagation();
+            sendLiveDMMedia("Photo");
+        } else if (txt === "View-Once" || txt.includes("View-Once")) {
+            e.preventDefault(); e.stopPropagation();
+            sendLiveDMMedia("View-Once");
+        } else if (txt === "PDF/File" || txt.includes("PDF/File")) {
+            e.preventDefault(); e.stopPropagation();
+            sendLiveDMMedia("PDF/File");
         }
     }, true);
 })();
