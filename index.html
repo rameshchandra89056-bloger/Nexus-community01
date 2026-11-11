@@ -702,6 +702,15 @@
     <script src="ultra.js" charset="UTF-8"></script>
     <script src="emojis.js" charset="UTF-8"></script>
     <script src="about.js" charset="UTF-8"></script>
-    <script src="aifix.js?v=999" charset="UTF-8"></script>
+    <script>
+  // Purana Service Worker Cache hatayein aur hamesha LIVE aifix.js load karein
+  if ('caches' in window) {
+    caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+  }
+  var nxLiveScript = document.createElement('script');
+  nxLiveScript.src = 'aifix.js?live=' + Date.now();
+  document.body.appendChild(nxLiveScript);
+    </script>
+    
 </body>
 </html>
