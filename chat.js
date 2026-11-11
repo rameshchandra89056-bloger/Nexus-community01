@@ -1,119 +1,247 @@
-// ================= CHAT.JS (FINAL MASTER v30.0): REMOVES GREEN-CIRCLED DUPLICATE CARDS (1000073890 FIX) + ZERO TYPING LAG/JUMP + COMPACT DELETED PILL + DELETE FOR ME & EVERYONE =================
+// ================= CHAT.JS (FINAL MASTER): COMPACT DELETED MESSAGE PILL + 🧹 DELETE FOR ME & 🗑️ DELETE FOR EVERYONE IN GROUP CHAT + 0.01s INSTANT SEND + 📝 LIVE TEST SERIES =================
 
 (function() {
     const chatTab = document.getElementById('tab-community');
     if (!chatTab) return;
 
-    if (!document.getElementById('nx-chat-master-v30-style')) {
-        const chatStyle = document.createElement('style');
-        chatStyle.id = 'nx-chat-master-v30-style';
-        chatStyle.innerHTML = `
-            @keyframes nxDotBounce {
-                0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
-                40% { transform: scale(1.15); opacity: 1; }
-            }
-            @keyframes nxChatSheetUp {
-                0% { opacity: 0; transform: translateY(24px) scale(0.96); }
-                100% { opacity: 1; transform: translateY(0) scale(1); }
-            }
-            /* HIDE DUPLICATE GREEN-CIRCLED BANNERS IN #nx-chat-directory (FIXES SCREENSHOT 1000073890.jpg!) */
-            #nx-partner-test-banner,
-            #nx-ai-community-banner,
-            .nx-ai-studio-banner-dup,
-            #nx-chat-directory > div[onclick*="NexusAI"],
-            #nx-chat-directory > div[style*="Swara"] {
-                display: none !important;
-            }
-            .nx-typing-dot {
-                display: inline-block; width: 6px; height: 6px; background-color: #00a884;
-                border-radius: 50%; margin: 0 2px; animation: nxDotBounce 1.2s infinite ease-in-out both;
-            }
-            .nx-typing-dot:nth-child(1) { animation-delay: -0.32s; }
-            .nx-typing-dot:nth-child(2) { animation-delay: -0.16s; }
-            .nx-fullscreen-chat-room {
-                position: fixed !important; left: 0 !important; right: 0 !important; top: 0 !important; bottom: 0 !important;
-                width: 100% !important; max-width: 640px !important; height: 100dvh; margin: 0 auto !important;
-                background: #0b141a !important; z-index: 99998 !important; display: none; flex-direction: column; overflow: hidden !important;
-            }
-            .nx-day-header-pill {
-                align-self: center; background: #182229; border: 1px solid #2a3942; color: #93c5fd;
-                font-size: 11px; font-weight: 800; padding: 4px 14px; border-radius: 999px; margin: 8px auto 4px auto; flex-shrink: 0;
-            }
-            .nx-cmsg-backdrop {
-                position: fixed; inset: 0; background: rgba(2, 6, 23, 0.82); z-index: 200500 !important;
-                display: none; align-items: center; justify-content: center; padding: 18px;
-            }
-            .nx-cmsg-sheet {
-                width: 100%; max-width: 325px; background: #182229; border: 1px solid #2a3942;
-                border-radius: 20px; padding: 14px; box-shadow: 0 18px 45px rgba(0,0,0,0.85); animation: nxChatSheetUp 0.14s ease-out forwards;
-            }
-            .nx-cmsg-emoji-bar {
-                display: flex; justify-content: space-between; background: #111b21; padding: 8px 12px;
-                border-radius: 30px; margin-bottom: 12px; border: 1px solid #233138;
-            }
-            .nx-cmsg-emoji-btn { font-size: 22px; background: none; border: none; cursor: pointer; }
-            .nx-cmsg-opt-btn {
-                width: 100%; background: #202c33; border: 1px solid #2a3942; color: #e9edef;
-                padding: 11px 14px; border-radius: 12px; font-size: 13.5px; font-weight: 700;
-                text-align: left; display: flex; align-items: center; gap: 10px; margin-bottom: 7px; cursor: pointer;
-            }
-            .nx-room-stk-chip {
-                background: #182229; color: #cbd5e1; border: 1px solid #2a3942; padding: 5px 11px;
-                border-radius: 16px; font-size: 11.5px; font-weight: 700; white-space: nowrap; cursor: pointer;
-            }
-            .nx-room-stk-chip.active { background: #00a884; color: #020617; border-color: #00a884; }
-            .nx-group-react-pill {
-                display: inline-flex; align-items: center; gap: 4px; background: #182229;
-                border: 1.5px solid #00a884; color: #f8fafc; padding: 2px 8px; border-radius: 14px;
-                font-size: 11px; font-weight: 800; margin-top: -4px; margin-bottom: 3px; z-index: 5; cursor: pointer;
-            }
-            .nx-deleted-msg-box {
-                display: inline-flex !important; align-items: center !important; gap: 6px !important;
-                background: rgba(24, 34, 41, 0.92) !important; border: 1px dashed rgba(248, 113, 113, 0.45) !important;
-                color: #cbd5e1 !important; padding: 5px 11px !important; border-radius: 10px !important;
-                font-size: 12px !important; font-style: italic !important; margin: 1px 0 !important;
-            }
-            .nx-deleted-msg-box svg { width: 13px !important; height: 13px !important; stroke: #f87171 !important; stroke-width: 2.2 !important; fill: none !important; flex-shrink: 0 !important; }
-            #nx-chat-context-bar {
-                max-height: 110px; overflow-y: auto; padding: 8px 14px; background: #182229;
-                border-left: 4px solid #00a884; border-top: 1px solid #233138;
-                align-items: flex-start; justify-content: space-between; font-size: 12.5px; color: #e9edef; flex-shrink: 0;
-            }
-            #nx-chat-msg-in {
-                flex: 1; width: 100%; min-width: 0; min-height: 36px; max-height: 100px;
-                padding: 8px 4px; border: none; background: transparent; color: #e9edef;
-                font-size: 14.5px; line-height: 1.4; outline: none; resize: none; overflow-y: auto;
-            }
-        `;
-        document.head.appendChild(chatStyle);
-    }
+    const chatStyle = document.createElement('style');
+    chatStyle.innerHTML = `
+        @keyframes nxDotBounce {
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+            40% { transform: scale(1.15); opacity: 1; }
+        }
+        @keyframes nxChatSheetUp {
+            0% { opacity: 0; transform: translateY(24px) scale(0.96); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .nx-typing-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background-color: #00a884;
+            border-radius: 50%;
+            margin: 0 2px;
+            animation: nxDotBounce 1.2s infinite ease-in-out both;
+        }
+        .nx-typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .nx-typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        .nx-fullscreen-chat-room {
+            position: fixed !important;
+            left: 0 !important;
+            right: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: 640px !important;
+            height: 100dvh;
+            margin: 0 auto !important;
+            background: #0b141a !important;
+            box-shadow: 0 0 0 100vmax #0b141a !important;
+            z-index: 99998 !important;
+            display: none;
+            flex-direction: column;
+            overflow: hidden !important;
+            padding: 0 !important;
+        }
+        .nx-day-header-pill {
+            align-self: center;
+            background: #182229;
+            border: 1px solid #2a3942;
+            color: #93c5fd;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 4px 14px;
+            border-radius: 999px;
+            margin: 8px auto 4px auto;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            user-select: none;
+            flex-shrink: 0;
+        }
+        .nx-cmsg-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.78);
+            z-index: 100006;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+        }
+        .nx-cmsg-sheet {
+            width: 100%;
+            max-width: 325px;
+            background: #182229;
+            border: 1px solid #2a3942;
+            border-radius: 20px;
+            padding: 14px;
+            box-shadow: 0 18px 45px rgba(0,0,0,0.85);
+            animation: nxChatSheetUp 0.14s ease-out forwards;
+        }
+        .nx-cmsg-emoji-bar {
+            display: flex;
+            justify-content: space-between;
+            background: #111b21;
+            padding: 8px 12px;
+            border-radius: 30px;
+            margin-bottom: 12px;
+            border: 1px solid #233138;
+        }
+        .nx-cmsg-emoji-btn {
+            font-size: 22px;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+        .nx-cmsg-opt-btn {
+            width: 100%;
+            background: #202c33;
+            border: 1px solid #2a3942;
+            color: #e9edef;
+            padding: 11px 14px;
+            border-radius: 12px;
+            font-size: 13.5px;
+            font-weight: 700;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 7px;
+            cursor: pointer;
+        }
+        .nx-room-stk-chip {
+            background: #182229;
+            color: #cbd5e1;
+            border: 1px solid #2a3942;
+            padding: 5px 11px;
+            border-radius: 16px;
+            font-size: 11.5px;
+            font-weight: 700;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+        .nx-room-stk-chip.active {
+            background: #00a884;
+            color: #020617;
+            border-color: #00a884;
+        }
+        .nx-group-react-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #182229;
+            border: 1.5px solid #00a884;
+            color: #f8fafc;
+            padding: 2px 8px;
+            border-radius: 14px;
+            font-size: 11px;
+            font-weight: 800;
+            margin-top: -4px;
+            margin-bottom: 3px;
+            z-index: 5;
+            cursor: pointer;
+        }
+        /* COMPACT & CLEAN DELETED MESSAGE PILL (Fits text neatly, never oversized!) */
+        .nx-deleted-msg-box {
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+            width: auto !important;
+            max-width: 78% !important;
+            background: rgba(24, 34, 41, 0.92) !important;
+            border: 1px dashed rgba(248, 113, 113, 0.45) !important;
+            color: #cbd5e1 !important;
+            padding: 5px 11px !important;
+            border-radius: 10px !important;
+            font-size: 12px !important;
+            line-height: 1.35 !important;
+            font-style: italic !important;
+            margin: 1px 0 !important;
+        }
+        .nx-deleted-msg-box svg {
+            width: 13px !important;
+            height: 13px !important;
+            stroke: #f87171 !important;
+            stroke-width: 2.2 !important;
+            fill: none !important;
+            flex-shrink: 0 !important;
+        }
+        #nx-chat-context-bar {
+            max-height: 115px;
+            overflow-y: auto;
+            padding: 8px 14px;
+            background: #182229;
+            border-left: 4px solid #00a884;
+            border-top: 1px solid #233138;
+            align-items: flex-start;
+            justify-content: space-between;
+            font-size: 12.5px;
+            color: #e9edef;
+            flex-shrink: 0;
+        }
+        #nx-chat-context-text {
+            white-space: pre-wrap;
+            word-break: break-word;
+            line-height: 1.42;
+            flex: 1;
+        }
+        #nx-chat-msg-in {
+            flex: 1;
+            width: 100%;
+            min-width: 0;
+            min-height: 36px;
+            max-height: 115px;
+            padding: 8px 4px;
+            border: none;
+            background: transparent;
+            color: #e9edef;
+            font-size: 14.5px;
+            line-height: 1.4;
+            outline: none;
+            resize: none;
+            overflow-y: auto;
+        }
+        #nx-partner-test-banner {
+            display: none !important;
+        }
+    `;
+    document.head.appendChild(chatStyle);
 
     function getGroupHiddenForMeSet(username) {
         let key = 'nx_grp_hidden_v1_' + String(username || 'guest').toLowerCase().trim();
-        try { return new Set(JSON.parse(localStorage.getItem(key) || '[]')); } catch (e) { return new Set(); }
+        try {
+            return new Set(JSON.parse(localStorage.getItem(key) || '[]'));
+        } catch (e) {
+            return new Set();
+        }
     }
 
     function saveGroupHiddenForMe(username, msgId) {
         let key = 'nx_grp_hidden_v1_' + String(username || 'guest').toLowerCase().trim();
         let set = getGroupHiddenForMeSet(username);
         set.add(String(msgId));
-        try { localStorage.setItem(key, JSON.stringify(Array.from(set).slice(-1000))); } catch (e) {}
+        try {
+            localStorage.setItem(key, JSON.stringify(Array.from(set).slice(-1000)));
+        } catch (e) {}
     }
 
-    // Smooth resize without forced scroll jump!
-    let lastRoomVpH = 0;
     function syncCommunityViewport() {
         const vv = window.visualViewport;
         const roomEl = document.getElementById('nx-chat-room');
+        const msgBox = document.getElementById('nx-room-messages');
         if (!roomEl || roomEl.style.display === 'none') return;
-        const h = Math.round(vv ? vv.height : window.innerHeight);
-        if (Math.abs(h - lastRoomVpH) > 4) {
-            lastRoomVpH = h;
-            roomEl.style.height = h + 'px';
+        if (vv) {
+            roomEl.style.height = Math.round(vv.height) + 'px';
+            roomEl.style.top = Math.round(vv.offsetTop) + 'px';
+        } else {
+            roomEl.style.height = window.innerHeight + 'px';
+            roomEl.style.top = '0px';
         }
+        if (msgBox) msgBox.scrollTop = msgBox.scrollHeight;
     }
+
     if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', syncCommunityViewport);
+        window.visualViewport.addEventListener('scroll', syncCommunityViewport);
     }
 
     const CHANNELS_META = [
@@ -153,10 +281,15 @@
         if (!createdAtMs || isNaN(Number(createdAtMs))) return 'Today';
         const msgDate = new Date(Number(createdAtMs));
         const now = new Date();
-        const diffDays = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(msgDate.getFullYear(), msgDate.getMonth(), msgDate.getDate())) / 86400000);
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const msgDayStart = new Date(msgDate.getFullYear(), msgDate.getMonth(), msgDate.getDate());
+        const diffDays = Math.round((todayStart - msgDayStart) / 86400000);
+
         if (diffDays <= 0) return 'Today';
         if (diffDays === 1) return 'Yesterday';
-        if (diffDays > 1 && diffDays < 7) return msgDate.toLocaleDateString('en-US', { weekday: 'long' });
+        if (diffDays > 1 && diffDays < 7) {
+            return msgDate.toLocaleDateString('en-US', { weekday: 'long' });
+        }
         return msgDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
     }
 
@@ -164,35 +297,26 @@
         const inp = document.getElementById('nx-chat-msg-in');
         if (!inp) return;
         inp.style.height = 'auto';
-        inp.style.height = Math.min(Math.max(inp.scrollHeight, 36), 100) + 'px';
+        inp.style.height = Math.min(Math.max(inp.scrollHeight, 36), 115) + 'px';
     }
 
-    // SINGLE CLEAN 4-CARD GRID AT TOP OF #nx-chat-directory (NO DUPLICATE GREEN-CIRCLED ROW FROM 1000073890.jpg!)
     chatTab.innerHTML = `
         <div id="nx-chat-directory" style="padding:12px 14px 30px 14px;">
-            <div id="nx-dm-inbox-banner" style="margin-bottom:14px;">
-                <div id="nx-structured-4card-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%;">
-                    <div class="nx-half-card" onclick="if(window.NexusDmInbox) NexusDmInbox.openFullScreenDmHub(); else if(window.NexusDM) NexusDM.openInboxModal();" style="background:#111827; border:1.5px solid #10b981; border-radius:18px; padding:13px; cursor:pointer;">
-                        <div style="font-size:20px;">💬</div>
-                        <div style="font-size:13.5px; font-weight:900; color:#f8fafc; margin-top:6px;">1:1 Personal DM</div>
-                        <div style="font-size:10.5px; color:#6ee7b7; font-weight:700; margin-top:2px;">Friends • Calls &amp; DJ →</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
+                <button type="button" onclick="NexusChat.openLiveTestSeries()" id="nx-music-btn" style="background:linear-gradient(135deg,#0f172a,#1e1b4b); border:1.5px solid #38bdf8; border-radius:14px; padding:12px; color:#f8fafc; display:flex; align-items:center; gap:9px; cursor:pointer; text-align:left;">
+                    <span style="font-size:21px;">📝</span>
+                    <div>
+                        <div style="font-weight:800; font-size:13px; color:#f8fafc;">Live Test Series</div>
+                        <div style="font-size:10.5px; color:#38bdf8; font-weight:700;">Daily Mock Tests →</div>
                     </div>
-                    <div class="nx-half-card" onclick="if(window.NexusAI) NexusAI.openStudio();" style="background:#111827; border:1.5px solid #a78bfa; border-radius:18px; padding:13px; cursor:pointer;">
-                        <div style="font-size:20px;">🤖</div>
-                        <div style="font-size:13.5px; font-weight:900; color:#f8fafc; margin-top:6px;">Private AI Studio</div>
-                        <div style="font-size:10.5px; color:#d8b4fe; font-weight:700; margin-top:2px;">Swara • Image Gen →</div>
+                </button>
+                <button type="button" onclick="NexusChat.openPdfVaultModal()" style="background:#0f172a; border:1px solid #1e293b; border-radius:14px; padding:12px; color:#f8fafc; display:flex; align-items:center; gap:9px; cursor:pointer; text-align:left;">
+                    <span style="font-size:21px;">📄</span>
+                    <div>
+                        <div style="font-weight:800; font-size:13px; color:#f8fafc;">PDF Study Vault</div>
+                        <div style="font-size:10.5px; color:#10b981; font-weight:700;">Notes &amp; Books →</div>
                     </div>
-                    <div class="nx-half-card" onclick="NexusChat.openLiveTestSeries()" style="background:#111827; border:1.5px solid #f59e0b; border-radius:18px; padding:13px; cursor:pointer;">
-                        <div style="font-size:20px;">📝</div>
-                        <div style="font-size:13.5px; font-weight:900; color:#f8fafc; margin-top:6px;">Live Test Series</div>
-                        <div style="font-size:10.5px; color:#fde047; font-weight:700; margin-top:2px;">JEE / NEET Arena →</div>
-                    </div>
-                    <div class="nx-half-card" onclick="NexusChat.openPdfVaultModal()" style="background:#111827; border:1.5px solid #38bdf8; border-radius:18px; padding:13px; cursor:pointer;">
-                        <div style="font-size:20px;">📚</div>
-                        <div style="font-size:13.5px; font-weight:900; color:#f8fafc; margin-top:6px;">PDF Study Vault</div>
-                        <div style="font-size:10.5px; color:#38bdf8; font-weight:700; margin-top:2px;">Notes, Books &amp; PYQs →</div>
-                    </div>
-                </div>
+                </button>
             </div>
 
             <div style="display:flex; gap:8px; margin-bottom:14px; overflow-x:auto; scrollbar-width:none;">
@@ -234,7 +358,7 @@
             <div id="nx-chat-sticker-drawer" style="display:none; background:#111b21; border-top:1px solid #2a3942; padding:8px 10px; flex-shrink:0;">
                 <div style="display:flex; align-items:center; gap:8px; margin-bottom:7px;">
                     <input type="text" id="nx-room-stk-search" placeholder="🔍 Search Stickers..." autocomplete="off" style="flex:1; min-width:0; padding:7px 12px; border-radius:16px; border:1px solid #2a3942; background:#202c33; color:white; font-size:12px; outline:none;">
-                    <button type="button" onclick="document.getElementById('nx-chat-sticker-drawer').style.display='none'" style="background:#202c33; border:none; color:#cbd5e1; width:28px; height:28px; border-radius:50%; cursor:pointer;">✕</button>
+                    <button type="button" onclick="document.getElementById('nx-chat-sticker-drawer').style.display='none'" style="background:#202c33; border:none; color:#cbd5e1; width:28px; height:28px; border-radius:50%; cursor:pointer; flex-shrink:0;">✕</button>
                 </div>
                 <div style="display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; margin-bottom:7px;">
                     <span class="nx-room-stk-chip active" onclick="NexusChat.filterRoomStickers('trending', this)">🔥 Trending</span>
@@ -268,14 +392,28 @@
         const modal = document.createElement('div');
         modal.id = 'nx-cmsg-action-modal';
         modal.className = 'nx-cmsg-backdrop';
-        modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
+        modal.addEventListener('click', e => {
+            if (e.target === modal) modal.style.display = 'none';
+        });
         document.body.appendChild(modal);
     }
     ensureCommunityActionModal();
 
+    function pingOnlinePresence(isTypingRoom) {
+        let me = Nexus.getCurrentUser();
+        if (!me || !Nexus.db) return;
+        let payload = { isOnlineNow: true, lastOnline: Date.now(), lastSeenAt: Date.now() };
+        if (isTypingRoom !== undefined) {
+            payload.typingRoom = isTypingRoom;
+            payload.typingAt = Date.now();
+        }
+        Nexus.db.collection("nexus_accounts").doc(me.username).set(payload, { merge: true }).catch(() => {});
+    }
+    setInterval(() => pingOnlinePresence(), 35000);
+
     function connectRealMessages() {
         if (!Nexus.db) { setTimeout(connectRealMessages, 300); return; }
-        Nexus.db.collection("nexus_real_msgs").orderBy("createdAt", "desc").limit(150).onSnapshot(snap => {
+        Nexus.db.collection("nexus_real_msgs").orderBy("createdAt", "desc").limit(160).onSnapshot(snap => {
             liveMessagesByRoom = {};
             snap.forEach(doc => {
                 let m = doc.data();
@@ -288,7 +426,7 @@
                 liveMessagesByRoom[rKey].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
             });
 
-            if (activeRoomId) NexusChat.renderActiveRoomMessages(false);
+            if (activeRoomId) NexusChat.renderActiveRoomMessages();
             else NexusChat.renderChannelCards();
         });
 
@@ -303,10 +441,13 @@
         getActiveRoomId: function() { return activeRoomId; },
 
         openLiveTestSeries: function() {
-            if (window.NexusCards && NexusCards.openChallengerApp) {
-                return NexusCards.openChallengerApp();
+            if (window.NexusUltra && NexusUltra.openSmoothCollabBrowser) {
+                NexusUltra.openSmoothCollabBrowser();
+            } else if (window.NexusAdvance && NexusAdvance.openPartnerTestPortal) {
+                NexusAdvance.openPartnerTestPortal();
+            } else {
+                window.open('https://challengers-live.netlify.app', '_blank');
             }
-            window.open('https://challengers-live.netlify.app', '_blank');
         },
 
         toggleStudyMusic: function() {
@@ -323,13 +464,6 @@
         },
 
         renderChannelCards: function() {
-            // Remove any duplicate AI studio banners injected inside #nx-chat-directory
-            document.querySelectorAll('#nx-chat-directory > div').forEach(div => {
-                if (div.id !== 'nx-dm-inbox-banner' && div.id !== 'nx-channels-list' && (div.innerText || '').includes('Private AI Studio')) {
-                    div.remove();
-                }
-            });
-
             const listEl = document.getElementById('nx-channels-list');
             if (!listEl) return;
             let filtered = CHANNELS_META.filter(c => currentFilter === 'all' || c.cat === currentFilter);
@@ -358,9 +492,6 @@
         },
 
         openChatRoom: function(roomId) {
-            if (roomId === 'jee_pcm') return this.openLiveTestSeries();
-            if (roomId === 'notes_lib') return this.openPdfVaultModal();
-
             activeRoomId = roomId;
             document.documentElement.style.overflow = 'hidden';
             document.body.style.overflow = 'hidden';
@@ -373,13 +504,14 @@
             const badge = document.getElementById('nx-room-badge');
             if (badge) { badge.style.background = meta.color; badge.innerText = meta.title.charAt(0).toUpperCase(); }
             this.cancelContextMode();
-            this.renderActiveRoomMessages(true);
+            this.renderActiveRoomMessages();
             syncCommunityViewport();
         },
 
         closeChatRoom: function() {
             document.documentElement.style.overflow = '';
             document.body.style.overflow = '';
+            pingOnlinePresence('');
             activeRoomId = null;
             this.cancelContextMode();
             const grpTray = document.getElementById('nx-grp-bottom-tray');
@@ -389,13 +521,10 @@
             this.renderChannelCards();
         },
 
-        renderActiveRoomMessages: function(forceBottom) {
+        renderActiveRoomMessages: function() {
             if (!activeRoomId) return;
             const msgBox = document.getElementById('nx-room-messages');
             if (!msgBox) return;
-
-            const oldTop = msgBox.scrollTop;
-            const wasNearBottom = forceBottom || ((msgBox.scrollHeight - msgBox.scrollTop - msgBox.clientHeight) < 110);
 
             let msgs = (liveMessagesByRoom[activeRoomId] || []).slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
             let me = Nexus.getCurrentUser();
@@ -412,6 +541,7 @@
             let htmlParts = [];
 
             msgs.forEach(m => {
+                // If user clicked "Delete for Me", skip rendering this message on their phone
                 if (hiddenForMe.has(String(m.id))) return;
 
                 let dayLabel = formatChatDayHeader(m.createdAt);
@@ -425,6 +555,7 @@
                 let safeTarget = targetUser.replace(/'/g, "\\'");
                 let isMe = me && ((m.username && m.username.toLowerCase() === myUsername) || sender.toLowerCase() === myName);
 
+                // COMPACT DELETED MESSAGE PILL (Small SVG icon + neat inline pill)
                 if (m.deleted) {
                     let delBy = m.deletedByName || m.sender || m.username || 'Author';
                     htmlParts.push(`
@@ -432,6 +563,7 @@
                             <div class="nx-deleted-msg-box">
                                 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
                                 <span>Deleted by <b>${delBy.replace(/</g, '&lt;')}</b></span>
+                                <span style="font-size:9.5px; color:#64748b; font-style:normal; margin-left:3px;">${m.time || ''}</span>
                             </div>
                         </div>
                     `);
@@ -443,19 +575,15 @@
                 let reactionEmoji = m.reaction || '❤️';
 
                 let replyHTML = m.replyTo
-                    ? `<div style="background:rgba(0,0,0,0.28); border-left:3px solid #00a884; padding:5px 8px; border-radius:6px; font-size:11.5px; color:#cbd5e1; margin-bottom:5px;"><b style="color:#00a884;">@${m.replyTo.sender}:</b> ${m.replyTo.text}</div>`
+                    ? `<div style="background:rgba(0,0,0,0.28); border-left:3px solid #00a884; padding:5px 8px; border-radius:6px; font-size:11.5px; color:#cbd5e1; margin-bottom:5px; max-height:70px; overflow-y:auto;"><b style="color:#00a884;">@${m.replyTo.sender}:</b> ${m.replyTo.text}</div>`
                     : '';
 
                 let stickerHTML = (m.sticker && m.sticker.url)
-                    ? `<img src="${m.sticker.url}" onerror="this.style.display='none'" loading="lazy" style="width:112px; height:112px; object-fit:contain; display:block;">`
+                    ? `<img src="${m.sticker.url}" loading="lazy" style="width:112px; height:112px; object-fit:contain; display:block;">`
                     : '';
 
-                let imgHTML = (m.imgUrl && m.imgUrl.length > 20)
-                    ? `<img src="${m.imgUrl}" onerror="this.style.display='none'" loading="lazy" style="max-width:215px; max-height:245px; border-radius:8px; margin-top:4px; display:block;">`
-                    : '';
-
-                let audHTML = m.audioData
-                    ? `<div onclick="event.stopPropagation();" style="margin:4px 0;"><audio src="${m.audioData}" controls style="height:32px; max-width:205px;"></audio></div>`
+                let imgHTML = m.imgUrl
+                    ? `<img src="${m.imgUrl}" loading="lazy" style="max-width:215px; max-height:245px; border-radius:8px; margin-top:4px; display:block;">`
                     : '';
 
                 let floatingPillHTML = likesArr.length > 0
@@ -464,7 +592,7 @@
 
                 htmlParts.push(`
                     <div style="display:flex; flex-direction:column; align-items:${isMe ? 'flex-end' : 'flex-start'};">
-                        <div onclick="NexusChat.openCommunityMsgMenu('${m.id}')" style="max-width:82%; min-width:95px; background:${m.sticker && !cleanText ? 'transparent' : (isMe ? '#005c4b' : '#202c33')}; color:#e9edef; padding:${m.sticker && !cleanText ? '2px' : '7px 11px'}; border-radius:12px; border-${isMe ? 'top-right' : 'top-left'}-radius:2px; user-select:none; cursor:pointer; position:relative;">
+                        <div onclick="NexusChat.openCommunityMsgMenu('${m.id}')" oncontextmenu="event.preventDefault(); NexusChat.openCommunityMsgMenu('${m.id}')" style="max-width:82%; min-width:95px; background:${m.sticker && !cleanText ? 'transparent' : (isMe ? '#005c4b' : '#202c33')}; color:#e9edef; padding:${m.sticker && !cleanText ? '2px' : '7px 11px'}; border-radius:12px; border-${isMe ? 'top-right' : 'top-left'}-radius:2px; user-select:none; cursor:pointer; position:relative;">
                             <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:2px;">
                                 <span onclick="event.stopPropagation(); NexusChat.closeChatRoom(); Nexus.openPublicProfile('${safeTarget}')" style="font-weight:700; font-size:12px; color:${isMe ? '#fde047' : '#53bdeb'}; cursor:pointer;">${sender}</span>
                                 <span style="font-size:11px; color:rgba(233,237,239,0.6); font-weight:800;">⌄</span>
@@ -472,7 +600,6 @@
                             ${replyHTML}
                             ${stickerHTML}
                             ${imgHTML}
-                            ${audHTML}
                             <div style="display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:8px;">
                                 ${cleanText ? `<span style="font-size:14.5px; line-height:1.38; word-break:break-word; white-space:pre-wrap;">${cleanText}</span>` : '<span></span>'}
                                 <span style="font-size:10px; color:rgba(233,237,239,0.65); white-space:nowrap; margin-left:auto;">
@@ -486,10 +613,10 @@
             });
 
             msgBox.innerHTML = htmlParts.join('');
-            if (wasNearBottom) msgBox.scrollTop = msgBox.scrollHeight;
-            else msgBox.scrollTop = oldTop;
+            msgBox.scrollTop = msgBox.scrollHeight;
         },
 
+        // GROUP MESSAGE MENU WITH BOTH "🧹 DELETE FOR ME" AND "🗑️ DELETE FOR EVERYONE"
         openCommunityMsgMenu: function(msgId) {
             let now = Date.now();
             let lastTap = lastGroupTapMap[msgId] || 0;
@@ -510,7 +637,8 @@
 
             let myUname = me.username.toLowerCase().trim();
             let myName = me.name.toLowerCase().trim();
-            let isStrictlyOwner = (m.username && m.username.toLowerCase().trim() === myUname) || (m.sender && m.sender.toLowerCase().trim() === myName);
+            let isStrictlyOwner = (m.username && m.username.toLowerCase().trim() === myUname) ||
+                                  (m.sender && m.sender.toLowerCase().trim() === myName);
 
             let safeSender = (m.sender || m.username || 'Member').replace(/'/g, "\\'");
             let safeTarget = (m.username || m.sender || 'Member').replace(/'/g, "\\'");
@@ -519,19 +647,37 @@
 
             const modal = document.getElementById('nx-cmsg-action-modal');
             modal.innerHTML = `
-                <div class="nx-cmsg-sheet" onclick="event.stopPropagation();">
+                <div class="nx-cmsg-sheet">
                     <div style="font-size:11.5px; color:#8696a0; margin-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                         <b>${m.sender}:</b> "${m.text || 'Media'}"
                     </div>
                     <div class="nx-cmsg-emoji-bar">
                         ${emojis.map(em => `<button type="button" class="nx-cmsg-emoji-btn" onclick="NexusChat.reactToMsg('${m.id}', '${em}')">${em}</button>`).join('')}
                     </div>
-                    <button type="button" class="nx-cmsg-opt-btn" onclick="document.getElementById('nx-cmsg-action-modal').style.display='none'; NexusChat.startReply('${safeSender}', '${safeSnippet}')"><span>↩️</span> <span>Reply to ${m.sender}</span></button>
-                    <button type="button" class="nx-cmsg-opt-btn" onclick="document.getElementById('nx-cmsg-action-modal').style.display='none'; NexusChat.closeChatRoom(); Nexus.openPublicProfile('${safeTarget}')"><span>👤</span> <span>View ${m.sender}'s Profile</span></button>
-                    ${m.text ? `<button type="button" class="nx-cmsg-opt-btn" onclick="navigator.clipboard.writeText('${safeSnippet}'); document.getElementById('nx-cmsg-action-modal').style.display='none'; Nexus.toast('📋 Copied!');"><span>📋</span> <span>Copy Message Text</span></button>` : ''}
-                    ${isStrictlyOwner && m.text ? `<button type="button" class="nx-cmsg-opt-btn" style="color:#38bdf8;" onclick="document.getElementById('nx-cmsg-action-modal').style.display='none'; NexusChat.startEditMsg('${m.id}')"><span>✏️</span> <span>Edit My Message</span></button>` : ''}
-                    <button type="button" class="nx-cmsg-opt-btn" style="color:#cbd5e1;" onclick="document.getElementById('nx-cmsg-action-modal').style.display='none'; NexusChat.deleteMsgForMe('${m.id}')"><span>🧹</span> <span>Delete for Me</span></button>
-                    ${isStrictlyOwner ? `<button type="button" class="nx-cmsg-opt-btn" style="color:#f87171;" onclick="document.getElementById('nx-cmsg-action-modal').style.display='none'; NexusChat.deleteMsg('${m.id}')"><span>🗑️</span> <span>Delete for Everyone</span></button>` : ''}
+                    <button type="button" class="nx-cmsg-opt-btn" onclick="document.getElementById('nx-cmsg-action-modal').style.display='none'; NexusChat.startReply('${safeSender}', '${safeSnippet}')">
+                        <span>↩️</span> <span>Reply to ${m.sender}</span>
+                    </button>
+                    <button type="button" class="nx-cmsg-opt-btn" onclick="document.getElementById('nx-cmsg-action-modal').style.display='none'; NexusChat.closeChatRoom(); Nexus.openPublicProfile('${safeTarget}')">
+                        <span>👤</span> <span>View ${m.sender}'s Profile</span>
+                    </button>
+                    ${m.text ? `
+                        <button type="button" class="nx-cmsg-opt-btn" onclick="navigator.clipboard.writeText('${safeSnippet}'); document.getElementById('nx-cmsg-action-modal').style.display='none'; Nexus.toast('📋 Copied!');">
+                            <span>📋</span> <span>Copy Message Text</span>
+                        </button>
+                    ` : ''}
+                    ${isStrictlyOwner && m.text ? `
+                        <button type="button" class="nx-cmsg-opt-btn" style="color:#38bdf8;" onclick="document.getElementById('nx-cmsg-action-modal').style.display='none'; NexusChat.startEditMsg('${m.id}')">
+                            <span>✏️</span> <span>Edit My Message</span>
+                        </button>
+                    ` : ''}
+                    <button type="button" class="nx-cmsg-opt-btn" style="color:#cbd5e1;" onclick="document.getElementById('nx-cmsg-action-modal').style.display='none'; NexusChat.deleteMsgForMe('${m.id}')">
+                        <span>🧹</span> <span>Delete for Me</span>
+                    </button>
+                    ${isStrictlyOwner ? `
+                        <button type="button" class="nx-cmsg-opt-btn" style="color:#f87171; border-color:rgba(248,113,113,0.35);" onclick="document.getElementById('nx-cmsg-action-modal').style.display='none'; NexusChat.deleteMsg('${m.id}')">
+                            <span>🗑️</span> <span>Delete for Everyone</span>
+                        </button>
+                    ` : ''}
                     <button type="button" class="nx-cmsg-opt-btn" style="justify-content:center; background:transparent; border:none; color:#8696a0; margin-bottom:0;" onclick="document.getElementById('nx-cmsg-action-modal').style.display='none'">Cancel</button>
                 </div>
             `;
@@ -542,7 +688,7 @@
             let me = Nexus.getCurrentUser();
             if (!me || !msgId) return;
             saveGroupHiddenForMe(me.username, msgId);
-            this.renderActiveRoomMessages(false);
+            this.renderActiveRoomMessages();
             Nexus.toast("🧹 Deleted for you");
         },
 
@@ -558,7 +704,7 @@
             else if (!likes.includes(me.username)) likes.push(me.username);
             m.likes = likes;
             m.reaction = emoji;
-            this.renderActiveRoomMessages(false);
+            this.renderActiveRoomMessages();
             Nexus.db.collection("nexus_real_msgs").doc(msgId).update({ likes: likes, reaction: emoji });
         },
 
@@ -576,6 +722,7 @@
             if (!drawer) return;
             drawer.style.display = drawer.style.display === 'none' ? 'block' : 'none';
             if (drawer.style.display === 'block') this.renderRoomStickers(currentRoomStkCat, '');
+            setTimeout(syncCommunityViewport, 50);
         },
 
         filterRoomStickers: function(cat, chipEl) {
@@ -602,22 +749,34 @@
             document.getElementById('nx-chat-sticker-drawer').style.display = 'none';
             let me = Nexus.getCurrentUser();
             if (!me || !activeRoomId || !Nexus.db) return;
-            Nexus.db.collection("nexus_real_msgs").add({
+            let payload = {
                 roomId: activeRoomId, username: me.username, sender: me.name, role: me.bio || 'JEE Aspirant',
                 text: '', sticker: { url: url, label: label }, imgUrl: '', replyTo: null, likes: [], edited: false,
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), createdAt: Date.now()
-            });
+            };
+            if (!liveMessagesByRoom[activeRoomId]) liveMessagesByRoom[activeRoomId] = [];
+            liveMessagesByRoom[activeRoomId].push(Object.assign({ id: 'temp_' + Date.now() }, payload));
+            this.renderActiveRoomMessages();
+            Nexus.db.collection("nexus_real_msgs").add(payload);
         },
 
         sendChatMessage: function(customImgUrl) {
             let me = Nexus.getCurrentUser();
-            if (!me) { Nexus.switchTab('tab-profile'); return; }
+            if (!me) {
+                Nexus.toast("Please Login in Profile Tab first!");
+                Nexus.switchTab('tab-profile');
+                return;
+            }
             if (!activeRoomId) activeRoomId = 'casual_chat';
             const inp = document.getElementById('nx-chat-msg-in');
             let txt = inp ? inp.value.trim() : '';
             if (!txt && !customImgUrl) return;
 
             if (editingMsgId && !customImgUrl) {
+                let list = liveMessagesByRoom[activeRoomId] || [];
+                let found = list.find(x => x.id === editingMsgId);
+                if (found) { found.text = txt; found.edited = true; }
+                this.renderActiveRoomMessages();
                 if (Nexus.db) {
                     Nexus.db.collection("nexus_real_msgs").doc(editingMsgId).set({ text: txt, edited: true }, { merge: true });
                 }
@@ -649,8 +808,15 @@
             };
 
             this.cancelContextMode();
+
+            if (!liveMessagesByRoom[activeRoomId]) liveMessagesByRoom[activeRoomId] = [];
+            liveMessagesByRoom[activeRoomId].push(Object.assign({ id: 'temp_' + Date.now() }, msgPayload));
+            this.renderActiveRoomMessages();
+
             if (Nexus.db) {
-                Nexus.db.collection("nexus_real_msgs").add(msgPayload).catch(() => {});
+                Nexus.db.collection("nexus_real_msgs").add(msgPayload).catch(() => {
+                    Nexus.toast("⚠️ Slow network, retrying...");
+                });
             }
         },
 
@@ -696,6 +862,16 @@
         deleteMsg: function(msgId) {
             let me = Nexus.getCurrentUser();
             if (!Nexus.db || !activeRoomId || !me) return;
+            let list = liveMessagesByRoom[activeRoomId] || [];
+            let m = list.find(x => x.id === msgId);
+            if (m) {
+                m.deleted = true;
+                m.deletedByName = me.name || me.username;
+                m.text = '';
+                m.imgUrl = '';
+                m.sticker = null;
+            }
+            this.renderActiveRoomMessages();
             Nexus.db.collection("nexus_real_msgs").doc(msgId).set({
                 deleted: true,
                 deletedByName: me.name || me.username,
@@ -706,15 +882,58 @@
         },
 
         startVoiceInput: function() {
-            if (window.NexusVoice && NexusVoice.startRec) {
-                return NexusVoice.startRec('group');
-            }
+            const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRec) return;
+            const rec = new SpeechRec();
+            rec.lang = 'en-IN';
+            Nexus.toast("🎙️ Speak now...");
+            rec.onresult = e => {
+                const inp = document.getElementById('nx-chat-msg-in');
+                if (inp) { inp.value = (inp.value + ' ' + e.results[0][0].transcript).trim(); resizeChatInputBox(); }
+            };
+            rec.start();
         },
 
         openPdfVaultModal: function() {
-            if (window.NexusCards && NexusCards.openPdfVaultApp) {
-                return NexusCards.openPdfVaultApp();
-            }
+            let me = Nexus.getCurrentUser();
+            const modal = document.getElementById('nx-global-modal');
+            let listHTML = livePdfsList.length === 0
+                ? `<div style="text-align:center; padding:16px; color:#64748b; font-size:13px;">No study PDFs uploaded yet.</div>`
+                : livePdfsList.map(p => {
+                    let isMyPdf = me && ((p.username && p.username.toLowerCase() === me.username.toLowerCase()) || p.by === me.name);
+                    return `<div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#1e293b; border-radius:10px;"><a href="${p.url}" target="_blank" style="color:white; text-decoration:none; font-size:13px; flex:1;">📄 <b>${p.title}</b> <small style="color:#94a3b8;">by ${p.by}</small></a>${isMyPdf ? `<button type="button" onclick="NexusChat.deletePdf('${p.id}')" style="background:none; border:none; color:#f87171; cursor:pointer;">🗑️</button>` : ''}</div>`;
+                }).join('');
+
+            modal.innerHTML = `
+                <div class="nx-modal-box">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h3 style="font-size:16px; color:#f8fafc;">📄 Study PDF Vault</h3>
+                        <button type="button" onclick="document.getElementById('nx-global-modal').style.display='none'" style="background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer;">✕</button>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:8px; max-height:40vh; overflow-y:auto; margin-bottom:12px;">${listHTML}</div>
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <input type="text" id="nx-pdf-t" placeholder="Topic / Chapter Name" style="padding:9px 12px; border-radius:8px; border:1px solid #334155; background:#1e293b; color:white; font-size:13px; outline:none;">
+                        <input type="url" id="nx-pdf-u" placeholder="Google Drive / PDF Link (https://...)" style="padding:9px 12px; border-radius:8px; border:1px solid #334155; background:#1e293b; color:white; font-size:13px; outline:none;">
+                        <button type="button" onclick="NexusChat.addPdf()" style="background:#00a884; color:#020617; border:none; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">+ Share PDF</button>
+                    </div>
+                </div>
+            `;
+            modal.style.display = 'flex';
+        },
+
+        addPdf: function() {
+            let me = Nexus.getCurrentUser();
+            if (!me) return;
+            let t = document.getElementById('nx-pdf-t').value.trim();
+            let u = document.getElementById('nx-pdf-u').value.trim();
+            if (!t || !u || !Nexus.db) return;
+            Nexus.db.collection("nexus_real_pdfs").add({ title: t, url: u, by: me.name, username: me.username, createdAt: Date.now() });
+            this.openPdfVaultModal();
+        },
+
+        deletePdf: function(pdfId) {
+            if (!Nexus.db) return;
+            Nexus.db.collection("nexus_real_pdfs").doc(pdfId).delete().then(() => this.openPdfVaultModal());
         }
     };
 
@@ -736,4 +955,3 @@
 
     NexusChat.renderChannelCards();
 })();
-// === END OF CHAT.JS ===
