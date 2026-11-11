@@ -113,18 +113,14 @@
             background-color: #050811;
         }
         :root {
-            /* Keep the app navigation above Netlify's injected bottom-right badge. */
             --nx-nav-height: 64px;
-            --nx-netlify-clearance: 72px;
-            --nx-safe-bottom: env(safe-area-inset-bottom, 0px);
         }
         body {
             background-color: #090d16;
             color: #f8fafc;
             overflow-x: hidden;
             padding-top: 56px;
-            /* Reserve room for the raised navigation and the badge-clearance area. */
-            padding-bottom: calc(var(--nx-nav-height) + var(--nx-netlify-clearance) + 24px + var(--nx-safe-bottom));
+            padding-bottom: 68px;
             max-width: 640px;
             margin: 0 auto;
             min-height: 100dvh;
@@ -209,16 +205,14 @@
         }
         .nx-tab-screen {
             display: none;
-            min-height: calc(100dvh - 56px - var(--nx-nav-height) - var(--nx-netlify-clearance) - var(--nx-safe-bottom));
-            padding-bottom: 28px;
+            min-height: calc(100dvh - 124px);
         }
         .nx-tab-screen.active {
             display: block;
         }
         .nx-bottom-nav {
             position: fixed;
-            /* Lift the whole bar clear of Netlify's fixed bottom-right badge. */
-            bottom: calc(var(--nx-netlify-clearance) + var(--nx-safe-bottom));
+            bottom: 0;
             left: 50%;
             transform: translateX(-50%);
             width: 100%;
@@ -307,8 +301,7 @@
         }
         #nx-toast {
             position: fixed;
-            /* Keep toast messages above the raised navigation instead of over it. */
-            bottom: calc(var(--nx-nav-height) + var(--nx-netlify-clearance) + 12px + var(--nx-safe-bottom));
+            bottom: 76px;
             left: 50%;
             transform: translateX(-50%);
             background: #10b981;
