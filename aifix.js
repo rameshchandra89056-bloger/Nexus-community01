@@ -1,13 +1,14 @@
 /* ============================================================================
-   NEXUS V7 AESTHETIC & LIVE ENGINE
-   - Instagram-Style Side-by-Side [+ Follow] & [💬 Message] Glass Buttons
-   - Auto Cache Cleaner & Zero-Refresh Live Firebase Sync for Online Members
-   - Clean 20MB Video Uploader (Post & 1:1 DM), Watch Party & Official AI
+   NEXUS V8 FINAL FIX (BASED ON REPO ZIP STRUCTURE)
+   1. Zero-Overlap Follow & Sleek Dark Glass Message Button in Member Profile
+   2. Complete 2-Step 1:1 DM Auto-Opener (Clicks "Open →" then clicks "@user Chat →")
+   3. Permanent Top Header "🤖 AI" Button Restore (Next to "📲 App")
+   4. 20MB Video Upload in Post (+) & 1:1 DM Chat + Official Nexus AI
    ============================================================================ */
 
 (function() {
-    if (window.__NEXUS_V7_LOADED__) return;
-    window.__NEXUS_V7_LOADED__ = true;
+    if (window.__NEXUS_V8_ACTIVE__) return;
+    window.__NEXUS_V8_ACTIVE__ = true;
 
     // 1. OLD NETLIFY REDIRECT
     if (window.location.hostname.includes("netlify.app")) {
@@ -15,11 +16,9 @@
         return;
     }
 
-    // 2. UNREGISTER STICKY SERVICE WORKERS SO UPDATES SHOW INSTANTLY
+    // Clear sticky Service Worker caches so updates apply live
     if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.getRegistrations().then(regs => {
-            regs.forEach(r => r.unregister());
-        });
+        navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.update()));
     }
 
     function showToast(msg) {
@@ -57,141 +56,182 @@
     }
 
     // =========================================================================
-    // 3. AESTHETIC INSTAGRAM-STYLE PROFILE BUTTONS: [ + Follow ]  [ 💬 Message ]
+    // 2. RESTORE TOP HEADER "🤖 AI" BUTTON NEXT TO "📲 App"
     // =========================================================================
-    function upgradeProfileAndPostModals() {
-        // Remove any old ugly green message button if present
-        document.querySelectorAll(".nx-injected-dm-btn, #nx-profile-msg-btn").forEach(el => el.remove());
+    function restoreHeaderAIButton() {
+        if (document.getElementById("nx-clean-ai-pill")) return;
 
-        // Find "+ Follow" button inside Member Full Profile
+        const allBtns = document.querySelectorAll("header button, header a, header div, .top-bar button, body > div button");
+        for (const el of allBtns) {
+            const txt = (el.innerText || "").trim();
+            if ((txt === "App" || txt.includes("App")) && el.children.length <= 2 && el.offsetWidth < 130) {
+                const parentText = el.parentElement ? el.parentElement.innerText : "";
+                if (!parentText.includes("AI")) {
+                    const aiPill = document.createElement("button");
+                    aiPill.id = "nx-clean-ai-pill";
+                    aiPill.type = "button";
+                    aiPill.innerHTML = "🤖 AI";
+                    aiPill.style.cssText = `
+                        background: rgba(99, 102, 241, 0.16);
+                        border: 1px solid rgba(99, 102, 241, 0.55);
+                        color: #c7d2fe;
+                        padding: 5px 11px;
+                        border-radius: 999px;
+                        font-size: 12px;
+                        font-weight: 700;
+                        margin-right: 6px;
+                        cursor: pointer;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 4px;
+                        white-space: nowrap;
+                    `;
+                    aiPill.onclick = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        window.openNexusOfficialAI();
+                    };
+                    el.parentNode.insertBefore(aiPill, el);
+                }
+                break;
+            }
+        }
+    }
+
+    // =========================================================================
+    // 3. ZERO-OVERLAP MEMBER PROFILE BUTTONS (+ Follow & 💬 Message)
+    // =========================================================================
+    function syncProfileAndPostUI() {
+        restoreHeaderAIButton();
+
+        // Clean up any old broken grid wrapper from V7 that caused overlapping
+        document.querySelectorAll(".nx-insta-action-row").forEach(row => {
+            const parent = row.parentNode;
+            if (parent) {
+                const fBtn = row.querySelector("button");
+                if (fBtn) {
+                    fBtn.style.width = "100%";
+                    parent.insertBefore(fBtn, row);
+                }
+                row.remove();
+            }
+        });
+
+        // Find "+ Follow" / "Following" button inside Member Full Profile
         document.querySelectorAll("button").forEach(followBtn => {
+            if (followBtn.classList.contains("nx-clean-dm-btn")) return;
             const txt = (followBtn.innerText || "").trim();
-            if ((txt === "+ Follow" || txt === "Following" || txt === "✓ Following") && !followBtn.dataset.nxAestheticDone) {
-                let modalCard = followBtn.parentElement;
-                for (let i = 0; i < 5 && modalCard; i++) {
-                    const cText = modalCard.innerText || "";
-                    if (cText.includes("Member Full Profile") || cText.includes("SHARED POSTS")) {
-                        followBtn.dataset.nxAestheticDone = "true";
 
-                        const handleMatch = cText.match(/@([a-zA-Z0-9_]+)/);
-                        const targetHandle = handleMatch ? handleMatch[1] : "member";
-
-                        // Create sleek side-by-side row wrapper (Instagram Dark UI style)
-                        const actionRow = document.createElement("div");
-                        actionRow.className = "nx-insta-action-row";
-                        actionRow.style.cssText = `
-                            display: grid;
-                            grid-template-columns: 1fr 1fr;
-                            gap: 10px;
-                            width: 100%;
-                            margin-top: 10px;
-                            margin-bottom: 6px;
-                        `;
-
-                        // Style the existing Follow button cleanly to fit left column
-                        followBtn.parentNode.insertBefore(actionRow, followBtn);
-                        actionRow.appendChild(followBtn);
-                        followBtn.style.cssText = `
-                            width: 100%;
-                            height: 42px;
-                            margin: 0;
-                            background: linear-gradient(135deg, #2563eb, #4f46e5);
-                            color: #ffffff;
-                            border: none;
-                            border-radius: 11px;
-                            font-weight: 700;
-                            font-size: 14px;
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-                            transition: all 0.2s ease;
-                        `;
-
-                        // Create sleek Dark Glass "Message" button for right column
-                        const msgBtn = document.createElement("button");
-                        msgBtn.type = "button";
-                        msgBtn.innerHTML = `<span style="font-size:15px;margin-right:6px;">💬</span> Message`;
-                        msgBtn.style.cssText = `
-                            width: 100%;
-                            height: 42px;
-                            margin: 0;
-                            background: rgba(30, 41, 59, 0.9);
-                            color: #f8fafc;
-                            border: 1px solid rgba(99, 102, 241, 0.45);
-                            border-radius: 11px;
-                            font-weight: 700;
-                            font-size: 14px;
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
-                            transition: all 0.2s ease;
-                        `;
-
-                        // Fast Follow Toggle
-                        followBtn.addEventListener("click", function() {
-                            const me = getCurrentMember();
-                            const fKey = "nx_flw_" + me.username + "_" + targetHandle;
-                            const isFlw = localStorage.getItem(fKey) === "true" || followBtn.innerText.includes("Following");
-                            if (!isFlw) {
-                                localStorage.setItem(fKey, "true");
-                                followBtn.innerText = "✓ Following";
-                                followBtn.style.background = "#1e293b";
-                                followBtn.style.border = "1px solid #334155";
-                                showToast("✅ Following @" + targetHandle);
-                            } else {
-                                localStorage.setItem(fKey, "false");
-                                followBtn.innerText = "+ Follow";
-                                followBtn.style.background = "linear-gradient(135deg, #2563eb, #4f46e5)";
-                                followBtn.style.border = "none";
-                            }
-                        });
-
-                        // Direct Message Click Action
-                        msgBtn.onclick = function(ev) {
-                            ev.preventDefault();
-                            ev.stopPropagation();
-                            // Close profile modal cleanly
-                            modalCard.querySelectorAll("button, div, span").forEach(b => {
-                                const bt = (b.innerText || "").trim();
-                                if (bt === "✕" || bt === "×" || bt === "X") b.click();
-                            });
-                            openDirectChatWith(targetHandle);
-                        };
-
-                        actionRow.appendChild(msgBtn);
+            if (txt === "+ Follow" || txt === "Following" || txt === "✓ Following" || txt === "Follow") {
+                // Find the Member Full Profile card container
+                let profileBox = followBtn.parentElement;
+                let isProfileModal = false;
+                for (let i = 0; i < 6 && profileBox; i++) {
+                    const boxText = profileBox.innerText || "";
+                    if (boxText.includes("Member Full Profile") || boxText.includes("SHARED POSTS")) {
+                        isProfileModal = true;
                         break;
                     }
-                    modalCard = modalCard.parentElement;
+                    profileBox = profileBox.parentElement;
+                }
+
+                if (!isProfileModal || !profileBox) return;
+
+                // Ensure "+ Follow" stays full-width block in its original position (NO OVERLAP)
+                followBtn.style.display = "block";
+                followBtn.style.width = "100%";
+                followBtn.style.position = "relative";
+                followBtn.style.clear = "both";
+
+                // Attach a safe fallback follow toggle ONLY once, running 200ms after click if native code didn't update it
+                if (!followBtn.dataset.nxSafeFollowBound) {
+                    followBtn.dataset.nxSafeFollowBound = "true";
+                    followBtn.addEventListener("click", function() {
+                        const beforeText = (followBtn.innerText || "").trim();
+                        setTimeout(() => {
+                            const afterText = (followBtn.innerText || "").trim();
+                            // Only run fallback if native profilefix.js didn't change the button text
+                            if (beforeText === afterText) {
+                                const isNowFollowing = beforeText.includes("Following");
+                                followBtn.innerText = isNowFollowing ? "+ Follow" : "✓ Following";
+                                followBtn.style.background = isNowFollowing ? "#2563eb" : "#1e293b";
+                            }
+                        }, 200);
+                    });
+                }
+
+                // Extract @handle and Name from the profile modal
+                const fullText = profileBox.innerText || "";
+                const handleMatch = fullText.match(/@([a-zA-Z0-9_]+)/);
+                const targetHandle = handleMatch ? handleMatch[1] : "member";
+
+                // Check if our clean Message button already exists inside this profile modal
+                let existingMsgBtn = profileBox.querySelector(".nx-clean-dm-btn");
+                if (!existingMsgBtn) {
+                    const msgBtn = document.createElement("button");
+                    msgBtn.type = "button";
+                    msgBtn.className = "nx-clean-dm-btn";
+                    msgBtn.innerHTML = `💬 Message @${targetHandle}`;
+                    msgBtn.style.cssText = `
+                        display: block !important;
+                        width: 100% !important;
+                        height: 42px !important;
+                        margin-top: 10px !important;
+                        margin-bottom: 4px !important;
+                        position: relative !important;
+                        clear: both !important;
+                        background: #1e293b !important;
+                        color: #f8fafc !important;
+                        border: 1px solid rgba(99, 102, 241, 0.5) !important;
+                        border-radius: 12px !important;
+                        font-weight: 700 !important;
+                        font-size: 14px !important;
+                        cursor: pointer !important;
+                        text-align: center !important;
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+                    `;
+
+                    msgBtn.onclick = function(ev) {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+
+                        // 1. Close the Member Full Profile modal first
+                        profileBox.querySelectorAll("button, div, span").forEach(b => {
+                            const bt = (b.innerText || "").trim();
+                            if (bt === "✕" || bt === "×" || bt === "X") b.click();
+                        });
+
+                        // 2. Open the actual 1:1 DM Chat window with this user
+                        openReal1on1ChatWindow(targetHandle);
+                    };
+
+                    followBtn.insertAdjacentElement("afterend", msgBtn);
+                } else {
+                    // Update handle text if user opened a different profile
+                    existingMsgBtn.innerHTML = `💬 Message @${targetHandle}`;
                 }
             }
         });
 
-        // Upgrade "Instant Cloud Post" modal to support both Photo & 20MB Video cleanly
+        // Upgrade "Instant Cloud Post" modal with sleek 20MB Video Upload Box
         document.querySelectorAll("div, label").forEach(box => {
             const bText = (box.innerText || "").trim();
-            if (bText.includes("Tap to Upload Photo / Doubt Image") && !box.dataset.nxMediaUpgraded && box.children.length <= 4) {
-                box.dataset.nxMediaUpgraded = "true";
-
-                // Make the upload card sleek and allow both Photo + 20MB Video
+            if (bText.includes("Tap to Upload Photo / Doubt Image") && !box.dataset.nxVidAdded && box.children.length <= 4) {
+                box.dataset.nxVidAdded = "true";
                 const vidBtn = document.createElement("div");
                 vidBtn.style.cssText = `
                     margin-top: 10px;
                     background: rgba(30, 41, 59, 0.75);
-                    border: 1px dashed rgba(99, 102, 241, 0.5);
+                    border: 1px dashed rgba(99, 102, 241, 0.55);
                     border-radius: 12px;
-                    padding: 11px;
+                    padding: 12px;
                     text-align: center;
                     color: #93c5fd;
                     font-weight: 700;
                     font-size: 13px;
                     cursor: pointer;
                 `;
-                vidBtn.innerHTML = `🎬 Upload Video (Up to 20MB) <span id="nx-vid-stat" style="display:block;font-size:11px;color:#64748b;font-weight:500;margin-top:2px;">Instant Feed Video Player</span>`;
-
+                vidBtn.innerHTML = `🎬 Tap to Upload Video (Up to 20MB) <span id="nx-vid-stat" style="display:block;font-size:11px;color:#64748b;font-weight:500;margin-top:2px;">Direct Live Feed Video Player</span>`;
                 vidBtn.onclick = function() {
                     const inp = document.createElement("input");
                     inp.type = "file";
@@ -209,7 +249,7 @@
                             const media = await uploadMedia20MB(file, (pct) => {
                                 st.innerText = `⏳ Uploading ${file.name} (${pct}%)...`;
                             });
-                            st.innerHTML = `<span style="color:#34d399;">✅ Ready! Publishing Video Post...</span>`;
+                            st.innerHTML = `<span style="color:#34d399;">✅ Video Uploaded! Sharing now...</span>`;
                             publishVideoToLiveFeed(media, box.closest("div[style*='fixed'], .modal, div"));
                         } catch (err) {
                             st.innerText = "⚠️ " + err.message;
@@ -222,28 +262,119 @@
         });
     }
 
-    setInterval(upgradeProfileAndPostModals, 400);
+    setInterval(syncProfileAndPostUI, 400);
 
     // =========================================================================
-    // 4. OPEN 1:1 CHAT DIRECTLY FROM PROFILE MESSAGE BUTTON
+    // 4. COMPLETE 2-STEP 1:1 DM OPENER (FIXES SCREENSHOT 33 BUG)
     // =========================================================================
-    function openDirectChatWith(handle) {
-        if (window.Nexus && typeof window.Nexus.openDM === "function") {
-            window.Nexus.openDM(handle);
-            return;
+    function openReal1on1ChatWindow(targetHandle) {
+        const cleanHandle = targetHandle.replace(/^@/, "").toLowerCase();
+
+        // Step A: Try calling native DM functions directly if exposed by dm.js / dminbox.js
+        const nativeFns = ["openDMChat", "openDirectChat", "startDM", "openChatWith", "startPersonalDM", "openUserDM"];
+        for (const fnName of nativeFns) {
+            if (typeof window[fnName] === "function") {
+                try { window[fnName](cleanHandle); return; } catch (e) {}
+            }
+            if (window.Nexus && typeof window.Nexus[fnName] === "function") {
+                try { window.Nexus[fnName](cleanHandle); return; } catch (e) {}
+            }
         }
+        if (window.Nexus && typeof window.Nexus.openDM === "function") {
+            try { window.Nexus.openDM(cleanHandle); return; } catch (e) {}
+        }
+
+        // Step B: Switch to Chat Tab (2nd icon in bottom navigation)
         const navs = document.querySelectorAll(".nx-nav-item, nav button, footer button");
         if (navs.length >= 2) navs[1].click();
+
+        // Step C: Click the "Open →" button on "Nexus Official 1:1 Personal DM" card
         setTimeout(() => {
-            document.querySelectorAll("button, div").forEach(el => {
-                if ((el.innerText || "").trim() === "Open" && el.children.length === 0) el.click();
+            let openClicked = false;
+            document.querySelectorAll("button, a, div").forEach(el => {
+                if (openClicked) return;
+                const t = (el.innerText || "").trim();
+                // Match "Open →" button or the "Nexus Official 1:1 Personal DM" card
+                if ((t.startsWith("Open") && t.length <= 10 && el.children.length <= 2) ||
+                    (t.includes("Nexus Official 1:1 Personal DM") && el.getAttribute("onclick"))) {
+                    el.click();
+                    openClicked = true;
+                }
             });
-            showToast("💬 Opening 1:1 Chat with @" + handle);
-        }, 250);
+
+            if (!openClicked) {
+                // Fallback: find the green card containing "Nexus Official 1:1 Personal DM" and click its button
+                document.querySelectorAll("div").forEach(card => {
+                    if (!openClicked && (card.innerText || "").includes("Nexus Official 1:1 Personal DM")) {
+                        const btn = card.querySelector("button, [onclick]");
+                        if (btn) { btn.click(); openClicked = true; }
+                        else { card.click(); openClicked = true; }
+                    }
+                });
+            }
+
+            // Step D: Poll for the "Nexus 1:1 Personal DM" member list modal and click "Chat →" for @targetHandle
+            let attempts = 0;
+            const findAndClickUserTimer = setInterval(() => {
+                attempts++;
+                let userChatOpened = false;
+
+                // Search all member rows inside the opened 1:1 Personal DM modal
+                document.querySelectorAll("div, button, li").forEach(row => {
+                    if (userChatOpened) return;
+                    const rowText = (row.innerText || "").toLowerCase();
+
+                    if ((rowText.includes("@" + cleanHandle) || rowText.includes(cleanHandle)) &&
+                        rowText.includes("chat") && row.offsetHeight > 30 && row.offsetHeight < 130) {
+
+                        // Find the "Chat →" button inside this user's row or click the row itself
+                        let clickedInner = false;
+                        row.querySelectorAll("button, span, div, a").forEach(child => {
+                            const ct = (child.innerText || "").trim();
+                            if (!clickedInner && ct.startsWith("Chat") && ct.length <= 10) {
+                                child.click();
+                                clickedInner = true;
+                                userChatOpened = true;
+                            }
+                        });
+                        if (!clickedInner) {
+                            row.click();
+                            userChatOpened = true;
+                        }
+                    }
+                });
+
+                // If user row isn't loaded yet, check if any other "Chat →" row has an onclick attribute we can call directly
+                if (!userChatOpened && attempts >= 4) {
+                    const anyChatRow = Array.from(document.querySelectorAll("[onclick]")).find(el =>
+                        (el.innerText || "").includes("Chat →") || (el.innerText || "").includes("@")
+                    );
+                    if (anyChatRow) {
+                        const rawOnClick = anyChatRow.getAttribute("onclick") || "";
+                        // Extract function name like "openChat('aarushi_01', ...)"
+                        const fnMatch = rawOnClick.match(/^([a-zA-Z0-9_.]+)\s*\(/);
+                        if (fnMatch && fnMatch[1]) {
+                            try {
+                                const fnParts = fnMatch[1].split(".");
+                                const fnObj = fnParts.length === 2 ? window[fnParts[0]][fnParts[1]] : window[fnParts[0]];
+                                if (typeof fnObj === "function") {
+                                    fnObj(cleanHandle, targetHandle);
+                                    userChatOpened = true;
+                                }
+                            } catch (e) {}
+                        }
+                    }
+                }
+
+                if (userChatOpened || attempts >= 18) {
+                    clearInterval(findAndClickUserTimer);
+                }
+            }, 90);
+        }, 120);
     }
 
     // =========================================================================
-    // 5. 20MB VIDEO & MEDIA UPLOAD ENGINE (LIVE FEED & 1:1 DM)
+    // 5. 20MB VIDEO & MEDIA UPLOAD ENGINE
     // =========================================================================
     async function uploadMedia20MB(file, onProg) {
         if (file.size > 20 * 1024 * 1024) throw new Error("Max 20MB allowed");
