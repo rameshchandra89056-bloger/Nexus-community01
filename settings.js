@@ -397,3 +397,184 @@
     Nexus.listeners.onUsers.push(renderSettings);
     renderSettings();
 })();
+
+/* ============================================================================
+   settings.js — SMOOTH EYE-FRIENDLY THEMES (SOFT WHITE, DARK, EMERALD) & MUTE
+   ============================================================================ */
+
+(function() {
+    const THEMES = {
+        dark: {
+            name: "🌙 Midnight Dark (Default)",
+            bg: "#090d16",
+            card: "#111827",
+            border: "#1e293b",
+            text: "#f8fafc",
+            subtext: "#94a3b8",
+            accent: "#6366f1",
+            iconFilter: "none"
+        },
+        softwhite: {
+            name: "☀️ Soft Daylight White (Eye-Friendly)",
+            bg: "#f1f5f9",       // Soft cool alabaster — never harsh on eyes
+            card: "#ffffff",     // Clean soft white cards
+            border: "#cbd5e1",   // Smooth slate borders
+            text: "#0f172a",     // Deep slate readable text
+            subtext: "#475569",  // Muted slate subtext
+            accent: "#4f46e5",   // Crisp indigo accent
+            iconFilter: "hue-rotate(5deg) brightness(0.85)"
+        },
+        emerald: {
+            name: "🌿 Emerald Forest",
+            bg: "#061512",
+            card: "#0d2621",
+            border: "#144239",
+            text: "#ecfdf5",
+            subtext: "#6ee7b7",
+            accent: "#10b981",
+            iconFilter: "none"
+        },
+        amethyst: {
+            name: "🔮 Royal Amethyst",
+            bg: "#12091c",
+            card: "#1e112f",
+            border: "#341d52",
+            text: "#faf5ff",
+            subtext: "#d8b4fe",
+            accent: "#a855f7",
+            iconFilter: "none"
+        }
+    };
+
+    window.applyNexusTheme = function(themeKey) {
+        const t = THEMES[themeKey] || THEMES.dark;
+        localStorage.setItem("nexus_active_theme", themeKey);
+
+        let styleTag = document.getElementById("nx-dynamic-theme-css");
+        if (!styleTag) {
+            styleTag = document.createElement("style");
+            styleTag.id = "nx-dynamic-theme-css";
+            document.head.appendChild(styleTag);
+        }
+
+        styleTag.innerHTML = `
+            :root {
+                --nx-bg: ${t.bg};
+                --nx-card: ${t.card};
+                --nx-text: ${t.text};
+                --nx-subtext: ${t.subtext};
+                --nx-accent: ${t.accent};
+            }
+            body, html, main, .nx-tab-screen {
+                background-color: ${t.bg} !important;
+                color: ${t.text} !important;
+                transition: background-color 0.25s ease, color 0.25s ease !important;
+            }
+            header, nav, footer, .nx-header, .bottom-nav,
+            div[style*="background:#0f172a"], div[style*="background: #0f172a"],
+            div[style*="background:#111827"], div[style*="background: #111827"],
+            div[style*="background:#1e293b"], div[style*="background: #1e293b"] {
+                background-color: ${t.card} !important;
+                color: ${t.text} !important;
+                border-color: ${t.border} !important;
+                transition: all 0.25s ease !important;
+            }
+            p, span, div, h1, h2, h3, h4, strong, b {
+                color: inherit;
+            }
+            input, textarea {
+                background-color: ${themeKey === "softwhite" ? "#f8fafc" : "#1e293b"} !important;
+                color: ${t.text} !important;
+                border: 1px solid ${t.border} !important;
+            }
+            svg, img.icon {
+                filter: ${t.iconFilter};
+                transition: filter 0.25s ease;
+            }
+        `;
+    };
+
+    // Apply saved theme immediately on startup
+    const savedTheme = localStorage.getItem("nexus_active_theme") || "dark";
+    window.applyNexusTheme(savedTheme);
+
+    // Inject Theme & Sound Controls inside Settings Screen or open via Gear Icon (⚙️)
+    window.openNexusSettingsModal = function() {
+        const old = document.getElementById("nx-theme-settings-modal");
+        if (old) { old.remove(); return; }
+
+        const currentTheme = localStorage.getItem("nexus_active_theme") || "dark";
+        const isMuted = localStorage.getItem("nexus_mute_notifications") === "true";
+
+        const modal = document.createElement("div");
+        modal.id = "nx-theme-settings-modal";
+        modal.style.cssText = `
+            position: fixed; inset: 0; z-index: 2147483645;
+            background: rgba(9, 13, 22, 0.8); backdrop-filter: blur(8px);
+            display: flex; align-items: center; justify-content: center;
+            padding: 18px; font-family: system-ui, sans-serif;
+        `;
+
+        modal.innerHTML = `
+            <div style="background:var(--nx-card, #111827);color:var(--nx-text, #fff);border:1px solid rgba(99,102,241,0.4);border-radius:22px;padding:22px;width:100%;max-width:390px;box-shadow:0 20px 50px rgba(0,0,0,0.5);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                    <div style="font-weight:800;font-size:18px;">⚙️ Appearance & Sound Settings</div>
+                    <button id="nx-set-close" style="background:#ef4444;color:#fff;border:none;padding:5px 11px;border-radius:8px;font-weight:800;cursor:pointer;">✕</button>
+                </div>
+
+                <div style="font-size:13px;font-weight:700;margin-bottom:10px;opacity:0.85;">🎨 Choose Smooth Theme (Eye-Friendly):</div>
+                <div style="display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:18px;">
+                    ${Object.keys(THEMES).map(k => `
+                        <button class="nx-theme-choice" data-theme="${k}" style="padding:12px 14px;border-radius:12px;border:2px solid ${currentTheme === k ? "#6366f1" : "rgba(148,163,184,0.25)"};background:${THEMES[k].bg};color:${THEMES[k].text};font-weight:700;font-size:13px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+                            <span>${THEMES[k].name}</span>
+                            ${currentTheme === k ? "<span>✔ Active</span>" : ""}
+                        </button>
+                    `).join("")}
+                </div>
+
+                <div style="font-size:13px;font-weight:700;margin-bottom:8px;opacity:0.85;">🔔 Notification Ring & Alerts:</div>
+                <button id="nx-sound-mute-btn" style="width:100%;padding:12px;border-radius:12px;border:1px solid #6366f1;background:rgba(99,102,241,0.12);color:inherit;font-weight:700;font-size:14px;cursor:pointer;">
+                    ${isMuted ? "🔇 Notifications Muted (Tap to Unmute)" : "🔊 Notification Ring Active (Tap to Mute)"}
+                </button>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        document.getElementById("nx-set-close").onclick = () => modal.remove();
+        modal.querySelectorAll(".nx-theme-choice").forEach(btn => {
+            btn.onclick = () => {
+                window.applyNexusTheme(btn.dataset.theme);
+                modal.remove();
+                window.openNexusSettingsModal();
+            };
+        });
+
+        document.getElementById("nx-sound-mute-btn").onclick = function() {
+            const nextMute = localStorage.getItem("nexus_mute_notifications") !== "true";
+            localStorage.setItem("nexus_mute_notifications", nextMute ? "true" : "false");
+            this.innerText = nextMute
+                ? "🔇 Notifications Muted (Tap to Unmute)"
+                : "🔊 Notification Ring Active (Tap to Mute)";
+            if (!nextMute && window.NexusNotify) window.NexusNotify.playRing();
+        };
+    };
+
+    // Attach to bottom-right Settings Gear Icon (5th nav item)
+    document.addEventListener("click", (e) => {
+        const navItems = document.querySelectorAll(".nx-nav-item, footer button, nav button");
+        if (navItems.length >= 5 && navItems[4].contains(e.target)) {
+            setTimeout(() => {
+                // Add a quick "🎨 Theme & Sound Settings" button at top of Settings tab if not already open
+                if (!document.getElementById("nx-inline-theme-btn")) {
+                    const btn = document.createElement("button");
+                    btn.id = "nx-inline-theme-btn";
+                    btn.innerHTML = "🎨 Smooth Themes (Soft White / Dark) & Sound Mute";
+                    btn.style.cssText = "position:fixed;bottom:78px;right:16px;z-index:99999;background:linear-gradient(90deg,#4f46e5,#7c3aed);color:#fff;border:none;padding:10px 16px;border-radius:999px;font-weight:800;font-size:12px;box-shadow:0 8px 20px rgba(79,70,229,0.45);cursor:pointer;";
+                    btn.onclick = () => window.openNexusSettingsModal();
+                    document.body.appendChild(btn);
+                }
+            }, 100);
+        }
+    });
+})();
