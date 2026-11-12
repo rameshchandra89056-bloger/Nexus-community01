@@ -1,3 +1,17 @@
+// Auto Guest Read Access so new users see 100% Real Database immediately
+if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser")) {
+    const defaultVisitor = {
+        uid: "visitor_" + Math.floor(1000 + Math.random() * 9000),
+        name: "Nexus Guest",
+        username: "guest_user",
+        handle: "@guest_user",
+        stream: "IIT-JEE / NEET",
+        isGuest: true,
+        verified: false
+    };
+    localStorage.setItem("nexus_user", JSON.stringify(defaultVisitor));
+    localStorage.setItem("currentUser", JSON.stringify(defaultVisitor));
+}
 // ================= CORE.JS (v7.0 FINAL MASTER): 🛡️ SINGLE CLEAN DELETED MESSAGE PILL (FIXES 3-BOX BUG) + 📐 ZERO + TRAY OVERLAP + 🤖 ADVANCED NEXUS AI STUDIO (ARCHITECTURE GUIDE, STRICT NSFW/HACKING SHIELD, DUAL-ENGINE SWARA VOICE, MIC & EXPORT) + 👤 PROFILE 1-MESSAGE BUTTON LOCK =================
 
 (function() {
