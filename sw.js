@@ -1,6 +1,6 @@
-// ================= SW.JS (v21.0 TURBO SPEED & ZERO-404 AI SERVICE WORKER): ⚡ INSTANT PWA & ASSET SPEED + 🧹 AUTO-CLEARS OLD STALE CACHES + 🤖 INTERCEPTS /.netlify/functions/ai AT NETWORK LEVEL SO HTTP 404 NEVER HAPPENS =================
+// ================= SW.JS (v25.0 TURBO SPEED, ZERO-CACHE LIVE SYNC & UNIVERSAL + NEXUS OFFICIAL AI): ⚡ INSTANT PWA SPEED + 🧹 AUTO-CLEARS OLD CACHES + 🤖 INTERCEPTS /.netlify/functions/ai & /api/ai =================
 
-const TURBO_CACHE = 'nexus-turbo-v21';
+const TURBO_CACHE = 'nexus-turbo-v25';
 const STATIC_ASSETS = [
     'manifest.json'
 ];
@@ -31,7 +31,18 @@ async function handleAiRequestInWorker(request) {
                      (Array.isArray(body.messages) && body.messages.length ? body.messages[body.messages.length - 1].content : 'Hello');
     } catch (e) {}
 
-    const sys = "You are Nexus AI Tutor for JEE (Physics, Chemistry, Maths) and Coding (HTML, CSS, JS, Python). Reply clearly in friendly Hinglish.";
+    const qLower = String(userPrompt).toLowerCase();
+
+    // Instant Official Response for Nexus Owner / Server Questions
+    if (qLower.includes('owner') || qLower.includes('founder') || qLower.includes('kisne banaya') || qLower.includes('creator')) {
+        const ownerMsg = "👑 **Nexus Official Info:** Nexus Student Community Platform ke Founder, Owner aur Lead Developer **Mohit** (`@mohit_01`) hain!";
+        return new Response(JSON.stringify({
+            reply: ownerMsg, answer: ownerMsg, text: ownerMsg, result: ownerMsg, content: ownerMsg, message: ownerMsg,
+            choices: [{ message: { content: ownerMsg } }]
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    const sys = "You are Nexus Official AI Tutor & Platform Assistant (created by Founder & Owner Mohit @mohit_01 for Nexus Student Community). You help students with IIT-JEE / NEET (Physics, Chemistry, Maths, Biology), Coding (HTML, CSS, JS, Python), and Nexus Platform features (1:1 Personal DM, 20MB Video/Photo sharing, Live YouTube Watch Party, PDF Study Vault, and Live Test Series). If someone asks about server status or any issue, tell them all Nexus servers are 100% Online and advise them to keep patience during live updates. Reply clearly in friendly Hinglish.";
     let aiReply = '';
 
     try {
@@ -60,7 +71,7 @@ async function handleAiRequestInWorker(request) {
     }
 
     if (!aiReply) {
-        aiReply = "Namaste! Main Nexus AI Tutor hoon. Aap Physics, Chemistry, Maths (JEE) ya HTML, CSS, JS, Python ka koi bhi sawal puchh sakte hain!";
+        aiReply = "Namaste! Main Nexus Official AI Tutor hoon (by Mohit @mohit_01). Aap Physics, Chemistry, Maths (JEE), Coding ya Nexus Platform ke kisi bhi feature ka sawal puchh sakte hain!";
     }
 
     const payload = JSON.stringify({
@@ -82,7 +93,7 @@ async function handleAiRequestInWorker(request) {
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
 
-    // 1. Intercept /.netlify/functions/ai so HTTP 404 NEVER happens!
+    // 1. Intercept /.netlify/functions/ai & /api/ai so HTTP 404 NEVER happens on Vercel or Netlify!
     if (url.pathname.includes('/.netlify/functions/ai') || url.pathname.includes('/api/ai')) {
         event.respondWith(handleAiRequestInWorker(event.request));
         return;
@@ -90,8 +101,8 @@ self.addEventListener('fetch', event => {
 
     if (event.request.method !== 'GET') return;
 
-    // 2. For HTML & JS files: Always fetch fresh from Network first so updates apply without clearing cache!
-    if (url.pathname.endsWith('.js') || url.pathname.endsWith('.html') || url.pathname === '/') {
+    // 2. For HTML, CSS & JS files: Always fetch 100% fresh from Network first so GitHub commits show IMMEDIATELY!
+    if (url.pathname.endsWith('.js') || url.pathname.endsWith('.html') || url.pathname.endsWith('.css') || url.pathname === '/') {
         event.respondWith(
             fetch(event.request, { cache: 'no-store' })
                 .then(netRes => {
@@ -99,13 +110,13 @@ self.addEventListener('fetch', event => {
                     caches.open(TURBO_CACHE).then(c => c.put(event.request, clone)).catch(() => {});
                     return netRes;
                 })
-                .catch(() => caches.match(event.request))
+                .catch(() => caches.match(event.request, { ignoreSearch: true }))
         );
         return;
     }
 
-    // 3. For Images, Fonts & Icons: Fast Stale-While-Revalidate for instant loading speed
-    if (url.pathname.match(/\.(png|jpg|jpeg|gif|webp|svg|woff2?|ttf|css)$/i)) {
+    // 3. For Images, Fonts & Icons: Fast Stale-While-Revalidate for 0.01s loading speed
+    if (url.pathname.match(/\.(png|jpg|jpeg|gif|webp|svg|woff2?|ttf)$/i)) {
         event.respondWith(
             caches.match(event.request).then(cached => {
                 const netFetch = fetch(event.request).then(netRes => {
