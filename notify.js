@@ -1,5 +1,5 @@
 /* ============================================================================
-   notify.js — REAL LIKE, FOLLOW & MESSAGE NOTIFICATIONS + BELL ICON (🔔) MENU
+   notify.js — COMPLETE CODE (BELL ICON MENU + REAL LIKE/FOLLOW/DM ALERTS)
    ============================================================================ */
 
 (function() {
@@ -13,7 +13,7 @@
         }
     }
 
-    function playChime() {
+    function playRingSound() {
         if (localStorage.getItem("nexus_mute_notifications") === "true") return;
         try {
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -34,24 +34,17 @@
         } catch (e) {}
     }
 
-    function saveAndShowNotification(notif) {
-        const me = getMyUser();
-        // If notification is targeted to a specific user, only alert if it's for me or global
-        if (notif.toUser && notif.toUser.toLowerCase().replace(/^@/, "") !== me.username && notif.fromUser === me.username) {
-            return;
-        }
-
+    function triggerPopupAndSave(notif) {
         const list = JSON.parse(localStorage.getItem("nexus_notifications_list") || "[]");
         if (list.some(item => item.id === notif.id)) return;
         list.unshift(notif);
         localStorage.setItem("nexus_notifications_list", JSON.stringify(list.slice(0, 50)));
 
-        playChime();
+        playRingSound();
 
-        const dot = document.getElementById("nx-bell-unread-dot");
+        const dot = document.getElementById("nx-bell-dot");
         if (dot) dot.style.display = "block";
 
-        // Floating Top Notification Popup
         const pop = document.createElement("div");
         pop.style.cssText = `
             position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
@@ -59,7 +52,7 @@
             background: rgba(15, 23, 42, 0.96); border: 1px solid #6366f1;
             border-left: 4px solid #10b981; border-radius: 16px; padding: 12px 15px;
             color: #fff; display: flex; align-items: center; gap: 12px;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.6); cursor: pointer;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.65); cursor: pointer;
             font-family: system-ui, sans-serif;
         `;
         const icon = notif.type === "like" ? "❤️" : (notif.type === "follow" ? "👤" : "💬");
@@ -69,28 +62,27 @@
                 <div style="font-weight:800;font-size:13px;color:#6ee7b7;">${notif.title || "New Notification"}</div>
                 <div style="font-size:12px;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${notif.body || ""}</div>
             </div>
-            <span style="font-size:10px;color:#94a3b8;">Just now</span>
+            <span style="font-size:10px;color:#94a3b8;">Now</span>
         `;
         pop.onclick = () => {
             pop.remove();
             window.openNotificationDrawer();
         };
         document.body.appendChild(pop);
-        setTimeout(() => { if (pop.parentNode) pop.remove(); }, 4000);
+        setTimeout(() => { if (pop.parentNode) pop.remove(); }, 3800);
     }
 
-    // Open Notification Center when Bell Icon (🔔) in top header is clicked
     window.openNotificationDrawer = function() {
-        const dot = document.getElementById("nx-bell-unread-dot");
+        const dot = document.getElementById("nx-bell-dot");
         if (dot) dot.style.display = "none";
 
-        const old = document.getElementById("nx-notif-center-modal");
+        const old = document.getElementById("nx-notif-drawer-modal");
         if (old) { old.remove(); return; }
 
         const list = JSON.parse(localStorage.getItem("nexus_notifications_list") || "[]");
 
         const modal = document.createElement("div");
-        modal.id = "nx-notif-center-modal";
+        modal.id = "nx-notif-drawer-modal";
         modal.style.cssText = `
             position: fixed; inset: 0; z-index: 2147483646;
             background: rgba(9, 13, 22, 0.85); backdrop-filter: blur(8px);
@@ -103,8 +95,8 @@
                 <div style="padding:14px 16px;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;align-items:center;">
                     <div style="font-weight:800;font-size:16px;">🔔 Notifications (${list.length})</div>
                     <div style="display:flex;gap:8px;">
-                        <button id="nx-clear-notifs" style="background:#1e293b;color:#94a3b8;border:none;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;">Clear All</button>
-                        <button id="nx-close-notifs" style="background:#ef4444;color:#fff;border:none;padding:5px 11px;border-radius:8px;font-weight:800;cursor:pointer;">✕</button>
+                        <button id="nx-notif-clear" style="background:#1e293b;color:#94a3b8;border:none;padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;">Clear</button>
+                        <button id="nx-notif-close" style="background:#ef4444;color:#fff;border:none;padding:5px 11px;border-radius:8px;font-weight:800;cursor:pointer;">✕</button>
                     </div>
                 </div>
                 <div style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;">
@@ -124,36 +116,34 @@
         `;
         document.body.appendChild(modal);
 
-        document.getElementById("nx-close-notifs").onclick = () => modal.remove();
-        document.getElementById("nx-clear-notifs").onclick = () => {
+        document.getElementById("nx-notif-close").onclick = () => modal.remove();
+        document.getElementById("nx-notif-clear").onclick = () => {
             localStorage.setItem("nexus_notifications_list", "[]");
             modal.remove();
             window.openNotificationDrawer();
         };
     };
 
-    // Bind Top Header Bell Icon (Second-to-last icon next to Search 🔍 in Header)
-    function bindBellButton() {
+    // Bind Top Header Bell Icon (🔔)
+    function bindHeaderBell() {
         const header = document.querySelector("header, .nx-header, .top-bar") || document.body.firstElementChild;
         if (!header) return;
-
         header.querySelectorAll("button, a, div, span, svg").forEach(el => {
             const html = (el.outerHTML || "").toLowerCase();
-            // Match bell SVG path (M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9) or bell class/icon
-            if ((html.includes("m18 8a6") || html.includes("bell") || html.includes("notif") || (el.innerText || "").trim() === "🔔") && !el.dataset.nxBellReady) {
-                const clickable = el.closest("button, a, div") || el;
-                clickable.dataset.nxBellReady = "true";
-                clickable.style.position = "relative";
-                clickable.style.cursor = "pointer";
+            if ((html.includes("m18 8a6") || html.includes("bell") || html.includes("notif") || (el.innerText || "").trim() === "🔔") && !el.dataset.nxBellBound) {
+                const target = el.closest("button, a, div") || el;
+                target.dataset.nxBellBound = "true";
+                target.style.position = "relative";
+                target.style.cursor = "pointer";
 
-                if (!document.getElementById("nx-bell-unread-dot")) {
+                if (!document.getElementById("nx-bell-dot")) {
                     const dot = document.createElement("span");
-                    dot.id = "nx-bell-unread-dot";
+                    dot.id = "nx-bell-dot";
                     dot.style.cssText = "position:absolute;top:2px;right:2px;width:8px;height:8px;background:#ef4444;border-radius:50%;display:none;";
-                    clickable.appendChild(dot);
+                    target.appendChild(dot);
                 }
 
-                clickable.addEventListener("click", (e) => {
+                target.addEventListener("click", (e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     window.openNotificationDrawer();
@@ -161,41 +151,24 @@
             }
         });
     }
-    setInterval(bindBellButton, 500);
+    setInterval(bindHeaderBell, 500);
 
-    // Automatically detect Real Likes (❤️), Follows (+ Follow) & Messages across the app
+    // Detect Real Likes (❤️ / ♡) & Messages to trigger notifications automatically
     document.addEventListener("click", (e) => {
         const btn = e.target.closest("button, div, span");
         if (!btn) return;
         const txt = (btn.innerText || "").trim();
         const me = getMyUser();
 
-        // 1. Detect Post Like click (❤️ / ♡)
-        if ((txt.startsWith("♡") || txt.startsWith("❤️") || (btn.outerHTML || "").includes("heart")) && btn.offsetWidth < 110) {
-            const postCard = btn.closest("div[style*='border'], article, .post-card");
-            if (postCard) {
-                const handleMatch = (postCard.innerText || "").match(/@([a-zA-Z0-9_]+)/);
-                const postOwner = handleMatch ? handleMatch[1] : "";
-                window.NexusNotify.push({
-                    type: "like",
-                    title: "❤️ New Post Like!",
-                    body: `${me.name} (${me.handle}) liked ${postOwner ? "@" + postOwner + "'s" : "a"} post`,
-                    toUser: postOwner,
-                    fromUser: me.username
-                });
-            }
-        }
-
-        // 2. Detect Follow click (+ Follow)
-        if (txt === "+ Follow") {
-            const profCard = btn.closest("div");
-            const handleMatch = profCard ? (profCard.parentElement.innerText || "").match(/@([a-zA-Z0-9_]+)/) : null;
-            const targetUser = handleMatch ? handleMatch[1] : "member";
+        if ((txt.startsWith("♡") || txt.startsWith("❤️")) && btn.offsetWidth < 100) {
+            const card = btn.closest("div[style*='border'], article, .post-card");
+            const handleMatch = card ? (card.innerText || "").match(/@([a-zA-Z0-9_]+)/) : null;
+            const postAuthor = handleMatch ? handleMatch[1] : "";
             window.NexusNotify.push({
-                type: "follow",
-                title: "👤 New Follower!",
-                body: `${me.name} (${me.handle}) started following @${targetUser}`,
-                toUser: targetUser,
+                type: "like",
+                title: "❤️ New Post Like!",
+                body: `${me.name} (${me.handle}) liked ${postAuthor ? "@" + postAuthor + "'s" : "your"} post`,
+                toUser: postAuthor,
                 fromUser: me.username
             });
         }
@@ -209,22 +182,21 @@
                 timestamp: Date.now()
             }, obj);
 
-            saveAndShowNotification(payload);
+            triggerPopupAndSave(payload);
 
             if (window.firebase && firebase.database) {
                 firebase.database().ref("live_notifications").push(payload);
             }
         },
-        playRing: playChime
+        playRing: playRingSound
     };
 
-    // Listen to Firebase for real-time incoming Likes, Follows & Messages
     if (window.firebase && firebase.database) {
-        const bootTime = Date.now();
+        const startAt = Date.now();
         firebase.database().ref("live_notifications").limitToLast(5).on("child_added", (snap) => {
             const v = snap.val();
-            if (v && v.timestamp >= bootTime) {
-                saveAndShowNotification(v);
+            if (v && v.timestamp >= startAt) {
+                triggerPopupAndSave(v);
             }
         });
     }
