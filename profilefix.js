@@ -1,122 +1,170 @@
-// ================= PROFILEFIX.JS (v95.0): RESTORES ALL REAL USERS FROM FIREBASE INTO TOP BAR & DM LIST + FIXES NATIVE ACCOUNT SIGNUP & LOGIN =================
+/* ============================================================================
+   profilefix.js — OFFICIAL MEMBER PROFILE (50-50 BUTTONS, 0.01s DM & FOLLOW)
+   ============================================================================ */
 
 (function() {
-    let usersMap = {};
-
-    function mergeUserIntoMaster(uname, name, dp, bio, lastOnline) {
-        if (!uname) return;
-        const cleanU = String(uname).replace(/^@/, '').trim();
-        const key = cleanU.toLowerCase();
-        if (!key || key === 'guest' || key === 'member' || key === 'someone') return;
-
-        const existing = usersMap[key] || {};
-        usersMap[key] = {
-            username: existing.username || cleanU,
-            name: name || existing.name || cleanU,
-            dp: (dp && dp.length > 10) ? dp : (existing.dp || ''),
-            bio: bio || existing.bio || 'IIT-JEE Aspirant',
-            isOnlineNow: existing.isOnlineNow || false,
-            lastOnline: Math.max(Number(lastOnline || 0), Number(existing.lastOnline || 0))
-        };
+    function getMyUser() {
+        try {
+            return JSON.parse(localStorage.getItem("nexus_user") || localStorage.getItem("currentUser") || "{}") || { name: "Member", handle: "@member" };
+        } catch (e) {
+            return { name: "Member", handle: "@member" };
+        }
     }
 
-    function applyMergedUsersToApp() {
-        if (!window.Nexus) return;
-        if (!Array.isArray(Nexus.users)) Nexus.users = [];
+    // Direct 0.01s 1:1 Chat Box Opener (No intermediate screens)
+    window.openDirectUserDM = function(targetHandle, targetName) {
+        const cleanHandle = (targetHandle || "member").replace(/^@/, "");
+        const displayName = targetName || cleanHandle;
 
-        // Keep existing users and merge discovered real users from Firebase
-        Nexus.users.forEach(u => {
-            if (u && u.username) mergeUserIntoMaster(u.username, u.name, u.dp, u.bio, u.lastOnline);
+        // Close Member Full Profile modal immediately
+        document.querySelectorAll("div, section").forEach(modal => {
+            if ((modal.innerText || "").includes("Member Full Profile")) {
+                const closeBtn = modal.querySelector("button");
+                if (closeBtn) closeBtn.click();
+                else modal.style.display = "none";
+            }
         });
 
-        const finalUsers = Object.values(usersMap);
-        if (!finalUsers.length) return;
+        // 1. If native dm.js function exists, open chat box directly in 0.01s
+        if (window.NexusDM && typeof window.NexusDM.openChatBox === "function") {
+            window.NexusDM.openChatBox(cleanHandle, displayName);
+            return;
+        }
+        if (typeof window.openOneToOneChat === "function") {
+            window.openOneToOneChat(cleanHandle, displayName);
+            return;
+        }
+    };
 
-        Nexus.users = finalUsers;
-        try {
-            localStorage.setItem('nexus_users', JSON.stringify(finalUsers));
-            localStorage.setItem('nx_users', JSON.stringify(finalUsers));
-        } catch (e) {}
+    // Format Profile Modal Buttons to exact 50% - 50% Equal Width
+    function formatProfileButtons() {
+        document.querySelectorAll("button").forEach(btn => {
+            if (btn.dataset.nx5050Done) return;
+            const text = (btn.innerText || "").trim().replace(/\s+/g, " ");
 
-        // Trigger Nexus UI refresh so Top Online/Stories Bar & Feed update immediately!
-        try { if (Nexus.rebuildAllUsersMasterList) Nexus.rebuildAllUsersMasterList(); } catch (e) {}
-        try { if (Nexus.renderStories) Nexus.renderStories(); } catch (e) {}
-        try { if (Nexus.renderFeed) Nexus.renderFeed(); } catch (e) {}
-        try { if (Nexus.renderHome) Nexus.renderHome(); } catch (e) {}
-    }
-
-    function startDeepFirebaseUserRecovery() {
-        if (!window.Nexus || !Nexus.db || window.__nxDeepRecoveryV95) return;
-        window.__nxDeepRecoveryV95 = true;
-
-        // 1. Pull registered accounts
-        Nexus.db.collection("nexus_accounts").limit(250).onSnapshot(snap => {
-            snap.forEach(doc => {
-                const d = doc.data() || {};
-                const u = d.username || doc.id;
-                mergeUserIntoMaster(u, d.name, d.dp, d.bio, d.lastOnline || d.createdAt);
-                if (u && usersMap[u.toLowerCase()]) {
-                    usersMap[u.toLowerCase()] = Object.assign({}, usersMap[u.toLowerCase()], d, { username: u });
+            if (text === "+ Follow" || text === "Following" || text === "✓ Following") {
+                let profileModal = btn.parentElement;
+                for (let i = 0; i < 6 && profileModal; i++) {
+                    if ((profileModal.innerText || "").includes("Member Full Profile")) break;
+                    profileModal = profileModal.parentElement;
                 }
-            });
-            applyMergedUsersToApp();
-        }, () => {});
+                if (!profileModal || !(profileModal.innerText || "").includes("Member Full Profile")) return;
 
-        // 2. Also recover active members from Posts so nobody is ever missing!
-        Nexus.db.collection("nexus_posts").orderBy("createdAt", "desc").limit(80).onSnapshot(snap => {
-            snap.forEach(doc => {
-                const p = doc.data() || {};
-                mergeUserIntoMaster(p.username || p.authorUser || p.author, p.author || p.name, p.authorDp || p.dp, p.role || p.bio, p.createdAt);
-            });
-            applyMergedUsersToApp();
-        }, () => {});
+                btn.dataset.nx5050Done = "true";
 
-        // 3. Also recover active members from Group Chat messages!
-        Nexus.db.collection("nexus_real_msgs").orderBy("createdAt", "desc").limit(100).onSnapshot(snap => {
-            snap.forEach(doc => {
-                const m = doc.data() || {};
-                mergeUserIntoMaster(m.username || m.sender, m.sender, m.dp, m.role, m.createdAt);
-            });
-            applyMergedUsersToApp();
-        }, () => {});
-    }
+                // Remove any old duplicate message buttons inside this modal
+                profileModal.querySelectorAll(".nx-clean-dm-btn, .nx-msg-50").forEach(old => old.remove());
 
-    // Fix native Profile Tab "Create Cloud Account / Login" button so it NEVER fails or hangs!
-    function bindNativeProfileCreateAccountFix() {
-        const profTab = document.getElementById('tab-profile');
-        if (!profTab) return;
-        profTab.querySelectorAll('button').forEach(btn => {
-            const txt = (btn.innerText || '').trim();
-            if ((txt.includes('Create Cloud Account') || txt.includes('Login to Account')) && !btn.getAttribute('data-v95-auth')) {
-                btn.setAttribute('data-v95-auth', '1');
-                btn.addEventListener('click', async () => {
-                    const inputs = Array.from(profTab.querySelectorAll('input'));
-                    const vals = inputs.map(i => (i.value || '').trim()).filter(Boolean);
-                    if (vals.length >= 1 && window.Nexus && Nexus.db) {
-                        const rawU = (vals[1] || vals[0]).replace(/^@/, '').replace(/\s+/g, '_').toLowerCase();
-                        const name = vals[0] || rawU;
-                        const uObj = {
-                            username: rawU,
-                            name: name,
-                            bio: 'IIT-JEE Aspirant',
-                            isOnlineNow: true,
-                            lastOnline: Date.now(),
-                            createdAt: Date.now()
-                        };
-                        localStorage.setItem('nexus_current_user', JSON.stringify(uObj));
-                        localStorage.setItem('nexus_user', JSON.stringify(uObj));
-                        Nexus.currentUser = uObj;
-                        Nexus.getCurrentUser = () => uObj;
-                        await Nexus.db.collection("nexus_accounts").doc(rawU).set(uObj, { merge: true }).catch(() => {});
+                // Extract target user's @handle and Name
+                const modalText = profileModal.innerText || "";
+                const handleMatch = modalText.match(/@([a-zA-Z0-9_]+)/);
+                const targetHandle = handleMatch ? handleMatch[1] : "member";
+                const lines = modalText.split("\n").map(l => l.trim()).filter(Boolean);
+                const handleIdx = lines.findIndex(l => l.includes("@" + targetHandle));
+                const targetName = handleIdx > 0 ? lines[handleIdx - 1] : targetHandle;
+
+                // Create a strict 50% - 50% 2-Column Container
+                const row5050 = document.createElement("div");
+                row5050.className = "nx-profile-5050-row";
+                row5050.style.cssText = `
+                    display: grid !important;
+                    grid-template-columns: 1fr 1fr !important;
+                    gap: 10px !important;
+                    width: 100% !important;
+                    margin: 12px 0 6px 0 !important;
+                    align-items: center !important;
+                `;
+
+                btn.parentNode.insertBefore(row5050, btn);
+                row5050.appendChild(btn);
+
+                // Left 50% Button: + Follow
+                const myUser = getMyUser();
+                const followKey = "nx_flw_" + (myUser.username || "me") + "_" + targetHandle;
+                const isFollowing = localStorage.getItem(followKey) === "true";
+
+                btn.innerHTML = isFollowing ? "✓ Following" : "+ Follow";
+                btn.style.cssText = `
+                    width: 100% !important;
+                    height: 42px !important;
+                    margin: 0 !important;
+                    padding: 0 12px !important;
+                    background: ${isFollowing ? "#1e293b" : "#2563eb"} !important;
+                    color: #ffffff !important;
+                    border: ${isFollowing ? "1px solid #3b82f6" : "none"} !important;
+                    border-radius: 11px !important;
+                    font-size: 14px !important;
+                    font-weight: 700 !important;
+                    white-space: nowrap !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    cursor: pointer !important;
+                `;
+
+                btn.onclick = function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const nowFollowing = localStorage.getItem(followKey) !== "true";
+                    localStorage.setItem(followKey, nowFollowing ? "true" : "false");
+
+                    btn.innerHTML = nowFollowing ? "✓ Following" : "+ Follow";
+                    btn.style.background = nowFollowing ? "#1e293b" : "#2563eb";
+                    btn.style.border = nowFollowing ? "1px solid #3b82f6" : "none";
+
+                    // Update Follower count in 0.01s
+                    profileModal.querySelectorAll("div, span, b").forEach(el => {
+                        if (el.children.length === 0 && (el.parentElement.innerText || "").includes("Followers")) {
+                            const n = parseInt(el.innerText, 10);
+                            if (!isNaN(n)) el.innerText = nowFollowing ? (n + 1) : Math.max(0, n - 1);
+                        }
+                    });
+
+                    // Send real-time Follow Notification with sound
+                    if (nowFollowing && window.NexusNotify) {
+                        window.NexusNotify.push({
+                            title: "New Follower! 🎉",
+                            body: `${myUser.name || "A member"} (${myUser.handle || "@member"}) started following @${targetHandle}`,
+                            toUser: targetHandle,
+                            type: "follow"
+                        });
                     }
-                });
+                };
+
+                // Right 50% Button: 💬 Message
+                const msgBtn = document.createElement("button");
+                msgBtn.type = "button";
+                msgBtn.className = "nx-msg-50";
+                msgBtn.innerHTML = "💬 Message";
+                msgBtn.style.cssText = `
+                    width: 100% !important;
+                    height: 42px !important;
+                    margin: 0 !important;
+                    padding: 0 12px !important;
+                    background: #1e293b !important;
+                    color: #f8fafc !important;
+                    border: 1px solid rgba(99, 102, 241, 0.45) !important;
+                    border-radius: 11px !important;
+                    font-size: 14px !important;
+                    font-weight: 700 !important;
+                    white-space: nowrap !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    cursor: pointer !important;
+                `;
+
+                msgBtn.onclick = function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.openDirectUserDM(targetHandle, targetName);
+                };
+
+                row5050.appendChild(msgBtn);
             }
         });
     }
 
-    setInterval(() => {
-        startDeepFirebaseUserRecovery();
-        bindNativeProfileCreateAccountFix();
-    }, 600);
+    document.addEventListener("click", () => setTimeout(formatProfileButtons, 30));
+    setInterval(formatProfileButtons, 350);
 })();
-// === END OF PROFILEFIX.JS ===
