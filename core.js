@@ -1,18 +1,4 @@
-// Auto Guest Read Access so new users see 100% Real Database immediately
-if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser")) {
-    const defaultVisitor = {
-        uid: "visitor_" + Math.floor(1000 + Math.random() * 9000),
-        name: "Nexus Guest",
-        username: "guest_user",
-        handle: "@guest_user",
-        stream: "IIT-JEE / NEET",
-        isGuest: true,
-        verified: false
-    };
-    localStorage.setItem("nexus_user", JSON.stringify(defaultVisitor));
-    localStorage.setItem("currentUser", JSON.stringify(defaultVisitor));
-}
-// ================= CORE.JS (v7.0 FINAL MASTER): 🛡️ SINGLE CLEAN DELETED MESSAGE PILL (FIXES 3-BOX BUG) + 📐 ZERO + TRAY OVERLAP + 🤖 ADVANCED NEXUS AI STUDIO (ARCHITECTURE GUIDE, STRICT NSFW/HACKING SHIELD, DUAL-ENGINE SWARA VOICE, MIC & EXPORT) + 👤 PROFILE 1-MESSAGE BUTTON LOCK =================
+// ================= CORE.JS (v8.0 FINAL SENIOR MASTER): 🛡️ PROFILE & SETTINGS BLACK-SCREEN HEALER + 🗑️ SINGLE CLEAN DELETED MESSAGE PILL + 📐 ZERO + TRAY OVERLAP + 🤖 11-SERVER NEXUS AI STUDIO (SWARA VOICE, MIC & SAFE IMAGE GEN) + 👤 50-50 PROFILE BUTTON GUARD =================
 
 (function() {
     const PROTO = 'https:' + '//';
@@ -30,6 +16,8 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
     let isSwaraSpeaking = false;
     let fallbackAudioPlayer = null;
     let activeHealthyAiServerIndex = 0;
+    let currentAuthMode = 'create'; // 'create' or 'login'
+    let currentProfileSubTab = 'posts'; // 'posts' or 'saved'
 
     // 11 Trusted Fast AI Models (Automatic Failover Router)
     const NEXUS_AI_SERVERS = [
@@ -64,7 +52,7 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
             overflow: hidden;
             box-shadow: 0 0 60px rgba(0,0,0,0.95);
         }
-        /* FIXED SCREENSHOT 1000072616.jpg: Single Clean Deleted Message Pill (Never Nested!) */
+        /* Single Clean Deleted Message Pill (Never Nested!) */
         .nx-single-deleted-pill {
             background: rgba(239, 68, 68, 0.14) !important;
             border: 1.5px dashed rgba(248, 113, 113, 0.65) !important;
@@ -79,7 +67,6 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
             max-width: 86% !important;
             box-shadow: none !important;
         }
-        /* Prevent any child or parent of .nx-single-deleted-pill from getting a 2nd or 3rd border! */
         .nx-single-deleted-pill *,
         .nx-dm-bubble-anim.nx-deleted-row-clean {
             border: none !important;
@@ -92,20 +79,22 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
             display: flex !important;
             margin: 2px 0 !important;
         }
-        /* FIXED 1:1 DM & GROUP + TRAY OVERLAPPING: Clean Non-Overlapping Flex Dock */
+        /* Clean Non-Overlapping 12-Icon Flex Dock for 1:1 DM & Group Chat */
         #nx-dm-bottom-tray, #nx-grp-bottom-tray {
             position: relative !important;
             bottom: auto !important;
             left: auto !important;
             right: auto !important;
+            transform: none !important;
             width: 100% !important;
-            max-height: 148px !important;
+            max-height: 215px !important;
             overflow-y: auto !important;
             grid-template-columns: repeat(4, 1fr) !important;
-            gap: 6px !important;
-            padding: 8px 10px !important;
+            gap: 7px !important;
+            padding: 10px !important;
             background: #111b21 !important;
             border-top: 1.5px solid #00a884 !important;
+            border-radius: 0 !important;
             flex-shrink: 0 !important;
             z-index: 25 !important;
             box-sizing: border-box !important;
@@ -128,6 +117,138 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
         }
     `;
     document.head.appendChild(coreStyle);
+
+    // =========================================================================
+    // 0. 🛡️ PROFILE TAB BLACK-SCREEN HEALER (Renders Login/Create or Full Profile Immediately!)
+    // =========================================================================
+    function healProfileTabBlackScreen() {
+        const profTab = document.getElementById('tab-profile');
+        if (!profTab) return;
+
+        let me = window.Nexus && Nexus.getCurrentUser ? Nexus.getCurrentUser() : null;
+        let currentModeAttr = profTab.getAttribute('data-nx-rendered-mode');
+        let expectedMode = me && me.username ? ('user_' + me.username + '_' + currentProfileSubTab) : ('auth_' + currentAuthMode);
+
+        if (profTab.innerHTML.trim() !== '' && currentModeAttr === expectedMode) {
+            return;
+        }
+
+        profTab.setAttribute('data-nx-rendered-mode', expectedMode);
+
+        // CASE A: User is Not Logged In -> Render Create Cloud Account / Login Existing Card
+        if (!me || !me.username) {
+            const isCreate = (currentAuthMode === 'create');
+            profTab.innerHTML = `
+                <div style="padding: 22px 16px 40px 16px; max-width: 420px; margin: 0 auto;">
+                    <div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 22px; padding: 18px; box-shadow: 0 16px 40px rgba(0,0,0,0.65);">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; background: #090d16; padding: 4px; border-radius: 14px; border: 1px solid #1e293b; margin-bottom: 16px;">
+                            <button type="button" onclick="NexusCore.switchAuthTab('create')" style="padding: 10px 8px; border-radius: 10px; border: none; background: ${isCreate ? '#2563eb' : 'transparent'}; color: ${isCreate ? '#ffffff' : '#94a3b8'}; font-weight: 800; font-size: 13px; cursor: pointer;">Create Cloud Account</button>
+                            <button type="button" onclick="NexusCore.switchAuthTab('login')" style="padding: 10px 8px; border-radius: 10px; border: none; background: ${!isCreate ? '#2563eb' : 'transparent'}; color: ${!isCreate ? '#ffffff' : '#94a3b8'}; font-weight: 800; font-size: 13px; cursor: pointer;">Login Existing</button>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 11px;">
+                            ${isCreate ? `
+                                <input type="text" id="nx-auth-name" placeholder="Full Name (e.g. Aman Kumar)" style="width:100%; padding:13px 14px; border-radius:12px; border:1px solid #334155; background:#090d16; color:#f8fafc; font-size:14px; outline:none;">
+                            ` : ''}
+                            <input type="text" id="nx-auth-uname" placeholder="Unique Username / ID (e.g. aman_01)" style="width:100%; padding:13px 14px; border-radius:12px; border:1px solid #334155; background:#090d16; color:#f8fafc; font-size:14px; outline:none;">
+                            ${isCreate ? `
+                                <input type="text" id="nx-auth-bio" placeholder="Stream / Target (e.g. IIT-JEE 2027)" style="width:100%; padding:13px 14px; border-radius:12px; border:1px solid #334155; background:#090d16; color:#f8fafc; font-size:14px; outline:none;">
+                            ` : ''}
+                            <input type="password" id="nx-auth-pin" placeholder="Secret 4-Digit PIN (e.g. 1234)" style="width:100%; padding:13px 14px; border-radius:12px; border:1px solid #334155; background:#090d16; color:#f8fafc; font-size:14px; outline:none;">
+
+                            <button type="button" onclick="NexusCore.submitCloudAuth()" style="width:100%; margin-top:4px; background:linear-gradient(135deg,#2563eb,#4f46e5); color:#ffffff; border:none; padding:14px; border-radius:14px; font-weight:900; font-size:15px; cursor:pointer; box-shadow:0 6px 20px rgba(37,99,235,0.4);">
+                                ${isCreate ? 'Create Cloud Account' : 'Login to My Account →'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        // CASE B: User IS Logged In -> Render Full Member Profile Dashboard
+        let myU = me.username.toLowerCase().trim();
+        let myPosts = (Nexus.posts || []).filter(p => p && !p.isOfficialPinned && p.username !== 'nexus_official' && ((p.username && p.username.toLowerCase().trim() === myU) || (p.author && p.author.toLowerCase().trim() === (me.name || '').toLowerCase().trim())));
+        let savedIds = [];
+        try { savedIds = JSON.parse(localStorage.getItem('nx_saved_posts') || '[]'); } catch (e) {}
+        let savedPosts = (Nexus.posts || []).filter(p => p && savedIds.includes(p.id));
+
+        let followers = Array.isArray(me.followersList) ? me.followersList : [];
+        let following = Array.isArray(me.followingList) ? me.followingList : [];
+        let dpUrl = me.dp || localStorage.getItem('nx_backup_my_dp_' + myU) || '';
+        let firstChar = (me.name || me.username || 'U').charAt(0).toUpperCase();
+
+        let dpHTML = dpUrl
+            ? `<img src="${dpUrl}" style="width:78px;height:78px;border-radius:50%;object-fit:cover;border:2.5px solid #10b981;">`
+            : `<div style="width:78px;height:78px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);color:white;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:900;border:2.5px solid #38bdf8;">${firstChar}</div>`;
+
+        let activeList = currentProfileSubTab === 'posts' ? myPosts : savedPosts;
+
+        profTab.innerHTML = `
+            <div style="padding: 14px 14px 40px 14px; max-width: 540px; margin: 0 auto;">
+                <div style="background:#0f172a; border:1px solid #1e293b; border-radius:20px; padding:16px; margin-bottom:14px;">
+                    <div style="display:flex; align-items:center; gap:14px; margin-bottom:14px;">
+                        <input type="file" id="nx-core-dp-in" accept="image/*" style="display:none;" onchange="NexusCore.uploadProfilePhoto(this)">
+                        <div onclick="document.getElementById('nx-core-dp-in').click()" style="position:relative; cursor:pointer; flex-shrink:0;" title="Tap to change profile photo">
+                            ${dpHTML}
+                            <span style="position:absolute;bottom:0;right:0;width:24px;height:24px;border-radius:50%;background:#10b981;color:#020617;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;border:2px solid #090d16;">📷</span>
+                        </div>
+                        <div style="min-width:0; flex:1;">
+                            <div style="font-size:19px; font-weight:900; color:#f8fafc; display:flex; align-items:center; gap:6px;">
+                                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${me.name || me.username}</span>
+                                <span style="width:16px;height:16px;border-radius:50%;background:#10b981;color:#022c22;font-size:10px;font-weight:900;display:inline-flex;align-items:center;justify-content:center;">✓</span>
+                            </div>
+                            <div style="font-size:12px; color:#10b981; font-weight:700; margin-top:2px;">@${me.username} ${me.moodNote ? `• 💭 ${me.moodNote}` : '• 🟢 Online'}</div>
+                            <div style="font-size:12.5px; color:#38bdf8; margin-top:3px;">${me.bio || 'IIT-JEE Aspirant'}</div>
+                        </div>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; background:#090d16; border:1px solid #1e293b; border-radius:12px; padding:10px 6px; text-align:center; margin-bottom:10px;">
+                        <div>
+                            <div style="font-size:16px; font-weight:900; color:white;">${myPosts.length}</div>
+                            <div style="font-size:10.5px; color:#94a3b8;">My Posts</div>
+                        </div>
+                        <div onclick="Nexus.openProfileFollowers('${me.username}')" style="border-left:1px solid #1e293b; border-right:1px solid #1e293b; cursor:pointer;">
+                            <div style="font-size:16px; font-weight:900; color:#38bdf8;">${followers.length}</div>
+                            <div style="font-size:10.5px; color:#93c5fd; font-weight:700;">Followers ↗</div>
+                        </div>
+                        <div onclick="Nexus.openProfileFollowing('${me.username}')" style="cursor:pointer;">
+                            <div style="font-size:16px; font-weight:900; color:#38bdf8;">${following.length}</div>
+                            <div style="font-size:10.5px; color:#93c5fd; font-weight:700;">Following ↗</div>
+                        </div>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                        <button type="button" id="nx-who-viewed-btn" onclick="if(window.NexusSuperChat) NexusSuperChat.openProfileVisitorsModal();" style="background:#161f33; border:1px solid #26334d; color:#cbd5e1; padding:9px; border-radius:11px; font-size:12px; font-weight:800; cursor:pointer;">👁️ Profile Visitors</button>
+                        <button type="button" onclick="if(window.NexusSuperChat) NexusSuperChat.openMoodNoteModal();" style="background:#161f33; border:1px solid #10b981; color:#5eead4; padding:9px; border-radius:11px; font-size:12px; font-weight:800; cursor:pointer;">💭 Set Mood Note</button>
+                    </div>
+                </div>
+
+                <div style="display:flex; background:#0f172a; border:1px solid #1e293b; border-radius:14px; padding:4px; gap:6px; margin-bottom:14px;">
+                    <button type="button" onclick="NexusCore.switchProfileSubTab('posts')" style="flex:1; padding:9px; border-radius:10px; border:none; background:${currentProfileSubTab === 'posts' ? 'linear-gradient(135deg,#2563eb,#4f46e5)' : 'transparent'}; color:${currentProfileSubTab === 'posts' ? 'white' : '#94a3b8'}; font-size:12.5px; font-weight:800; cursor:pointer;">📌 My Posts (${myPosts.length})</button>
+                    <button type="button" onclick="NexusCore.switchProfileSubTab('saved')" style="flex:1; padding:9px; border-radius:10px; border:none; background:${currentProfileSubTab === 'saved' ? 'linear-gradient(135deg,#2563eb,#4f46e5)' : 'transparent'}; color:${currentProfileSubTab === 'saved' ? 'white' : '#94a3b8'}; font-size:12.5px; font-weight:800; cursor:pointer;">🔖 Saved Notes (${savedPosts.length})</button>
+                </div>
+
+                <div id="nx-my-posts-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    ${activeList.length === 0
+                        ? `<div style="grid-column:1/-1; text-align:center; padding:28px 14px; color:#64748b; background:#0f172a; border:1px dashed #1e293b; border-radius:16px; font-size:13px;">${currentProfileSubTab === 'posts' ? 'No posts shared yet. Tap + below to create your first post!' : 'No saved notes yet. Tap 🔖 on any post to bookmark it here!'}</div>`
+                        : activeList.map(p => `
+                            <div onclick="Nexus.openSinglePostModal('${p.id}')" style="background:#0f172a; border:1px solid #1e293b; border-radius:14px; padding:9px; min-height:150px; display:flex; flex-direction:column; justify-content:space-between; cursor:pointer;">
+                                <div style="flex:1; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#090d16; border-radius:10px;">
+                                    ${p.image
+                                        ? `<img src="${p.image}" style="width:100%; height:110px; object-fit:cover; border-radius:8px;">`
+                                        : `<div style="font-size:12px; color:#e2e8f0; padding:8px; line-height:1.4; max-height:110px; overflow:hidden;">${(p.text || 'Post').replace(/</g, '&lt;')}</div>`}
+                                </div>
+                                <div style="display:flex; justify-content:space-between; font-size:11px; color:#94a3b8; padding-top:6px; margin-top:6px; border-top:1px solid #1e293b;">
+                                    <span>❤️ ${(p.likedBy || []).length} • 💬 ${(p.comments || []).length}</span>
+                                    <span style="color:#38bdf8; font-weight:800;">Open ↗</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                </div>
+            </div>
+        `;
+    }
 
     // =========================================================================
     // 1. 👥 TWO-WAY FOLLOWER & FOLLOWING GRAPH SYNC
@@ -167,7 +288,7 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
     }
 
     // =========================================================================
-    // 2. 👤 PUBLIC PROFILE BUTTON GUARD (Always 1 Follow + 1 Message Button!)
+    // 2. 👤 PUBLIC PROFILE 50-50 BUTTON GUARD (1 Follow + 1 Message Button!)
     // =========================================================================
     function enforceSingleMessageButtonOnPublicProfile() {
         const modal = document.getElementById('nx-global-modal');
@@ -186,9 +307,10 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
 
         const parentRow = followBtn.parentElement;
         if (!parentRow) return;
-        parentRow.style.display = 'flex';
+        parentRow.style.display = 'grid';
+        parentRow.style.gridTemplateColumns = '1fr 1fr';
         parentRow.style.gap = '10px';
-        followBtn.style.flex = '1';
+        followBtn.style.width = '100%';
 
         let msgBtns = Array.from(parentRow.querySelectorAll('button')).filter(b => b !== followBtn);
 
@@ -196,7 +318,7 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
             const mBtn = document.createElement('button');
             mBtn.type = 'button';
             mBtn.className = 'nx-guaranteed-msg-btn';
-            mBtn.style.cssText = "flex:1; background:#10b981; color:#020617; border:none; padding:11px; border-radius:12px; font-weight:900; font-size:13.5px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px;";
+            mBtn.style.cssText = "width:100%; background:#10b981; color:#020617; border:none; padding:11px; border-radius:12px; font-weight:900; font-size:13.5px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px;";
             mBtn.innerHTML = `💬 Message`;
             mBtn.onclick = () => {
                 modal.style.display = 'none';
@@ -206,9 +328,8 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
         } else {
             msgBtns.forEach((b, idx) => {
                 if (idx === 0) {
-                    if (b.id === 'nx-dm-trigger-btn') b.removeAttribute('id');
                     b.style.setProperty('display', 'inline-flex', 'important');
-                    b.style.flex = '1';
+                    b.style.width = '100%';
                     b.style.alignItems = 'center';
                     b.style.justifyContent = 'center';
                     b.onclick = () => {
@@ -219,19 +340,11 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
                     b.remove();
                 }
             });
-
-            if (!document.getElementById('nx-dm-trigger-btn')) {
-                const dummyMarker = document.createElement('span');
-                dummyMarker.id = 'nx-dm-trigger-btn';
-                dummyMarker.style.display = 'none';
-                modal.appendChild(dummyMarker);
-            }
         }
     }
 
     // =========================================================================
     // 3. 🗑️ SINGLE CLEAN DELETED MESSAGE PILL & 1:1 DM + TRAY OVERLAP FIX
-    // Fixes Screenshot 1000072616.jpg (Removes 3 nested boxes -> 1 clean pill!)
     // =========================================================================
     function patchDmDeleteAndFixPlusTrayOverlap() {
         if (window.NexusDM) {
@@ -286,7 +399,6 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
             }
         }
 
-        // Clean up any existing deleted message bubbles inside #nx-dm-msgs-box so ONLY 1 single pill border renders!
         document.querySelectorAll('#nx-dm-msgs-box .nx-dm-bubble-anim').forEach(row => {
             if ((row.innerText || '').includes('This message was deleted by')) {
                 const bubble = row.firstElementChild;
@@ -299,13 +411,11 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
             }
         });
 
-        // Fix 1:1 DM + Tray Overlap: Auto-close tray when tapping message list or focusing input
         const dmMsgBox = document.getElementById('nx-dm-msgs-box');
         const dmTray = document.getElementById('nx-dm-bottom-tray');
         const dmComposer = document.getElementById('nx-dm-composer');
 
         if (dmTray && dmComposer && dmTray.parentNode === document.body) {
-            // Ensure tray is docked inside #nx-dm-dedicated-root right above #nx-dm-composer!
             dmComposer.parentNode.insertBefore(dmTray, dmComposer);
         }
 
@@ -399,7 +509,6 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
         }
     }
 
-    // Strict Safety Filter: Blocks Hacking, Illegal Tasks, AND 18+/NSFW/Abusive Prompts in Text & Image Gen!
     function isProhibitedOrUnsafePrompt(q) {
         let low = (q || '').toLowerCase();
         const hackingPattern = /\b(hack|hacking|exploit|ddos|phishing|crack|bypass|sql injection|steal password|keylogger|malware|virus|dark web|ransomware|admin pin)\b/i;
@@ -417,7 +526,6 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
         ].some(t => low.startsWith(t) || low.includes(t));
     }
 
-    // Complete Built-in Knowledge of Nexus Platform, Code Structure, AI & JEE Formulas
     function getBuiltInExpertAnswer(userQ) {
         let low = (userQ || '').toLowerCase().trim();
 
@@ -488,6 +596,124 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
     }
 
     window.NexusCore = {
+        switchAuthTab: function(mode) {
+            currentAuthMode = mode;
+            const profTab = document.getElementById('tab-profile');
+            if (profTab) profTab.removeAttribute('data-nx-rendered-mode');
+            healProfileTabBlackScreen();
+        },
+
+        switchProfileSubTab: function(subTab) {
+            currentProfileSubTab = subTab;
+            const profTab = document.getElementById('tab-profile');
+            if (profTab) profTab.removeAttribute('data-nx-rendered-mode');
+            healProfileTabBlackScreen();
+        },
+
+        submitCloudAuth: async function() {
+            const isCreate = (currentAuthMode === 'create');
+            const nameIn = document.getElementById('nx-auth-name');
+            const unameIn = document.getElementById('nx-auth-uname');
+            const bioIn = document.getElementById('nx-auth-bio');
+            const pinIn = document.getElementById('nx-auth-pin');
+
+            let rawU = (unameIn ? unameIn.value : '').trim().toLowerCase().replace(/^@/, '').replace(/[^a-z0-9_]/g, '');
+            let rawPin = (pinIn ? pinIn.value : '').trim() || '1234';
+
+            if (!rawU) {
+                Nexus.toast("⚠️ Kripya apna Unique Username / ID dalein!");
+                return;
+            }
+
+            Nexus.toast("⚡ Connecting to Nexus Cloud...");
+
+            if (!isCreate) {
+                // Login Existing Flow
+                let foundAcc = (Nexus.cloudAccounts || []).find(a => a && a.username && a.username.toLowerCase() === rawU);
+                if (!foundAcc && Nexus.db) {
+                    try {
+                        let doc = await Nexus.db.collection("nexus_accounts").doc(rawU).get();
+                        if (doc.exists) foundAcc = doc.data();
+                    } catch (e) {}
+                }
+                if (foundAcc && foundAcc.pin && String(foundAcc.pin) !== String(rawPin)) {
+                    Nexus.toast("❌ Galat Secret PIN!");
+                    return;
+                }
+                let finalAcc = Object.assign({
+                    username: rawU,
+                    name: (foundAcc && foundAcc.name) || rawU,
+                    bio: (foundAcc && foundAcc.bio) || 'IIT-JEE Aspirant',
+                    dp: (foundAcc && foundAcc.dp) || '',
+                    followersList: (foundAcc && foundAcc.followersList) || [],
+                    followingList: (foundAcc && foundAcc.followingList) || []
+                }, foundAcc || {}, {
+                    isOnlineNow: true,
+                    lastOnline: Date.now()
+                });
+
+                localStorage.setItem('nx_active_account', JSON.stringify(finalAcc));
+                if (Nexus.rebuildAllUsersMasterList) Nexus.rebuildAllUsersMasterList();
+                if (Nexus.notifyAll) Nexus.notifyAll();
+                const profTab = document.getElementById('tab-profile');
+                if (profTab) profTab.removeAttribute('data-nx-rendered-mode');
+                healProfileTabBlackScreen();
+                Nexus.toast(`✅ Welcome back, ${finalAcc.name}!`);
+                Nexus.switchTab('tab-home');
+                return;
+            }
+
+            // Create Cloud Account Flow
+            let fullName = (nameIn ? nameIn.value : '').trim() || rawU;
+            let bioStr = (bioIn ? bioIn.value : '').trim() || 'IIT-JEE Aspirant';
+
+            let newAcc = {
+                username: rawU,
+                name: fullName,
+                bio: bioStr,
+                pin: rawPin,
+                dp: '',
+                followersList: [],
+                followingList: [],
+                isOnlineNow: true,
+                lastOnline: Date.now(),
+                createdAt: Date.now()
+            };
+
+            localStorage.setItem('nx_active_account', JSON.stringify(newAcc));
+            if (Nexus.db) {
+                Nexus.db.collection("nexus_accounts").doc(rawU).set(newAcc, { merge: true }).catch(() => {});
+            }
+            if (Nexus.rebuildAllUsersMasterList) Nexus.rebuildAllUsersMasterList();
+            if (Nexus.notifyAll) Nexus.notifyAll();
+            const profTab = document.getElementById('tab-profile');
+            if (profTab) profTab.removeAttribute('data-nx-rendered-mode');
+            healProfileTabBlackScreen();
+            Nexus.toast(`🎉 Cloud Account Created! Welcome ${fullName}`);
+            Nexus.switchTab('tab-home');
+        },
+
+        uploadProfilePhoto: function(inputEl) {
+            const file = inputEl && inputEl.files && inputEl.files[0];
+            if (!file || !window.Nexus) return;
+            Nexus.compressImage(file, 320, 0.74, dataUrl => {
+                let me = Nexus.getCurrentUser();
+                if (!me) return;
+                me.dp = dataUrl;
+                localStorage.setItem('nx_active_account', JSON.stringify(me));
+                localStorage.setItem('nx_backup_my_dp_' + me.username.toLowerCase(), dataUrl);
+                if (Nexus.db) {
+                    Nexus.db.collection("nexus_accounts").doc(me.username).set({ dp: dataUrl }, { merge: true }).catch(() => {});
+                }
+                if (Nexus.rebuildAllUsersMasterList) Nexus.rebuildAllUsersMasterList();
+                if (Nexus.notifyAll) Nexus.notifyAll();
+                const profTab = document.getElementById('tab-profile');
+                if (profTab) profTab.removeAttribute('data-nx-rendered-mode');
+                healProfileTabBlackScreen();
+                Nexus.toast("📸 Profile Photo Updated Live!");
+            });
+        },
+
         openPrivateAiStudio: function(prefillQuery) {
             let studio = document.getElementById('nx-private-ai-studio');
             if (!studio) {
@@ -495,10 +721,6 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
                 studio.id = 'nx-private-ai-studio';
                 document.body.appendChild(studio);
             }
-
-            aiChatHistory = (aiChatHistory || []).filter(m =>
-                !m.text || (!m.text.includes('Latin word for connection') && !m.text.includes('American actor'))
-            );
 
             if (aiChatHistory.length === 0) {
                 aiChatHistory.push({
@@ -524,7 +746,6 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
                     </div>
                 </div>
 
-                <!-- Advanced Quick Action Chips Bar -->
                 <div style="display:flex; gap:6px; overflow-x:auto; padding:8px 12px; background:#0f172a; border-bottom:1px solid #1e293b; scrollbar-width:none; flex-shrink:0;">
                     <button type="button" class="nx-ai-quick-chip" onclick="NexusCore.quickAsk('What is Nexus')">📘 About Nexus</button>
                     <button type="button" class="nx-ai-quick-chip" onclick="NexusCore.quickAsk('Explain Nexus Website Architecture')">🏗️ Website Code Info</button>
@@ -621,7 +842,6 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
                 msgBox.scrollTop = msgBox.scrollHeight;
             }
 
-            // 1. STRICT SAFETY SHIELD (Blocks Hacking AND NSFW/18+/Abusive Words in Text & Image Gen!)
             let violationType = isProhibitedOrUnsafePrompt(userQ);
             if (violationType === 'hacking') {
                 aiChatHistory.push({
@@ -636,13 +856,12 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
                 aiChatHistory.push({
                     role: 'ai',
                     serverName: 'Content Filter 🛡️',
-                    text: "🚫 **Strict Community Guideline:** Nexus ek clean Student Educational Platform hai. Yahan kisi bhi prakar ke 18+, adult, vulgar ya prohibited words aur photos generate karna strictly प्रतिबंधित (blocked) hai."
+                    text: "🚫 **Strict Community Guideline:** Nexus ek clean Student Educational Platform hai. Yahan kisi bhi prakar ke 18+, adult, vulgar ya prohibited words aur photos generate karna strictly blocked hai."
                 });
                 if (msgBox) { msgBox.innerHTML = aiChatHistory.map(m => formatAiStudioMessageHTML(m)).join(''); msgBox.scrollTop = msgBox.scrollHeight; }
                 return;
             }
 
-            // 2. SAFE EDUCATIONAL & CREATIVE AI IMAGE GENERATION
             if (isAiImagePrompt(userQ)) {
                 let cleanPrompt = userQ.replace(/^(\/img|\/image|photo banao|image banao|picture banao|generate image|create image|draw )/i, '').trim() || userQ;
                 let safePrompt = `${cleanPrompt}, clean educational digital art, safe for students, high quality HD`;
@@ -664,13 +883,11 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
 
             if (sendBtn) sendBtn.disabled = true;
 
-            // 3. Check Built-in Expert Brain First (Nexus, Architecture, What is AI, JEE Formulas)
             let aiReply = getBuiltInExpertAnswer(userQ);
             let usedServerName = aiReply ? 'Nexus Official Brain' : '';
 
             const sysPrompt = "You are Nexus Official AI Tutor & Coding Assistant created for Mohit Kumar's Nexus Student Community platform. Think step-by-step and give a clear, accurate, well-structured educational answer in friendly Hinglish or English. Never teach hacking or inappropriate content. Wrap any code inside ```html or ```javascript or ```python.";
 
-            // 4. 11-Server Auto-Failover Cloud AI Router
             if (!aiReply) {
                 const seed = Math.floor(Math.random() * 99999);
                 for (let attempt = 0; attempt < NEXUS_AI_SERVERS.length; attempt++) {
@@ -754,7 +971,6 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
             }
         },
 
-        // 100% RELIABLE DUAL-ENGINE SWARA VOICE (Web Speech API + Cloud Hindi TTS Fallback for Mobile WebViews!)
         speakSwaraVoice: function(base64Text, btnEl) {
             if (isSwaraSpeaking) {
                 this.stopSwaraVoice();
@@ -781,7 +997,6 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
             let idx = 0;
             let speechStartedSuccessfully = false;
 
-            // Cloud Audio Stream Fallback if Android WebView speechSynthesis is silent/blocked
             const playCloudTtsFallback = () => {
                 if (!isSwaraSpeaking || idx >= chunks.length) {
                     isSwaraSpeaking = false;
@@ -789,7 +1004,7 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
                     return;
                 }
                 let q = encodeURIComponent(chunks[idx].trim().substring(0, 180));
-                let audioUrl = `${PROTO}[translate.googleapis.com/translate_tts?ie=UTF-8&q=$](https://translate.googleapis.com/translate_tts?ie=UTF-8&q=$){q}&tl=hi&client=tw-ob`;
+                let audioUrl = `[https://translate.googleapis.com/translate_tts?ie=UTF-8&q=$](https://translate.googleapis.com/translate_tts?ie=UTF-8&q=$){q}&tl=hi&client=tw-ob`;
                 fallbackAudioPlayer = new Audio(audioUrl);
                 fallbackAudioPlayer.onended = () => {
                     idx++;
@@ -834,7 +1049,6 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
                 };
 
                 speakNextNative();
-                // If native WebView TTS didn't start within 1.2s, switch to Cloud TTS Audio automatically!
                 setTimeout(() => {
                     if (isSwaraSpeaking && !speechStartedSuccessfully && (!window.speechSynthesis.speaking)) {
                         window.speechSynthesis.cancel();
@@ -892,6 +1106,7 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
     };
 
     function runCoreMasterLoop() {
+        healProfileTabBlackScreen();
         patchMasterFollowerGraph();
         enforceSingleMessageButtonOnPublicProfile();
         patchDmDeleteAndFixPlusTrayOverlap();
@@ -903,5 +1118,6 @@ if (!localStorage.getItem("nexus_user") && !localStorage.getItem("currentUser"))
         runCoreMasterLoop();
         setInterval(runCoreMasterLoop, 350);
     });
-    setTimeout(runCoreMasterLoop, 120);
+    setTimeout(runCoreMasterLoop, 100);
 })();
+// === END OF CORE.JS ===
