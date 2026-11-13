@@ -688,7 +688,33 @@
         document.addEventListener('DOMContentLoaded', () => Nexus.init());
         setTimeout(() => Nexus.init(), 150);
     </script>
+<!-- NEXUS NON-DESTRUCTIVE PATCH (Keep all your 900 lines & old JS files intact!) -->
+<style>
+  /* 1. Fix + Icon & Input Bar Overlapping Automatically */
+  #chat-input-bar, .chat-input-container, .dm-input-bar {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    position: relative !important;
+  }
+  #chat-input-bar button, .dm-input-bar button {
+    position: static !important;
+    flex-shrink: 0 !important;
+  }
+  /* 2. 1,000+ Messages Anti-Hang Virtualization */
+  .message, .dm-msg, .chat-message, [data-msg-id] {
+    content-visibility: auto;
+    contain-intrinsic-size: 0 64px;
+  }
+</style>
 
+<script>
+  // Force Service Worker to never cache old JS/HTML
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(reg => reg.update());
+  }
+</script>
+    
     
 <script src="about.js" charset="UTF-8"></script>
 <script src="advance.js" charset="UTF-8"></script>
