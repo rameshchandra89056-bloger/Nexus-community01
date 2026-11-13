@@ -1,4 +1,4 @@
-// ================= DM.JS (100% FINAL MASTER): ZERO DUPLICATE PROFILE MESSAGE BUTTON + INSTANT DELETE FOR EVERYONE + HOME FEED DOUBLE-TAP SAFE + KEYBOARD LOCK + 105+ STICKERS =================
+// ================= DM.JS (100% FINAL MASTER): ZERO DUPLICATE PROFILE MESSAGE BUTTON + PARTNER ID SYNC FOR PHOTO/VIDEO/WATCH-PARTY + INSTANT DELETE FOR EVERYONE + HOME FEED DOUBLE-TAP SAFE + KEYBOARD LOCK + 105+ STICKERS =================
 
 (function() {
     let activeDmPartner = null;
@@ -65,8 +65,6 @@
     const dmStyle = document.createElement('style');
     dmStyle.innerHTML = `
         * { -webkit-tap-highlight-color: transparent; }
-        /* Hide any legacy duplicate Message button on Public Profile */
-        #nx-dm-trigger-btn { display: none !important; }
         @keyframes nxMsgSlideIn {
             0% { opacity: 0; transform: translateY(4px); }
             100% { opacity: 1; transform: translateY(0); }
@@ -519,13 +517,6 @@
         }
     }
 
-    function getSavedPostIdsUnified() {
-        let a = [], b = [];
-        try { a = JSON.parse(localStorage.getItem('nx_saved_posts') || '[]'); } catch (e) {}
-        try { b = JSON.parse(localStorage.getItem('nx_saved') || '[]'); } catch (e) {}
-        return Array.from(new Set([...a, ...b]));
-    }
-
     function isUserTrulyOnline(u) {
         if (!u) return false;
         let me = Nexus.getCurrentUser();
@@ -548,7 +539,6 @@
         return `Last seen ${Math.floor(diffHr / 24)}d ago`;
     }
 
-    // Lightbox ONLY for DM photos (Does NOT hijack Home Feed double-tap to like!)
     function initImageZoomLightbox() {
         if (document.getElementById('nx-img-lightbox')) return;
         const lb = document.createElement('div');
@@ -657,6 +647,8 @@
     }
 
     window.NexusDM = {
+        activePartner: null,
+
         openInboxModal: function() {
             this.closeDM(true);
             if (Nexus.rebuildAllUsersMasterList) Nexus.rebuildAllUsersMasterList();
@@ -750,6 +742,7 @@
                 username: partnerUsername,
                 name: partnerName || partnerUsername
             };
+            this.activePartner = partnerUsername;
 
             const root = ensureDmRootContainer();
             let partnerObj = (Nexus.users || []).find(u =>
@@ -771,7 +764,7 @@
                         <div onclick="NexusDM.closeDM(); Nexus.openPublicProfile('${safePartnerUname}')" style="display:flex; align-items:center; gap:9px; min-width:0; cursor:pointer; flex:1;">
                             ${avHTML}
                             <div style="min-width:0; flex:1;">
-                                <div style="font-weight:700; font-size:15px; color:#e9edef; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${partnerName}</div>
+                                <div id="nx-dm-partner-name" style="font-weight:700; font-size:15px; color:#e9edef; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${partnerName || partnerUsername}</div>
                                 <div id="nx-dm-partner-status" style="font-size:11.5px; color:${isOnline ? '#00a884' : '#8696a0'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                                     ${formatLastSeen(partnerObj)}
                                 </div>
@@ -959,7 +952,7 @@
                     ? dmDeletedInfo(m)
                     : `${replyHTML}
                         <div style="display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:8px; padding-right:25px;">
-                            ${formattedTxt ? `<span style="padding-right:4px;">${formattedTxt}</span>` : '<span></span>'}
+                            ${formattedTxt ? `<span class="nx-dm-msg-text" style="padding-right:4px;">${formattedTxt}</span>` : '<span></span>'}
                             <span style="font-size:10.5px; color:rgba(233,237,239,0.72); white-space:nowrap; margin-left:auto; display:inline-flex; align-items:center;">
                                 ${reactionBadge}
                                 <span>${dmEscapeHTML(m.time || '')} ${m.edited ? '(edited)' : ''}</span>
@@ -1186,7 +1179,10 @@
             Nexus.toast('🧹 Deleted for you.');
         },
 
-        // INSTANT DELETE FOR EVERYONE (No blocking window.confirm!)
+        deleteDM: function(msgId) {
+            return this.deleteDMForEveryone(msgId);
+        },
+
         deleteDMForEveryone: async function(msgId) {
             const me = Nexus.getCurrentUser();
             if (!Nexus.db || !me || !msgId) return;
@@ -1200,7 +1196,6 @@
                 return;
             }
 
-            // Instant UI update
             message.deleted = true;
             message.deletedByName = me.name || me.username || 'sender';
             message.text = '';
@@ -1333,6 +1328,7 @@
             document.documentElement.style.overflow = '';
             document.body.style.overflow = '';
             activeDmPartner = null;
+            this.activePartner = null;
             pingDmTyping('');
             if (dmUnsubscribe) { dmUnsubscribe(); dmUnsubscribe = null; }
             if (dmPartnerUnsub) { dmPartnerUnsub(); dmPartnerUnsub = null; }
@@ -1346,3 +1342,4 @@
         }
     };
 })();
+// === END OF DM.JS ===
