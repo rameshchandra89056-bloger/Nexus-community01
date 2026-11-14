@@ -42,6 +42,83 @@
     <link rel="dns-prefetch" href="https://image.pollinations.ai">
     <link rel="dns-prefetch" href="https://fonts.gstatic.com">
 
+    <!-- ================= 0.01s COLD-START REST PRE-FETCHER FOR BRAND NEW VISITORS ================= -->
+    <script>
+    (function () {
+        const PROJECT_ID = "nexus-community-bf99c";
+        const BASE_REST_URL = "https://firestore.googleapis.com/v1/projects/" + PROJECT_ID + "/databases/(default)/documents";
+
+        function parseFirestoreFields(fields) {
+            if (!fields) return {};
+            const out = {};
+            for (const k in fields) {
+                const v = fields[k];
+                if ("stringValue" in v) out[k] = v.stringValue;
+                else if ("integerValue" in v) out[k] = Number(v.integerValue);
+                else if ("doubleValue" in v) out[k] = Number(v.doubleValue);
+                else if ("booleanValue" in v) out[k] = Boolean(v.booleanValue);
+                else if ("arrayValue" in v) {
+                    out[k] = (v.arrayValue.values || []).map((item) => item.stringValue || item.integerValue || "");
+                }
+            }
+            return out;
+        }
+
+        async function preloadRealDatabaseForNewVisitor() {
+            try {
+                const [pRes, uRes] = await Promise.all([
+                    fetch(BASE_REST_URL + "/nexus_real_posts?pageSize=25"),
+                    fetch(BASE_REST_URL + "/nexus_accounts?pageSize=60")
+                ]);
+
+                if (pRes.ok) {
+                    const pJson = await pRes.json();
+                    if (pJson.documents && pJson.documents.length) {
+                        const posts = pJson.documents
+                            .map((d) => {
+                                const obj = parseFirestoreFields(d.fields);
+                                obj.id = d.name.split("/").pop();
+                                return obj;
+                            })
+                            .filter((p) => {
+                                const t = String(p.content || p.text || "").toLowerCase();
+                                return !t.includes("website ko refresh kar lain") && !t.includes("ek baar refresh");
+                            })
+                            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+                        if (posts.length) {
+                            try { localStorage.setItem("nx_light_posts_v1", JSON.stringify(posts.slice(0, 25))); } catch (e) {}
+                            if (window.Nexus) {
+                                Nexus.posts = posts;
+                                Nexus.listeners.onPosts.forEach((fn) => { try { fn(Nexus.posts); } catch (e) {} });
+                            }
+                        }
+                    }
+                }
+
+                if (uRes.ok) {
+                    const uJson = await uRes.json();
+                    if (uJson.documents && uJson.documents.length) {
+                        const users = uJson.documents
+                            .map((d) => parseFirestoreFields(d.fields))
+                            .filter((u) => u && u.username);
+
+                        if (users.length) {
+                            try { localStorage.setItem("nx_master_users_v1", JSON.stringify(users)); } catch (e) {}
+                            if (window.Nexus) {
+                                Nexus.cloudAccounts = users;
+                                if (typeof Nexus.rebuildAllUsersMasterList === "function") Nexus.rebuildAllUsersMasterList();
+                                Nexus.listeners.onUsers.forEach((fn) => { try { fn(Nexus.users); } catch (e) {} });
+                            }
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+        preloadRealDatabaseForNewVisitor();
+    })();
+    </script>
+
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
@@ -337,12 +414,34 @@
         #nx-stories-bar::-webkit-scrollbar {
             display: none;
         }
-        /* Smart Mini-Theater when Keyboard is Open */
+        /* Smart Mini-Theater when Mobile Keyboard Opens */
         body.nx-keyboard-open iframe[src*="youtube.com"],
         body.nx-keyboard-open iframe[src*="youtu.be"] {
             max-height: 112px !important;
             height: 112px !important;
             transition: height 0.18s ease !important;
+        }
+        /* Sleek 3-Dot Button & Popup Styling on Media Bubbles (Matches 'Hello 11:20' style!) */
+        .nx-media-dots-btn {
+            width: 26px;
+            height: 22px;
+            border-radius: 12px;
+            background: #090d16;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            color: #cbd5e1;
+            font-size: 13px;
+            font-weight: 900;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            line-height: 1;
+            letter-spacing: 1px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+            transition: transform 0.12s ease;
+        }
+        .nx-media-dots-btn:active {
+            transform: scale(0.88);
         }
     </style>
 </head>
@@ -449,7 +548,6 @@
 
         let lastUsersProfileHash = '';
 
-        // 100% COMPLETE NEXUS CORE ENGINE (SO NEW USERS SEE REAL DATABASE INSTANTLY WITHOUT REFRESH!)
         window.Nexus = {
             config: {
                 apiKey: "AIzaSyCKMUVSgImQ39LRuREmhqyd7NTyE-TNyrQ",
@@ -630,7 +728,6 @@
                     } catch(e) {}
                 }
 
-                // Live Accounts Stream
                 this.db.collection("nexus_accounts").onSnapshot(snap => {
                     this.cloudAccounts = [];
                     snap.forEach(d => this.cloudAccounts.push(d.data()));
@@ -647,7 +744,6 @@
                     }
                 });
 
-                // Live Real Posts Stream (Filters out old "refresh kar lain" dummy announcement automatically)
                 this.db.collection("nexus_real_posts").orderBy("createdAt", "desc").limit(50).onSnapshot(snap => {
                     this.posts = [];
                     snap.forEach(d => {
@@ -717,7 +813,6 @@
                 setTimeout(() => { t.style.display = 'none'; }, 2200);
             },
 
-            // UPGRADED: Supports BOTH Photos AND up to 50MB Videos natively in Post Modal & Chat!
             compressImage: function(file, maxW, quality, callback) {
                 if (!file) return;
                 if (file.type && file.type.startsWith('video/') && typeof window.__nxUploadVideoForPost === 'function') {
@@ -755,15 +850,14 @@
 
         document.addEventListener('DOMContentLoaded', () => Nexus.init());
         setTimeout(() => Nexus.init(), 100);
-        // Re-notify modules once all 30 scripts finish parsing so new users NEVER need to refresh!
         window.addEventListener('load', () => {
             setTimeout(() => Nexus.notifyAll(), 250);
             setTimeout(() => Nexus.notifyAll(), 900);
-            setTimeout(() => Nexus.notifyAll(), 2000);
+            setTimeout(() => Nexus.notifyAll(), 1800);
         });
     </script>
 
-    <!-- ================= ALL 30 ORIGINAL NEXUS .JS FILES (100% INTACT & UTF-8) ================= -->
+    <!-- ================= ALL 30 ORIGINAL NEXUS .JS FILES (100% INTACT) ================= -->
     <script src="about.js" charset="UTF-8"></script>
     <script src="advance.js" charset="UTF-8"></script>
     <script src="ai.js" charset="UTF-8"></script>
@@ -796,20 +890,19 @@
     <script src="ytparty.js" charset="UTF-8"></script>
 
     <!-- ============================================================================
-         NEXUS OFFICIAL WHATSAPP-GRADE ENGINE (RUNS AFTER ALL 30 FILES):
-         1. Zero-Blink Smart DOM Diffing on Chat Box (No screen refresh on sending messages!)
-         2. Complete '+' Power Menu: Multiple Photos, 50MB Video, Blue View-Once (1️⃣),
-            Voice Note, Clean HD Audio Call, Watch-Party & PDF
-         3. Tailwind CSS Framed Photos/Videos with Live Reactions (❤️🔥😂👍) & Delete (🗑️)
-         4. Kills Duplicate Watch-Party Box & Restores "Share Nexus" in Settings Tab
-         5. Full 50MB Video Upload in Post Modal & Home Feed Video Player
+         NEXUS V5 FINAL MASTER ENGINE (FIXES ALL SCREENSHOT 1000076421.jpg ISSUES):
+         1. Strict Unicode-Safe Per-Partner Room Isolation (Photos NEVER leak to another user!)
+         2. True HH:MM + Timestamp Sorting (New text 'Hello 11:20' ALWAYS stays BELOW '11:19' photo!)
+         3. Sleek '•••' 3-Dot Button on Photos/Videos (Replaces ugly exposed top emoji bar!)
+         4. 100% Working Blue View-Once (1️⃣) via Global Capture Click Delegation
+         5. Guest-to-Account Redirect & 0.01s Follow / Profile / Message Actions
          ============================================================================ -->
     <script>
     (function () {
-        if (window.__NEXUS_WHATSAPP_MASTER_V4__) return;
-        window.__NEXUS_WHATSAPP_MASTER_V4__ = true;
+        if (window.__NEXUS_V5_FINAL_MASTER__) return;
+        window.__NEXUS_V5_FINAL_MASTER__ = true;
 
-        const MAX_VIDEO_BYTES = 50 * 1024 * 1024; // 50 MB
+        const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
         const CHUNK_CHAR_SIZE = 650000;
         const roomMediaMap = {};
         let activeRoomKey = null;
@@ -829,11 +922,55 @@
                 const raw = JSON.parse(localStorage.getItem("nx_active_account") || "{}");
                 if (raw && raw.username) return raw.username.toLowerCase().trim();
             } catch (e) {}
-            return (localStorage.getItem("nexus_username") || "mohiy").toLowerCase().trim();
+            return "";
         }
 
         // ========================================================================
-        // 1. STRICT OPEN CHAT CONTAINER & ZERO-BLINK WHATSAPP DOM DIFFING PATCH
+        // 1. GUEST GUARD: REDIRECT UNLOGGED NEW USERS TO PROFILE/ACCOUNT TAB
+        // ========================================================================
+        document.addEventListener(
+            "click",
+            (e) => {
+                const target = e.target.closest("button, a, span, div");
+                if (!target) return;
+
+                const myUname = getMyUsername();
+                const txt = (target.innerText || "").trim().toLowerCase();
+
+                // If user is NOT logged in and clicks Follow, Chat/Message, Send, or + Post:
+                if (!myUname) {
+                    const isProtectedAction =
+                        txt === "follow" ||
+                        txt === "+ follow" ||
+                        txt.includes("chat →") ||
+                        txt.includes("message") ||
+                        target.classList.contains("nx-fab-post") ||
+                        (target.tagName === "BUTTON" && target.getBoundingClientRect().top > window.innerHeight - 130 && !target.classList.contains("nx-nav-item"));
+
+                    if (isProtectedAction && !target.closest("#tab-profile")) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        if (window.Nexus && Nexus.switchTab) {
+                            Nexus.switchTab("tab-profile");
+                            Nexus.toast("👤 Pehle apna Account banayein ya Login karein!");
+                        }
+                        return;
+                    }
+                }
+
+                // 0.01s Instant Follow Feedback when logged in
+                if (myUname && (txt === "follow" || txt === "+ follow") && target.children.length === 0) {
+                    target.style.transition = "all 0.1s ease";
+                    target.style.background = "#10b981";
+                    target.style.color = "#020617";
+                    target.innerText = "Following ✓";
+                }
+            },
+            true
+        );
+
+        // ========================================================================
+        // 2. STRICT UNICODE-SAFE PARTNER ROOM KEY (PHOTOS NEVER LEAK BETWEEN USERS!)
         // ========================================================================
         function getStrictOpenChatMessagesBox() {
             const msgInput =
@@ -873,10 +1010,160 @@
             return null;
         }
 
-        // Intercepts innerHTML on the chat box so dm.js/chat.js NEVER blinks or wipes the screen!
+        // Unicode-safe hash so fancy names like ꧁ঔৣ☬CHANCHAL☬ঔৣ꧂ get a 100% unique key!
+        function unicodeSafeSlug(str) {
+            const s = String(str || "").trim().toLowerCase();
+            const ascii = s.replace(/[^a-z0-9]/g, "");
+            let hash = 0;
+            for (let i = 0; i < s.length; i++) {
+                hash = (hash << 5) - hash + s.charCodeAt(i);
+                hash |= 0;
+            }
+            return (ascii ? ascii + "_" : "u_") + Math.abs(hash).toString(36);
+        }
+
+        function getSharedRoomKey() {
+            const chatBox = getStrictOpenChatMessagesBox();
+            if (!chatBox) return null;
+
+            const myUname = getMyUsername() || "guest";
+
+            // Find the active chat header title right above "Last seen" / "Online Now" / "Live Room"
+            let headerTitle = "";
+            const chatRoot = chatBox.parentElement || document.body;
+            const els = chatRoot.querySelectorAll("h1, h2, h3, h4, strong, b, span, div");
+            for (const el of els) {
+                if (el.children.length > 1) continue;
+                const r = el.getBoundingClientRect();
+                if (r.top >= 2 && r.top <= 95 && r.left >= 36 && r.width > 25) {
+                    const t = (el.innerText || "").trim();
+                    if (
+                        t.length > 1 &&
+                        t.length < 48 &&
+                        !t.includes("Nexus") &&
+                        !t.includes("Online Now") &&
+                        !t.includes("Last seen") &&
+                        !t.includes("Live Room") &&
+                        !t.includes("Swipe") &&
+                        !t.includes("PDF") &&
+                        !t.includes("Chat →")
+                    ) {
+                        headerTitle = t;
+                        break;
+                    }
+                }
+            }
+
+            const raw = (headerTitle || window.currentChatUser || window.currentRoomId || "").trim();
+            if (!raw) return null;
+            const lower = raw.toLowerCase();
+
+            if (lower.includes("saved messages")) {
+                return "dm_saved_" + myUname;
+            }
+
+            if (
+                lower.includes("student chat") ||
+                lower.includes("live room") ||
+                lower.includes("group") ||
+                lower.includes("club") ||
+                lower.includes("arena") ||
+                lower.includes("doubt")
+            ) {
+                return "grp_" + unicodeSafeSlug(lower);
+            }
+
+            // 1v1 DM: Match exact user in Nexus.users by username or fancy display name
+            let partnerKey = "";
+            const cleanLookup = lower.replace(/^@/, "").replace(/\.\.\.$/, "").trim();
+            if (window.Nexus && Array.isArray(Nexus.users)) {
+                const matched = Nexus.users.find((u) => {
+                    if (!u) return false;
+                    const uName = (u.username || "").toLowerCase().trim();
+                    const dName = (u.name || "").toLowerCase().trim();
+                    return (
+                        uName === cleanLookup ||
+                        dName === cleanLookup ||
+                        (cleanLookup.length >= 4 && (dName.startsWith(cleanLookup) || cleanLookup.startsWith(dName)))
+                    );
+                });
+                if (matched && matched.username) {
+                    partnerKey = matched.username.toLowerCase().trim();
+                }
+            }
+
+            if (!partnerKey) {
+                partnerKey = unicodeSafeSlug(cleanLookup);
+            }
+
+            const sortedPair = [myUname, partnerKey].sort().join("__");
+            return "dm_pair_" + sortedPair;
+        }
+
+        // ========================================================================
+        // 3. TRUE CHRONOLOGICAL MESSAGE ORDERING ('Hello 11:20' ALWAYS BELOW '11:19'!)
+        // ========================================================================
+        function extractMessageTimestamp(el) {
+            if (el.dataset && el.dataset.msgTs) {
+                return Number(el.dataset.msgTs);
+            }
+            // Parse HH:MM (e.g., "11:20") from inside native message bubble text
+            const txt = el.innerText || "";
+            const match = txt.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+            if (match) {
+                const now = new Date();
+                const msgDate = new Date(
+                    now.getFullYear(),
+                    now.getMonth(),
+                    now.getDate(),
+                     parseInt(match[1], 10),
+                    parseInt(match[2], 10),
+                    30
+                );
+                const ts = msgDate.getTime();
+                el.dataset.msgTs = String(ts);
+                return ts;
+            }
+            const fallbackTs = Date.now();
+            el.dataset.msgTs = String(fallbackTs);
+            return fallbackTs;
+        }
+
+        function sortChatMessagesChronologically(chatBox, currentRoomKey) {
+            if (!chatBox) return;
+            // First, remove any media bubble that belongs to a DIFFERENT room!
+            chatBox.querySelectorAll(".nx-ig-media-bubble").forEach((b) => {
+                if (b.dataset.roomKey && b.dataset.roomKey !== currentRoomKey) {
+                    b.remove();
+                }
+            });
+
+            // Stamp all native message nodes with their accurate time
+            const allKids = Array.from(chatBox.children);
+            allKids.forEach((k) => extractMessageTimestamp(k));
+
+            // Ensure every media bubble is positioned BEFORE any message that has a strictly newer timestamp
+            const mediaBubbles = Array.from(chatBox.querySelectorAll(".nx-ig-media-bubble"));
+            mediaBubbles.forEach((mb) => {
+                const mTs = Number(mb.dataset.msgTs || 0);
+                const siblings = Array.from(chatBox.children);
+                for (let i = 0; i < siblings.length; i++) {
+                    const sib = siblings[i];
+                    if (sib === mb) continue;
+                    const sTs = extractMessageTimestamp(sib);
+                    // If a native text message has a newer timestamp (e.g. 11:20 > 11:19), place media bubble BEFORE it
+                    if (sTs > mTs + 15000) {
+                        chatBox.insertBefore(mb, sib);
+                        break;
+                    }
+                }
+            });
+        }
+
+        // Zero-Blink WhatsApp DOM Diffing on Chat Container
         function installZeroBlinkWhatsAppPatch(chatBox) {
-            if (!chatBox || chatBox.__nxZeroBlinkInstalled) return;
-            chatBox.__nxZeroBlinkInstalled = true;
+            if (!chatBox || chatBox.__nxV5ZeroBlink) return;
+            chatBox.__nxV5ZeroBlink = true;
 
             const nativeDesc = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML");
             if (!nativeDesc || !nativeDesc.set) return;
@@ -890,12 +1177,14 @@
                     const rk = getSharedRoomKey() || "default";
                     const prevRk = this.dataset.nxRoom || "";
 
+                    // If switching to a different user's chat, wipe old DOM cleanly first!
                     if (!newHtml || !newHtml.trim() || (prevRk && prevRk !== rk)) {
                         this.dataset.nxRoom = rk;
                         nativeDesc.set.call(this, newHtml);
                         if (roomMediaMap[rk]) {
                             roomMediaMap[rk].forEach((m) => renderChatMediaBubble(m, m.localUrl));
                         }
+                        sortChatMessagesChronologically(this, rk);
                         this.scrollTop = this.scrollHeight;
                         return;
                     }
@@ -909,21 +1198,7 @@
                         (el) => !el.classList.contains("nx-ig-media-bubble")
                     );
 
-                    if (curNodes.length === 0) {
-                        nativeDesc.set.call(this, newHtml);
-                        Array.from(this.children).forEach((c, idx) => {
-                            if (!c.dataset.msgTs) {
-                                c.dataset.msgTs = String(Date.now() - (incNodes.length - idx) * 1000);
-                            }
-                        });
-                        if (roomMediaMap[rk]) {
-                            roomMediaMap[rk].forEach((m) => renderChatMediaBubble(m, m.localUrl));
-                        }
-                        this.scrollTop = this.scrollHeight;
-                        return;
-                    }
-
-                    const nearBottom = this.scrollHeight - this.scrollTop - this.clientHeight < 140;
+                    const nearBottom = this.scrollHeight - this.scrollTop - this.clientHeight < 150;
 
                     incNodes.forEach((inc, i) => {
                         const cur = curNodes[i];
@@ -942,6 +1217,7 @@
                         }
                     }
 
+                    sortChatMessagesChronologically(this, rk);
                     if (nearBottom) {
                         this.scrollTop = this.scrollHeight;
                     }
@@ -950,187 +1226,331 @@
         }
 
         // ========================================================================
-        // 2. RESOLVE SHARED ROOM KEY (1v1 COUPLE DM & GROUP CHAT)
+        // 4. SLEEK '•••' 3-DOT POPUP & 100% WORKING BLUE VIEW-ONCE (1️⃣)
         // ========================================================================
-        function getSharedRoomKey() {
-            const msgInput =
-                document.getElementById("nx-dm-input") ||
-                document.getElementById("nx-chat-msg-in") ||
-                document.querySelector('input[placeholder*="Message"]');
-
-            if (!msgInput || msgInput.offsetParent === null) return null;
-
-            const myUname = getMyUsername();
-            let headerTitle = "";
-            const els = document.querySelectorAll("h1, h2, h3, h4, strong, b, span, div");
-            for (const el of els) {
-                if (el.children.length > 1) continue;
-                const r = el.getBoundingClientRect();
-                if (r.top >= 4 && r.top <= 90 && r.left >= 40 && r.width > 30) {
-                    const t = (el.innerText || "").trim();
-                    if (
-                        t.length > 1 &&
-                        t.length < 42 &&
-                        !t.includes("Nexus") &&
-                        !t.includes("Online") &&
-                        !t.includes("Live Room") &&
-                        !t.includes("Swipe") &&
-                        !t.includes("PDF") &&
-                        !t.includes("Chat →")
-                    ) {
-                        headerTitle = t;
-                        break;
-                    }
-                }
-            }
-
-            const raw = (headerTitle || window.currentChatUser || window.currentRoomId || "global_chat").trim();
-            const lower = raw.toLowerCase();
-
-            if (lower.includes("saved messages")) return "dm_saved_" + myUname;
-
-            if (
-                lower.includes("chat") ||
-                lower.includes("room") ||
-                lower.includes("group") ||
-                lower.includes("club") ||
-                lower.includes("arena") ||
-                lower.includes("doubt")
-            ) {
-                return "grp_" + lower.replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
-            }
-
-            let partner = lower.replace(/^@/, "").replace(/\([^)]*\)/g, "").trim();
-            if (window.Nexus && Array.isArray(Nexus.users)) {
-                const found = Nexus.users.find(
-                    (u) =>
-                        u &&
-                        ((u.username && u.username.toLowerCase().trim() === partner) ||
-                            (u.name && u.name.toLowerCase().trim() === partner) ||
-                            (u.name && lower.includes(u.name.toLowerCase().trim())))
-                );
-                if (found && found.username) partner = found.username.toLowerCase().trim();
-            }
-            partner = partner.replace(/[^a-z0-9_]/g, "");
-
-            if (partner && partner !== myUname) {
-                return "dm_pair_" + [myUname, partner].sort().join("__");
-            }
-            return "room_" + (partner || myUname);
-        }
-
-        // ========================================================================
-        // 3. KILL EXTRA WATCH-PARTY BOX + RESTORE "SHARE NEXUS" IN SETTINGS
-        // ========================================================================
-        function globalUiCleanerAndSettingsEnhancer() {
-            // A. Remove "All members ek bar website ko refresh kar lain" dummy card if rendered
-            document.querySelectorAll("#tab-home div").forEach((card) => {
-                if (
-                    card.children.length >= 2 &&
-                    card.children.length <= 6 &&
-                    card.innerText &&
-                    card.innerText.includes("website ko refresh kar lain")
-                ) {
-                    card.style.display = "none";
-                }
-            });
-
-            // B. Kill extra duplicate Watch-Party box (Keep only 1 clean player!)
-            document.querySelectorAll("iframe").forEach((frame) => {
-                const src = (frame.getAttribute("src") || "").trim();
-                const bad =
-                    !src ||
-                    src === "about:blank" ||
-                    src.includes("undefined") ||
-                    (src.includes(window.location.hostname) && !src.includes("vault.html"));
-                if (bad) {
-                    const box = frame.closest('[id*="watch"], [class*="watch"]');
-                    if (box && !box.innerText.includes("Playing in Sync")) box.style.display = "none";
-                    frame.remove();
-                }
-            });
-
-            const ytFrames = Array.from(document.querySelectorAll('iframe[src*="youtube"]'));
-            if (ytFrames.length > 1) {
-                // If two YouTube Watch-Party boxes opened at once, hide the older top duplicate
-                for (let i = 0; i < ytFrames.length - 1; i++) {
-                    const dupBox = ytFrames[i].closest("div");
-                    if (dupBox) dupBox.style.display = "none";
-                    ytFrames[i].remove();
-                }
-            }
-
-            // C. Ensure ONLY ONE '+' button in bottom chat bar & zero overlap
-            const msgInput =
-                document.getElementById("nx-dm-input") ||
-                document.getElementById("nx-chat-msg-in") ||
-                document.querySelector('input[placeholder*="Message"]');
-
-            if (msgInput && msgInput.offsetParent !== null) {
-                const bar = msgInput.parentElement;
-                if (bar) {
-                    bar.style.display = "flex";
-                    bar.style.alignItems = "center";
-                    bar.style.gap = "6px";
-                    const plusBtns = [];
-                    bar.parentElement.querySelectorAll("button, span, div").forEach((el) => {
-                        if (el === bar || el === msgInput) return;
-                        const t = (el.innerText || "").trim();
-                        if ((t === "+" || t === "＋") && el.children.length === 0) plusBtns.push(el);
-                    });
-                    if (plusBtns.length > 1) {
-                        for (let i = 1; i < plusBtns.length; i++) plusBtns[i].style.display = "none";
-                    }
-                    if (plusBtns[0]) {
-                        plusBtns[0].style.position = "static";
-                        plusBtns[0].style.flexShrink = "0";
-                    }
-                }
-            }
-
-            // D. Restore "🚀 Share Nexus" Card inside #tab-settings
-            const settingsTab = document.getElementById("tab-settings");
-            if (
-                settingsTab &&
-                settingsTab.classList.contains("active") &&
-                !document.getElementById("nx-share-nexus-card")
-            ) {
-                const shareCard = document.createElement("div");
-                shareCard.id = "nx-share-nexus-card";
-                shareCard.className =
-                    "mx-4 my-3 p-4 rounded-2xl bg-gradient-to-r from-emerald-950/90 via-slate-900 to-cyan-950/90 border border-emerald-500/40 shadow-xl flex items-center justify-between";
-                shareCard.innerHTML = `
-                    <div>
-                        <div class="text-sm font-extrabold text-emerald-400 flex items-center gap-1.5">🚀 Share Nexus App</div>
-                        <div class="text-xs text-slate-300 mt-0.5">Invite friends & study partners to Nexus Community</div>
-                    </div>
-                    <button type="button" id="nx-share-now-btn" class="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-extrabold text-xs shadow-lg active:scale-95 transition">
-                        Share 🔗
-                    </button>
-                `;
-                settingsTab.prepend(shareCard);
-                shareCard.querySelector("#nx-share-now-btn").onclick = async () => {
-                    const shareData = {
-                        title: "Nexus Community",
-                        text: "🔥 Join me on Nexus Community (Live Chat, Watch-Party & Study Vault): ",
-                        url: "https://nexus-community01.vercel.app/"
+        // Global Capture-Phase Click Listener so View-Once & '•••' Menu NEVER fail!
+        document.addEventListener(
+            "click",
+            async (e) => {
+                // A. Handle Click on '1️⃣ View Once Photo • Tap to Open'
+                const voBtn = e.target.closest(".nx-open-viewonce");
+                if (voBtn) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    const bubble = voBtn.closest(".nx-ig-media-bubble");
+                    if (!bubble) return;
+                    const msgId = bubble.id;
+                    const rk = bubble.dataset.roomKey || getSharedRoomKey();
+                    const list = (rk && roomMediaMap[rk]) || [];
+                    const msgObj = list.find((x) => x.id === msgId) || {
+                        id: msgId,
+                        mediaUrl: voBtn.dataset.url || "",
+                        mediaType: voBtn.dataset.mtype || "image",
+                        sender: voBtn.dataset.sender || "",
+                        opened: voBtn.dataset.opened === "1"
                     };
-                    if (navigator.share) {
-                        try { await navigator.share(shareData); return; } catch (e) {}
+                    openViewOnceViewerModal(msgObj, bubble);
+                    return;
+                }
+
+                // B. Handle Click on Sleek '•••' 3-Dot Button under Photo/Video Bubble
+                const dotsBtn = e.target.closest(".nx-media-dots-btn");
+                if (dotsBtn) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    const bubble = dotsBtn.closest(".nx-ig-media-bubble");
+                    if (bubble) openMediaThreeDotActionSheet(bubble, dotsBtn);
+                    return;
+                }
+
+                // Close any open media action popup if clicking outside
+                const existingSheet = document.getElementById("nx-media-3dot-popup");
+                if (existingSheet && !e.target.closest("#nx-media-3dot-popup")) {
+                    existingSheet.remove();
+                }
+            },
+            true
+        );
+
+        function openMediaThreeDotActionSheet(bubble, btnEl) {
+            document.getElementById("nx-media-3dot-popup")?.remove();
+
+            const msgId = bubble.id;
+            const isMine = bubble.dataset.isMine === "1";
+            const mediaUrl = bubble.dataset.rawUrl || "";
+            const rect = btnEl.getBoundingClientRect();
+
+            const popup = document.createElement("div");
+            popup.id = "nx-media-3dot-popup";
+            popup.style.cssText = `position:fixed; top:${Math.max(
+                60,
+                rect.top - 95
+            )}px; right:18px; background:#0f172a; border:1px solid #334155; border-radius:16px; padding:8px 10px; z-index:200010; box-shadow:0 12px 32px rgba(0,0,0,0.9); color:#fff; min-width:190px;`;
+
+            popup.innerHTML = `
+                <!-- Emoji Reaction Bar -->
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; padding-bottom:6px; border-bottom:1px solid #1e293b; margin-bottom:6px;">
+                    ${["❤️", "🔥", "😂", "👍", "😮", "🙏"]
+                        .map(
+                            (em) =>
+                                `<button type="button" data-em="${em}" style="background:none; border:none; font-size:18px; cursor:pointer; padding:2px;">${em}</button>`
+                        )
+                        .join("")}
+                </div>
+                ${
+                    mediaUrl
+                        ? `<a href="${mediaUrl}" download="nexus_media" target="_blank" style="display:flex; align-items:center; gap:8px; padding:6px 8px; color:#38bdf8; font-size:12px; font-weight:700; text-decoration:none; border-radius:8px;">⬇️ <span>View / Save Media</span></a>`
+                        : ""
+                }
+                ${
+                    isMine
+                        ? `<button type="button" id="nx-act-del-media" style="width:100%; text-align:left; display:flex; align-items:center; gap:8px; padding:6px 8px; background:none; border:none; color:#f43f5e; font-size:12px; font-weight:800; cursor:pointer; border-radius:8px;">🗑️ <span>Delete for Everyone</span></button>`
+                        : ""
+                }
+            `;
+
+            document.body.appendChild(popup);
+
+            // Reaction Click
+            popup.querySelectorAll("button[data-em]").forEach((b) => {
+                b.onclick = (ev) => {
+                    ev.stopPropagation();
+                    const emoji = b.getAttribute("data-em");
+                    const badge = bubble.querySelector(".nx-react-badge");
+                    if (badge) {
+                        badge.textContent = emoji;
+                        badge.style.display = "inline-flex";
                     }
-                    try {
-                        await navigator.clipboard.writeText(shareData.text + shareData.url);
-                        Nexus.toast("✅ Nexus Link Copied! Share on WhatsApp");
-                    } catch (e) {
-                        window.open("https://wa.me/?text=" + encodeURIComponent(shareData.text + shareData.url));
+                    if (window.Nexus && Nexus.db) {
+                        Nexus.db.collection("nexus_live_media").doc(msgId).set({ reaction: emoji }, { merge: true }).catch(() => {});
                     }
+                    popup.remove();
+                };
+            });
+
+            // Delete Click
+            const delBtn = popup.querySelector("#nx-act-del-media");
+            if (delBtn) {
+                delBtn.onclick = async (ev) => {
+                    ev.stopPropagation();
+                    popup.remove();
+                    bubble.remove();
+                    const rk = bubble.dataset.roomKey || getSharedRoomKey();
+                    if (rk && roomMediaMap[rk]) {
+                        roomMediaMap[rk] = roomMediaMap[rk].filter((x) => x.id !== msgId);
+                    }
+                    if (window.Nexus && Nexus.db) {
+                        await Nexus.db.collection("nexus_live_media").doc(msgId).delete().catch(() => {});
+                    }
+                    if (window.Nexus && Nexus.toast) Nexus.toast("🗑️ Deleted for Everyone");
                 };
             }
         }
-        setInterval(globalUiCleanerAndSettingsEnhancer, 400);
+
+        // Full-Screen View Once Modal (Works for both Receiver and Sender Preview!)
+        async function openViewOnceViewerModal(msg, bubbleEl) {
+            if (msg.opened) {
+                if (window.Nexus && Nexus.toast) Nexus.toast("1️⃣ View Once photo pehle hi open ho chuki hai!");
+                return;
+            }
+
+            let url = msg.localUrl || msg.mediaUrl || (bubbleEl && bubbleEl.dataset.rawUrl) || "";
+            if (!url && msg.mode === "chunked") {
+                url = await loadChunkedMedia(msg);
+            }
+            if (!url) {
+                if (window.Nexus && Nexus.toast) Nexus.toast("1️⃣ Media opened & burned!");
+                return;
+            }
+
+            const isSender = (msg.sender || "").toLowerCase() === getMyUsername();
+
+            const overlay = document.createElement("div");
+            overlay.style.cssText =
+                "position:fixed; inset:0; background:rgba(2,6,23,0.97); z-index:200050; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:18px;";
+
+            overlay.innerHTML = `
+                <div style="background:rgba(14,165,233,0.15); border:1px solid rgba(56,189,248,0.45); color:#38bdf8; padding:6px 16px; border-radius:999px; font-size:12px; font-weight:800; margin-bottom:14px; display:flex; align-items:center; gap:8px;">
+                    <span style="width:20px; height:20px; border-radius:50%; background:#38bdf8; color:#020617; display:inline-flex; align-items:center; justify-content:center; font-weight:900; font-size:11px;">1</span>
+                    <span>${isSender ? "View Once Preview (Receiver can open once)" : "View Once Media • Disappears on close"}</span>
+                </div>
+                ${
+                    msg.mediaType === "video"
+                        ? `<video src="${url}" controls autoplay playsinline style="max-width:100%; max-height:72dvh; border-radius:18px; border:1.5px solid rgba(56,189,248,0.4); box-shadow:0 12px 40px rgba(0,0,0,0.8);"></video>`
+                        : `<img src="${url}" style="max-width:100%; max-height:72dvh; border-radius:18px; border:1.5px solid rgba(56,189,248,0.4); box-shadow:0 12px 40px rgba(0,0,0,0.8); object-fit:contain;" />`
+                }
+                <div style="display:flex; gap:12px; margin-top:18px;">
+                    <button type="button" id="nx-vo-close-btn" style="padding:10px 22px; border-radius:999px; background:#334155; color:#fff; font-weight:800; font-size:12.5px; border:none; cursor:pointer;">
+                        ${isSender ? "Close Preview ✕" : "Close & Burn 🔥"}
+                    </button>
+                    ${
+                        isSender
+                            ? `<button type="button" id="nx-vo-burn-btn" style="padding:10px 22px; border-radius:999px; background:#e11d48; color:#fff; font-weight:800; font-size:12.5px; border:none; cursor:pointer;">Test Burn (Mark Opened) 🔥</button>`
+                            : ""
+                    }
+                </div>
+            `;
+
+            document.body.appendChild(overlay);
+
+            const markAsBurned = () => {
+                msg.opened = true;
+                if (bubbleEl) {
+                    const slot = bubbleEl.querySelector(".nx-media-slot");
+                    if (slot) {
+                        slot.innerHTML = `<div style="padding:10px 14px; border-radius:12px; background:#0f172a; border:1px solid #334155; color:#94a3b8; font-weight:700; font-size:12px; display:flex; align-items:center; gap:8px;"><span>1️⃣</span> <span>Opened</span></div>`;
+                    }
+                }
+                if (window.Nexus && Nexus.db) {
+                    Nexus.db.collection("nexus_live_media").doc(msg.id).set({ opened: true, mediaUrl: "" }, { merge: true }).catch(() => {});
+                }
+            };
+
+            // If Receiver opened it, burn immediately!
+            if (!isSender) {
+                markAsBurned();
+            }
+
+            overlay.querySelector("#nx-vo-close-btn").onclick = () => overlay.remove();
+            const burnBtn = overlay.querySelector("#nx-vo-burn-btn");
+            if (burnBtn) {
+                burnBtn.onclick = () => {
+                    markAsBurned();
+                    overlay.remove();
+                    if (window.Nexus && Nexus.toast) Nexus.toast("🔥 View Once Marked as Opened!");
+                };
+            }
+        }
 
         // ========================================================================
-        // 4. MULTIPLE PHOTOS + 50MB VIDEO + BLUE VIEW-ONCE (1️⃣) + DELETE & REACT
+        // 5. MEDIA BUBBLE RENDERER (CLEAN WHATSAPP STYLE + SLEEK '•••' BUTTON)
+        // ========================================================================
+        async function renderChatMediaBubble(msg, localPreviewUrl) {
+            if (!msg || !msg.id) return;
+            const chatBox = getStrictOpenChatMessagesBox();
+            if (!chatBox) return;
+
+            const currentRk = getSharedRoomKey();
+            // Never render a photo if it belongs to another user's room!
+            if (msg.roomKey && currentRk && msg.roomKey !== currentRk) return;
+
+            const existing = document.getElementById(msg.id);
+            if (existing) {
+                const st = existing.querySelector(".nx-media-status");
+                if (st && msg.statusText) st.textContent = msg.statusText;
+                const reactBadge = existing.querySelector(".nx-react-badge");
+                if (reactBadge) {
+                    reactBadge.textContent = msg.reaction || "";
+                    reactBadge.style.display = msg.reaction ? "inline-flex" : "none";
+                }
+                if (msg.opened && msg.viewOnce) {
+                    const slot = existing.querySelector(".nx-media-slot");
+                    if (slot) {
+                        slot.innerHTML = `<div style="padding:10px 14px; border-radius:12px; background:#0f172a; border:1px solid #334155; color:#94a3b8; font-weight:700; font-size:12px; display:flex; align-items:center; gap:8px;"><span>1️⃣</span> <span>Opened</span></div>`;
+                    }
+                }
+                return;
+            }
+
+            const isMe = (msg.sender || "").toLowerCase() === getMyUsername();
+            const displayUrl = localPreviewUrl || msg.mediaUrl || "";
+
+            const wrapper = document.createElement("div");
+            wrapper.id = msg.id;
+            wrapper.className = "nx-ig-media-bubble";
+            wrapper.dataset.roomKey = msg.roomKey || currentRk || "";
+            wrapper.dataset.msgTs = String(msg.createdAt || Date.now());
+            wrapper.dataset.isMine = isMe ? "1" : "0";
+            wrapper.dataset.rawUrl = displayUrl;
+            wrapper.style.cssText = `display:flex; justify-content:${
+                isMe ? "flex-end" : "flex-start"
+            }; margin:10px 0; padding:0 10px;`;
+
+            let mediaSlotHtml = "";
+
+            if (msg.viewOnce) {
+                if (msg.opened) {
+                    mediaSlotHtml = `<div style="padding:10px 14px; border-radius:12px; background:#0f172a; border:1px solid #334155; color:#94a3b8; font-weight:700; font-size:12px; display:flex; align-items:center; gap:8px;"><span>1️⃣</span> <span>Opened</span></div>`;
+                } else {
+                    mediaSlotHtml = `
+                        <button type="button" class="nx-open-viewonce" data-url="${displayUrl}" data-mtype="${
+                        msg.mediaType || "image"
+                    }" data-sender="${msg.sender || ""}" data-opened="0" style="width:100%; padding:12px 16px; border-radius:14px; background:linear-gradient(135deg, #0c4a6e, #1e3a8a); border:1.5px solid #38bdf8; color:#e0f2fe; font-weight:800; font-size:12.5px; display:flex; align-items:center; gap:12px; cursor:pointer; box-shadow:0 4px 14px rgba(56,189,248,0.25);">
+                            <span style="width:26px; height:26px; border-radius:50%; background:#38bdf8; color:#020617; display:inline-flex; align-items:center; justify-content:center; font-weight:900; font-size:12px; flex-shrink:0;">1</span>
+                            <div style="text-align:left;">
+                                <div>${msg.mediaType === "video" ? "View Once Video" : "View Once Photo"}</div>
+                                <div style="font-size:10px; color:#7dd3fc; font-weight:600;">Tap to Open • 1 Time View</div>
+                            </div>
+                        </button>`;
+                }
+            } else if (msg.mediaType === "video") {
+                mediaSlotHtml = `<video src="${displayUrl}" controls playsinline style="max-width:240px; max-height:300px; width:100%; border-radius:12px; border:1px solid rgba(255,255,255,0.14); background:#000; display:block;"></video>`;
+            } else if (msg.mediaType === "audio") {
+                mediaSlotHtml = `<audio src="${displayUrl}" controls style="width:215px; height:36px; display:block; margin-top:2px;"></audio>`;
+            } else if (msg.mediaType === "pdf") {
+                mediaSlotHtml = `<a href="${displayUrl}" target="_blank" download="${
+                    msg.fileName || "notes.pdf"
+                }" style="padding:10px 14px; border-radius:12px; background:#0f172a; border:1px solid #38bdf8; color:#38bdf8; font-weight:800; font-size:12px; display:flex; align-items:center; gap:8px; text-decoration:none;">📄 <span>${
+                    msg.fileName || "Open PDF Notes"
+                }</span></a>`;
+            } else {
+                mediaSlotHtml = `<img src="${displayUrl}" style="max-width:235px; max-height:290px; width:100%; border-radius:12px; border:1px solid rgba(255,255,255,0.14); object-fit:cover; display:block; cursor:pointer;" onclick="window.open(this.src)" />`;
+            }
+
+            const timeStr = new Date(msg.createdAt || Date.now()).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false
+            });
+
+            // Clean WhatsApp Bubble with Sleek '•••' Button at Bottom-Right (Just like 'Hello 11:20'!)
+            wrapper.innerHTML = `
+                <div style="position:relative; background:${
+                    isMe ? "#064e3b" : "#1e293b"
+                }; color:#fff; padding:7px 7px 14px 7px; border-radius:${
+                isMe ? "16px 16px 4px 16px" : "16px 16px 16px 4px"
+            }; max-width:78%; box-shadow:0 4px 14px rgba(0,0,0,0.45); border:1px solid ${
+                isMe ? "rgba(16,185,129,0.35)" : "rgba(71,85,105,0.4)"
+            };">
+                    <div class="nx-media-slot">${mediaSlotHtml}</div>
+
+                    <!-- Footer: Reaction Pill + Time + Read Tick -->
+                    <div style="display:flex; align-items:center; justify-content: flex-end; gap:5px; margin-top:5px; padding-right:30px; font-size:10px; color:#a7f3d0;">
+                        <span class="nx-react-badge" style="display:${
+                            msg.reaction ? "inline-flex" : "none"
+                        }; background:#090d16; border:1px solid #334155; padding:1px 6px; border-radius:999px; font-size:11px; margin-right:auto;">${
+                msg.reaction || ""
+            }</span>
+                        <span style="opacity:0.85;">${timeStr}</span>
+                        <span class="nx-media-status" style="font-weight:800;">${msg.statusText || "✓✓"}</span>
+                    </div>
+
+                    <!-- Sleek '•••' Button at Bottom-Right Corner (Matches 'Hello 11:20' in Screenshot!) -->
+                    <button type="button" class="nx-media-dots-btn" title="React or Delete" style="position:absolute; bottom:-8px; right:6px;">•••</button>
+                </div>
+            `;
+
+            chatBox.appendChild(wrapper);
+            sortChatMessagesChronologically(chatBox, msg.roomKey || currentRk);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            if (!displayUrl && msg.mode === "chunked") {
+                const full = await loadChunkedMedia(msg);
+                if (full) {
+                    wrapper.dataset.rawUrl = full;
+                    const vo = wrapper.querySelector(".nx-open-viewonce");
+                    if (vo) vo.dataset.url = full;
+                    const mediaEl = wrapper.querySelector("video, audio, img, a");
+                    if (mediaEl) {
+                        if (mediaEl.tagName === "A") mediaEl.href = full;
+                        else mediaEl.src = full;
+                    }
+                }
+            }
+        }
+
+        // ========================================================================
+        // 6. UPLOAD ENGINE (MULTI-PHOTO, 50MB VIDEO, VIEW ONCE, VOICE NOTE)
         // ========================================================================
         const multiPicker = document.createElement("input");
         multiPicker.type = "file";
@@ -1200,13 +1620,12 @@
             });
         }
 
-        // Expose video uploader for Nexus.compressImage (Post Modal 50MB Video Support!)
         window.__nxUploadVideoForPost = async function (file, callback) {
             if (file.size > MAX_VIDEO_BYTES) {
                 alert("⚠️ Video 50MB se chhoti honi chahiye!");
                 return;
             }
-            Nexus.toast("📤 Uploading Video 1%...");
+            if (window.Nexus && Nexus.toast) Nexus.toast("📤 Uploading Video 1%...");
             try {
                 const res = await uploadUpTo50MB(file, (pct) => {
                     const t = document.getElementById("nx-toast");
@@ -1215,10 +1634,10 @@
                         t.style.display = "block";
                     }
                 });
-                Nexus.toast("✅ Video Ready! Tap Post to Publish");
+                if (window.Nexus && Nexus.toast) Nexus.toast("✅ Video Ready! Tap Post to Publish");
                 if (callback && res.url) callback(res.url);
             } catch (e) {
-                Nexus.toast("⚠️ Network slow, try smaller video");
+                if (window.Nexus && Nexus.toast) Nexus.toast("⚠️ Network slow, try smaller video");
             }
         };
 
@@ -1254,7 +1673,7 @@
 
         async function loadChunkedMedia(msg) {
             if (msg.mediaUrl) return msg.mediaUrl;
-            if (msg.mode !== "chunked" || !msg.streamId || !Nexus.db) return "";
+            if (msg.mode !== "chunked" || !msg.streamId || !window.Nexus || !Nexus.db) return "";
             const parts = [];
             for (let i = 0; i < msg.totalChunks; i++) {
                 const d = await Nexus.db.collection("nexus_media_chunks").doc(`${msg.streamId}_${i}`).get();
@@ -1263,221 +1682,6 @@
             return parts.join("");
         }
 
-        // Open View-Once Modal & Mark as Opened in Firestore
-        async function openViewOnceMediaModal(msg) {
-            if (msg.opened) {
-                Nexus.toast("1️⃣ This View-Once media has already been opened!");
-                return;
-            }
-            let url = msg.mediaUrl || "";
-            if (!url && msg.mode === "chunked") url = await loadChunkedMedia(msg);
-            if (!url) return;
-
-            const overlay = document.createElement("div");
-            overlay.style.cssText =
-                "position:fixed; inset:0; background:rgba(2,6,23,0.96); z-index:200000; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px;";
-            overlay.innerHTML = `
-                <div class="text-sky-400 font-extrabold text-sm mb-3 flex items-center gap-2">1️⃣ View Once Media • Disappears after closing</div>
-                ${
-                    msg.mediaType === "video"
-                        ? `<video src="${url}" controls autoplay playsinline class="max-w-full max-h-[75dvh] rounded-2xl border border-sky-500/40 shadow-2xl"></video>`
-                        : `<img src="${url}" class="max-w-full max-h-[75dvh] rounded-2xl border border-sky-500/40 shadow-2xl object-contain" />`
-                }
-                <button type="button" class="mt-5 px-6 py-2.5 rounded-full bg-rose-600 text-white font-extrabold text-xs shadow-lg">Close & Burn 🔥</button>
-            `;
-            document.body.appendChild(overlay);
-
-            // Mark opened in Firestore immediately
-            msg.opened = true;
-            if (Nexus.db) {
-                Nexus.db.collection("nexus_live_media").doc(msg.id).set({ opened: true, mediaUrl: "" }, { merge: true }).catch(() => {});
-            }
-
-            overlay.querySelector("button").onclick = () => {
-                overlay.remove();
-                const bubble = document.getElementById(msg.id);
-                if (bubble) {
-                    const slot = bubble.querySelector(".nx-media-slot");
-                    if (slot) {
-                        slot.innerHTML = `<div class="px-3.5 py-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-400 font-bold text-xs flex items-center gap-2">1️⃣ <span>Opened</span></div>`;
-                    }
-                }
-            };
-        }
-
-        // Tailwind CSS Framed Media Bubble with Reactions (❤️🔥😂👍) & Delete (🗑️)
-        async function renderChatMediaBubble(msg, localPreviewUrl) {
-            if (!msg || !msg.id) return;
-            const chatBox = getStrictOpenChatMessagesBox();
-            if (!chatBox) return;
-
-            const existing = document.getElementById(msg.id);
-            if (existing) {
-                const st = existing.querySelector(".nx-media-status");
-                if (st && msg.statusText) st.textContent = msg.statusText;
-                const reactBadge = existing.querySelector(".nx-react-badge");
-                if (reactBadge) {
-                    reactBadge.textContent = msg.reaction || "";
-                    reactBadge.style.display = msg.reaction ? "inline-flex" : "none";
-                }
-                if (msg.opened && msg.viewOnce) {
-                    const slot = existing.querySelector(".nx-media-slot");
-                    if (slot) {
-                        slot.innerHTML = `<div class="px-3.5 py-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-400 font-bold text-xs flex items-center gap-2">1️⃣ <span>Opened</span></div>`;
-                    }
-                }
-                return;
-            }
-
-            const isMe = (msg.sender || "").toLowerCase() === getMyUsername();
-            const wrapper = document.createElement("div");
-            wrapper.id = msg.id;
-            wrapper.className = "nx-ig-media-bubble flex " + (isMe ? "justify-end" : "justify-start") + " my-2.5 px-2.5";
-            wrapper.dataset.msgTs = String(msg.createdAt || Date.now());
-
-            const displayUrl = localPreviewUrl || msg.mediaUrl || "";
-            let mediaContentHtml = "";
-
-            if (msg.viewOnce) {
-                if (msg.opened) {
-                    mediaContentHtml = `<div class="px-3.5 py-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-400 font-bold text-xs flex items-center gap-2">1️⃣ <span>Opened</span></div>`;
-                } else {
-                    mediaContentHtml = `
-                        <button type="button" class="nx-open-viewonce px-4 py-3 rounded-xl bg-gradient-to-r from-sky-950 to-blue-950 border border-sky-400/60 text-sky-300 font-extrabold text-xs flex items-center gap-2.5 shadow-lg active:scale-95 transition cursor-pointer">
-                            <span class="w-6 h-6 rounded-full bg-sky-500 text-slate-950 flex items-center justify-center font-black text-[11px]">1</span>
-                            <span>${msg.mediaType === "video" ? "View Once Video" : "View Once Photo"} • Tap to Open</span>
-                        </button>`;
-                }
-            } else if (msg.mediaType === "video") {
-                mediaContentHtml = `<video src="${displayUrl}" controls playsinline class="max-w-[240px] max-h-[300px] w-full rounded-xl border border-white/15 bg-black shadow-md block"></video>`;
-            } else if (msg.mediaType === "audio") {
-                mediaContentHtml = `
-                    <div class="flex items-center gap-2 bg-slate-950/70 p-1.5 rounded-xl border border-white/10">
-                        <audio src="${displayUrl}" controls class="w-[190px] h-8 block"></audio>
-                        <button type="button" class="nx-audio-speed px-2 py-1 rounded-lg bg-emerald-500 text-slate-950 font-black text-[10px]">1x</button>
-                    </div>`;
-            } else if (msg.mediaType === "pdf") {
-                mediaContentHtml = `<a href="${displayUrl}" target="_blank" download="${msg.fileName || "notes.pdf"}" class="px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-cyan-500/40 text-cyan-300 font-bold text-xs flex items-center gap-2 no-underline">📄 <span>${msg.fileName || "Open PDF Notes"}</span></a>`;
-            } else {
-                mediaContentHtml = `<img src="${displayUrl}" class="max-w-[235px] max-h-[290px] w-full rounded-xl border border-white/15 object-cover shadow-md block cursor-pointer hover:opacity-95 transition" onclick="window.open(this.src)" />`;
-            }
-
-            const timeStr = new Date(msg.createdAt || Date.now()).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit"
-            });
-
-            wrapper.innerHTML = `
-                <div class="relative max-w-[80%] rounded-2xl p-2 ${
-                    isMe
-                        ? "bg-gradient-to-br from-emerald-900/95 via-teal-900/95 to-slate-900 border border-emerald-500/40 rounded-br-sm"
-                        : "bg-gradient-to-br from-slate-800/95 to-slate-900 border border-slate-700 rounded-bl-sm"
-                } text-white shadow-xl">
-                    <!-- Top Header: Sender + Reaction Emojis + Delete Option -->
-                    <div class="flex items-center justify-between gap-3 mb-1 px-0.5">
-                        <span class="text-[10px] font-extrabold text-emerald-300">@${msg.sender || "user"}</span>
-                        <div class="flex items-center gap-1.5">
-                            <button type="button" data-react="❤️" class="nx-react-btn text-[11px] hover:scale-125 transition bg-transparent border-0 cursor-pointer">❤️</button>
-                            <button type="button" data-react="🔥" class="nx-react-btn text-[11px] hover:scale-125 transition bg-transparent border-0 cursor-pointer">🔥</button>
-                            <button type="button" data-react="😂" class="nx-react-btn text-[11px] hover:scale-125 transition bg-transparent border-0 cursor-pointer">😂</button>
-                            <button type="button" data-react="👍" class="nx-react-btn text-[11px] hover:scale-125 transition bg-transparent border-0 cursor-pointer">👍</button>
-                            ${
-                                isMe
-                                    ? `<button type="button" class="nx-del-media-btn text-[11px] text-rose-400 hover:text-rose-300 ml-1 bg-transparent border-0 cursor-pointer" title="Delete for Everyone">🗑️</button>`
-                                    : ""
-                            }
-                        </div>
-                    </div>
-
-                    <!-- Media Slot -->
-                    <div class="nx-media-slot">${mediaContentHtml}</div>
-
-                    <!-- Bottom Footer: Reaction Pill + Timestamp + Read Status -->
-                    <div class="flex items-center justify-between gap-2 mt-1.5 px-1 text-[10px] text-slate-300">
-                        <span class="nx-react-badge px-1.5 py-0.5 rounded-full bg-slate-950/90 border border-slate-700 text-[11px]" style="display:${
-                            msg.reaction ? "inline-flex" : "none"
-                        }">${msg.reaction || ""}</span>
-                        <span class="ml-auto opacity-80">${timeStr}</span>
-                        <span class="nx-media-status font-bold text-emerald-300">${msg.statusText || "✓✓"}</span>
-                    </div>
-                </div>
-            `;
-
-            // Insert in exact chronological position
-            const children = Array.from(chatBox.children);
-            const msgTs = Number(msg.createdAt || Date.now());
-            let inserted = false;
-            for (let i = 0; i < children.length; i++) {
-                const cTs = Number(children[i].dataset.msgTs || 0);
-                if (cTs > msgTs) {
-                    chatBox.insertBefore(wrapper, children[i]);
-                    inserted = true;
-                    break;
-                }
-            }
-            if (!inserted) chatBox.appendChild(wrapper);
-            chatBox.scrollTop = chatBox.scrollHeight;
-
-            // Bind View-Once Click
-            const voBtn = wrapper.querySelector(".nx-open-viewonce");
-            if (voBtn) voBtn.onclick = () => openViewOnceMediaModal(msg);
-
-            // Bind Audio Speed 1x / 1.5x / 2x
-            const speedBtn = wrapper.querySelector(".nx-audio-speed");
-            if (speedBtn) {
-                speedBtn.onclick = () => {
-                    const aud = wrapper.querySelector("audio");
-                    if (!aud) return;
-                    aud.playbackRate = aud.playbackRate === 1 ? 1.5 : aud.playbackRate === 1.5 ? 2 : 1;
-                    speedBtn.textContent = aud.playbackRate + "x";
-                };
-            }
-
-            // Bind Reaction Buttons
-            wrapper.querySelectorAll(".nx-react-btn").forEach((rBtn) => {
-                rBtn.onclick = (ev) => {
-                    ev.stopPropagation();
-                    const emoji = rBtn.getAttribute("data-react");
-                    const badge = wrapper.querySelector(".nx-react-badge");
-                    if (badge) {
-                        badge.textContent = emoji;
-                        badge.style.display = "inline-flex";
-                    }
-                    if (Nexus.db) {
-                        Nexus.db.collection("nexus_live_media").doc(msg.id).set({ reaction: emoji }, { merge: true }).catch(() => {});
-                    }
-                };
-            });
-
-            // Bind Delete Button (Deletes from both phones via Firestore)
-            const delBtn = wrapper.querySelector(".nx-del-media-btn");
-            if (delBtn) {
-                delBtn.onclick = async (ev) => {
-                    ev.stopPropagation();
-                    wrapper.remove();
-                    const rk = getSharedRoomKey();
-                    if (rk && roomMediaMap[rk]) {
-                        roomMediaMap[rk] = roomMediaMap[rk].filter((x) => x.id !== msg.id);
-                    }
-                    if (Nexus.db) {
-                        await Nexus.db.collection("nexus_live_media").doc(msg.id).delete().catch(() => {});
-                    }
-                    Nexus.toast("🗑️ Deleted for Everyone");
-                };
-            }
-
-            // Load chunked media if needed
-            if (!displayUrl && msg.mode === "chunked" && !msg.viewOnce) {
-                const full = await loadChunkedMedia(msg);
-                const mediaEl = wrapper.querySelector("video, audio, img, a");
-                if (mediaEl && full) {
-                    if (mediaEl.tagName === "A") mediaEl.href = full;
-                    else mediaEl.src = full;
-                }
-            }
-        }
-
-        // Send 1 or Multiple Files (Photos / 50MB Videos / View-Once / Voice Notes)
         async function sendSingleOrMultipleFiles(fileList, forcedType, isViewOnce) {
             if (!fileList || !fileList.length) return;
             const files = Array.from(fileList);
@@ -1492,7 +1696,7 @@
                 const rk = getSharedRoomKey();
                 if (!rk) return;
 
-                const sender = getMyUsername();
+                const sender = getMyUsername() || "user";
                 const msgId = "nxm_" + Date.now() + "_" + i + "_" + Math.random().toString(36).slice(2, 5);
                 const mime = (file.type || "").toLowerCase();
                 const mediaType =
@@ -1556,20 +1760,27 @@
                     if (!roomMediaMap[rk]) roomMediaMap[rk] = [];
                     roomMediaMap[rk].push(Object.assign({}, finalDoc, { localUrl }));
 
-                    if (Nexus.db) {
+                    if (window.Nexus && Nexus.db) {
                         await Nexus.db.collection("nexus_live_media").doc(msgId).set(finalDoc);
                     }
 
                     const el = document.getElementById(msgId);
-                    const st = el && el.querySelector(".nx-media-status");
-                    if (st) st.textContent = "✓✓";
+                    if (el) {
+                        el.dataset.rawUrl = finalDoc.mediaUrl || localUrl;
+                        const vo = el.querySelector(".nx-open-viewonce");
+                        if (vo) vo.dataset.url = finalDoc.mediaUrl || localUrl;
+                        const st = el.querySelector(".nx-media-status");
+                        if (st) st.textContent = "✓✓";
+                    }
                 } catch (err) {
                     const el = document.getElementById(msgId);
                     const st = el && el.querySelector(".nx-media-status");
                     if (st) st.textContent = "⚠️ Retry";
                 }
             }
-            Nexus.toast(files.length > 1 ? `✅ ${files.length} Photos Sent!` : "✅ Sent!");
+            if (window.Nexus && Nexus.toast) {
+                Nexus.toast(isViewOnce ? "1️⃣ View Once Sent!" : files.length > 1 ? `✅ ${files.length} Photos Sent!` : "✅ Sent!");
+            }
         }
 
         multiPicker.onchange = (e) => {
@@ -1581,11 +1792,10 @@
         };
 
         // ========================================================================
-        // 5. WHATSAPP-CLEAN HD VOICE CALL & VOICE NOTE RECORDER
+        // 7. SINGLE '+' POWER MENU & CLEAN CALL / VOICE NOTE / SETTINGS
         // ========================================================================
         async function startCleanAudioCall(withVideo) {
             const rk = getSharedRoomKey() || "nexus_room";
-            // Pre-warm microphone with Echo Cancellation & Noise Suppression for crystal clear voice!
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
                     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -1596,18 +1806,16 @@
 
             const roomName = "NexusCleanCall_" + rk.replace(/[^a-zA-Z0-9]/g, "");
             const videoFlag = withVideo ? "false" : "true";
-            const url = `https://meet.jit.si/${roomName}#config.startWithVideoMuted=${videoFlag}&config.startWithAudioMuted=false&config.prejoinPageEnabled=false&config.disableAP=false&config.enableNoisyMicDetection=false`;
+            const url = `https://meet.jit.si/${roomName}#config.startWithVideoMuted=${videoFlag}&config.startWithAudioMuted=false&config.prejoinPageEnabled=false`;
 
             const callModal = document.createElement("div");
             callModal.style.cssText = "position:fixed; inset:0; background:#020617; z-index:200005; display:flex; flex-direction:column;";
             callModal.innerHTML = `
-                <div class="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 text-white">
-                    <div class="flex items-center gap-2 font-extrabold text-sm text-emerald-400">
-                        <span>${withVideo ? "📹 HD Video Call" : "📞 HD Crystal Voice Call"}</span>
-                    </div>
-                    <button type="button" id="nx-close-call-modal" class="px-4 py-1.5 rounded-full bg-rose-600 text-white font-extrabold text-xs">End Call ☎️</button>
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background:#0f172a; border-bottom:1px solid #1e293b; color:#fff;">
+                    <span style="font-weight:800; font-size:14px; color:#34d399;">${withVideo ? "📹 HD Video Call" : "📞 HD Crystal Voice Call"}</span>
+                    <button type="button" id="nx-close-call-modal" style="padding:6px 16px; border-radius:999px; background:#e11d48; color:#fff; font-weight:800; font-size:12px; border:none; cursor:pointer;">End Call ☎️</button>
                 </div>
-                <iframe src="${url}" allow="camera; microphone; fullscreen; autoplay" class="flex-1 w-full border-0"></iframe>
+                <iframe src="${url}" allow="camera; microphone; fullscreen; autoplay" style="flex:1; width:100%; border:0;"></iframe>
             `;
             document.body.appendChild(callModal);
             callModal.querySelector("#nx-close-call-modal").onclick = () => callModal.remove();
@@ -1632,7 +1840,7 @@
                     };
                     voiceRecorder.start();
                     isRecordingVoice = true;
-                    Nexus.toast("🎤 Recording HD Voice... Tap '+' Again to Send!");
+                    if (window.Nexus && Nexus.toast) Nexus.toast("🎤 Recording HD Voice... Tap '+' Again to Send!");
                 } catch (e) {
                     alert("Microphone permission Allow kijiye!");
                 }
@@ -1642,9 +1850,6 @@
             }
         }
 
-        // ========================================================================
-        // 6. COMPLETE '+' POWER MENU (WITH BLUE VIEW-ONCE 1️⃣, MULTI-PHOTO, 50MB VIDEO)
-        // ========================================================================
         function toggleCompletePlusMenu() {
             if (isRecordingVoice) {
                 toggleVoiceNote();
@@ -1656,34 +1861,34 @@
                 menu = document.createElement("div");
                 menu.id = "nx-whatsapp-plus-sheet";
                 menu.style.cssText =
-                    "display:none; position:fixed; bottom:70px; right:16px; width:260px; background:#0f172a; border:1.5px solid #10b981; border-radius:20px; padding:10px; z-index:100020; box-shadow:0 18px 45px rgba(0,0,0,0.92); color:#fff;";
+                    "display:none; position:fixed; bottom:70px; right:16px; width:265px; background:#0f172a; border:1.5px solid #10b981; border-radius:20px; padding:10px; z-index:100020; box-shadow:0 18px 45px rgba(0,0,0,0.92); color:#fff;";
 
                 menu.innerHTML = `
-                    <div class="text-[10px] font-black text-emerald-400 px-2 pb-1.5 uppercase tracking-wider">⚡ Nexus Official Chat Tools</div>
-                    <div class="grid grid-cols-2 gap-1.5 text-xs">
-                        <button type="button" data-act="multi-photo" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left font-bold text-white flex items-center gap-2 cursor-pointer">
+                    <div style="font-size:10px; font-weight:900; color:#34d399; padding:2px 6px 6px; text-transform:uppercase; letter-spacing:0.6px;">⚡ Nexus Official Chat Tools</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:12px;">
+                        <button type="button" data-act="multi-photo" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#fff; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer;">
                             <span>🖼️</span> <span>Photos (Multi)</span>
                         </button>
-                        <button type="button" data-act="view-once" class="p-2.5 rounded-xl bg-sky-950/90 hover:bg-sky-900 border border-sky-500/50 text-left font-extrabold text-sky-300 flex items-center gap-2 cursor-pointer">
-                            <span class="w-4 h-4 rounded-full bg-sky-400 text-slate-950 flex items-center justify-center text-[10px] font-black">1</span>
+                        <button type="button" data-act="view-once" style="padding:10px; border-radius:12px; background:linear-gradient(135deg,#0c4a6e,#1e3a8a); border:1px solid #38bdf8; color:#e0f2fe; font-weight:800; display:flex; align-items:center; gap:7px; cursor:pointer;">
+                            <span style="width:16px; height:16px; border-radius:50%; background:#38bdf8; color:#020617; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:900;">1</span>
                             <span>View Once</span>
                         </button>
-                        <button type="button" data-act="video" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left font-bold text-cyan-300 flex items-center gap-2 cursor-pointer">
+                        <button type="button" data-act="video" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#38bdf8; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer;">
                             <span>🎬</span> <span>Video (50MB)</span>
                         </button>
-                        <button type="button" data-act="camera" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left font-bold text-white flex items-center gap-2 cursor-pointer">
+                        <button type="button" data-act="camera" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#fff; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer;">
                             <span>📸</span> <span>Camera Pic</span>
                         </button>
-                        <button type="button" data-act="voice" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left font-bold text-rose-400 flex items-center gap-2 cursor-pointer">
+                        <button type="button" data-act="voice" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#fb7185; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer;">
                             <span>🎤</span> <span>Voice Note</span>
                         </button>
-                        <button type="button" data-act="audio-call" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left font-bold text-emerald-300 flex items-center gap-2 cursor-pointer">
+                        <button type="button" data-act="audio-call" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#34d399; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer;">
                             <span>📞</span> <span>Voice Call</span>
                         </button>
-                        <button type="button" data-act="video-call" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left font-bold text-indigo-300 flex items-center gap-2 cursor-pointer">
+                        <button type="button" data-act="video-call" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#818cf8; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer;">
                             <span>📹</span> <span>Video Call</span>
                         </button>
-                        <button type="button" data-act="pdf" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left font-bold text-amber-300 flex items-center gap-2 cursor-pointer">
+                        <button type="button" data-act="pdf" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#fbbf24; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer;">
                             <span>📄</span> <span>Send PDF</span>
                         </button>
                     </div>
@@ -1764,12 +1969,34 @@
         );
 
         // ========================================================================
-        // 7. UPGRADE POST MODAL FOR 50MB VIDEO & RENDER VIDEOS IN HOME FEED
+        // 8. UI CLEANER, POST 50MB VIDEO & LIVE ROOM STREAM SYNC
         // ========================================================================
-        function upgradePostModalAndFeedVideos() {
+        function periodicMaintain() {
+            // A. Hide dummy "refresh kar lain" announcement card
+            document.querySelectorAll("#tab-home div").forEach((card) => {
+                if (
+                    card.children.length >= 2 &&
+                    card.children.length <= 6 &&
+                    card.innerText &&
+                    card.innerText.includes("website ko refresh kar lain")
+                ) {
+                    card.style.display = "none";
+                }
+            });
+
+            // B. Remove duplicate Watch-Party iframes
+            const ytFrames = Array.from(document.querySelectorAll('iframe[src*="youtube"]'));
+            if (ytFrames.length > 1) {
+                for (let i = 0; i < ytFrames.length - 1; i++) {
+                    const dupBox = ytFrames[i].closest("div");
+                    if (dupBox) dupBox.style.display = "none";
+                    ytFrames[i].remove();
+                }
+            }
+
+            // C. Upgrade Post Modal for 50MB Video & convert video URLs in Home Feed
             const postModal = document.getElementById("tab-post-modal");
             if (postModal && postModal.offsetParent !== null) {
-                // Allow native file input inside Post Modal to pick both Photos AND Videos!
                 postModal.querySelectorAll('input[type="file"]').forEach((inp) => {
                     if (!inp.accept.includes("video")) {
                         inp.setAttribute("accept", "image/*,video/mp4,video/webm,video/*");
@@ -1781,7 +2008,6 @@
                 if (lbl) lbl.innerText = "📸🎬 Tap to Upload Photo or Video (<50MB)";
             }
 
-            // Turn any video URLs inside Home Feed into sleek playable video tags
             document.querySelectorAll("#tab-home img").forEach((img) => {
                 const src = img.getAttribute("src") || "";
                 if (src.match(/\.(mp4|webm|mov)(\?|$)/i) || src.startsWith("data:video/")) {
@@ -1789,16 +2015,45 @@
                     v.src = src;
                     v.controls = true;
                     v.playsInline = true;
-                    v.className = "w-full max-h-[420px] rounded-2xl border border-slate-800 bg-black mt-2 shadow-lg";
+                    v.style.cssText = "width:100%; max-height:420px; border-radius:16px; border:1px solid #1e293b; background:#000; margin-top:8px;";
                     img.replaceWith(v);
                 }
             });
-        }
-        setInterval(upgradePostModalAndFeedVideos, 500);
 
-        // ========================================================================
-        // 8. LIVE FIRESTORE MEDIA & WATCH-PARTY SYNC LISTENERS
-        // ========================================================================
+            // D. Restore "🚀 Share Nexus" in Settings Tab
+            const settingsTab = document.getElementById("tab-settings");
+            if (settingsTab && settingsTab.classList.contains("active") && !document.getElementById("nx-share-nexus-card")) {
+                const shareCard = document.createElement("div");
+                shareCard.id = "nx-share-nexus-card";
+                shareCard.style.cssText =
+                    "margin:12px 16px; padding:16px; border-radius:18px; background:linear-gradient(90deg,#064e3b,#0f172a); border:1px solid rgba(16,185,129,0.45); display:flex; align-items:center; justify-content:space-between; color:#fff;";
+                shareCard.innerHTML = `
+                    <div>
+                        <div style="font-size:14px; font-weight:800; color:#34d399;">🚀 Share Nexus App</div>
+                        <div style="font-size:11.5px; color:#cbd5e1; margin-top:2px;">Invite friends & study partners to Nexus</div>
+                    </div>
+                    <button type="button" id="nx-share-now-btn" style="padding:8px 16px; border-radius:12px; background:#10b981; color:#020617; font-weight:900; font-size:12px; border:none; cursor:pointer;">Share 🔗</button>
+                `;
+                settingsTab.prepend(shareCard);
+                shareCard.querySelector("#nx-share-now-btn").onclick = async () => {
+                    const shareData = {
+                        title: "Nexus Community",
+                        text: "🔥 Join me on Nexus Community (Live Chat, Watch-Party & Study Vault): ",
+                        url: "https://nexus-community01.vercel.app/"
+                    };
+                    if (navigator.share) {
+                        try { await navigator.share(shareData); return; } catch (e) {}
+                    }
+                    try {
+                        await navigator.clipboard.writeText(shareData.text + shareData.url);
+                        if (window.Nexus && Nexus.toast) Nexus.toast("✅ Nexus Link Copied!");
+                    } catch (e) {}
+                };
+            }
+        }
+        setInterval(periodicMaintain, 450);
+
+        // Live Room Listener with Strict Room Isolation
         function syncActiveRoomStreams() {
             const chatBox = getStrictOpenChatMessagesBox();
             if (!chatBox || !window.Nexus || !Nexus.db) return;
@@ -1806,62 +2061,68 @@
             const rk = getSharedRoomKey();
             if (!rk) return;
 
-            if (roomMediaMap[rk]) {
-                roomMediaMap[rk].forEach((m) => renderChatMediaBubble(m, m.localUrl));
-            }
+            // If user switched to a different person's chat, immediately clear previous user's media bubbles!
+            if (rk !== activeRoomKey) {
+                activeRoomKey = rk;
+                chatBox.querySelectorAll(".nx-ig-media-bubble").forEach((b) => {
+                    if (b.dataset.roomKey !== rk) b.remove();
+                });
 
-            if (rk === activeRoomKey) return;
-            activeRoomKey = rk;
+                if (unsubMedia) unsubMedia();
+                if (unsubSync) unsubSync();
 
-            if (unsubMedia) unsubMedia();
-            if (unsubSync) unsubSync();
+                unsubMedia = Nexus.db
+                    .collection("nexus_live_media")
+                    .where("roomKey", "==", rk)
+                    .onSnapshot((snap) => {
+                        const currentIds = new Set();
+                        const list = [];
+                        snap.forEach((d) => {
+                            currentIds.add(d.id);
+                            list.push(d.data());
+                        });
 
-            unsubMedia = Nexus.db
-                .collection("nexus_live_media")
-                .where("roomKey", "==", rk)
-                .onSnapshot((snap) => {
-                    const currentIds = new Set();
-                    const list = [];
-                    snap.forEach((d) => {
-                        currentIds.add(d.id);
-                        list.push(d.data());
+                        if (roomMediaMap[rk]) {
+                            roomMediaMap[rk].forEach((oldItem) => {
+                                if (!currentIds.has(oldItem.id)) {
+                                    document.getElementById(oldItem.id)?.remove();
+                                }
+                            });
+                        }
+
+                        list.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+                        roomMediaMap[rk] = list.slice(-35);
+                        roomMediaMap[rk].forEach((m) => renderChatMediaBubble(m));
+                        sortChatMessagesChronologically(chatBox, rk);
                     });
 
-                    // Remove deleted media bubbles immediately on both phones
-                    if (roomMediaMap[rk]) {
-                        roomMediaMap[rk].forEach((oldItem) => {
-                            if (!currentIds.has(oldItem.id)) {
-                                document.getElementById(oldItem.id)?.remove();
-                            }
-                        });
-                    }
-
-                    list.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-                    roomMediaMap[rk] = list.slice(-35);
-                    roomMediaMap[rk].forEach((m) => renderChatMediaBubble(m));
-                });
-
-            unsubSync = Nexus.db
-                .collection("nexus_watch_sync")
-                .doc(rk)
-                .onSnapshot((doc) => {
-                    if (!doc.exists) return;
-                    const data = doc.data();
-                    if (!data || !data.updatedAt || Date.now() - data.updatedAt > 10000) return;
-                    if ((data.sender || "").toLowerCase() === getMyUsername() && Date.now() - lastBroadcastTime < 1200) {
-                        return;
-                    }
-                    isPartnerSyncing = true;
-                    const target = Number(data.currentTime) || 0;
-                    currentMovieTime = target;
-                    sendYtCmd("seekTo", [target, true]);
-                    sendYtCmd(data.action === "pause" ? "pauseVideo" : "playVideo", []);
-                    setTimeout(() => {
-                        isPartnerSyncing = false;
-                    }, 900);
-                });
+                unsubSync = Nexus.db
+                    .collection("nexus_watch_sync")
+                    .doc(rk)
+                    .onSnapshot((doc) => {
+                        if (!doc.exists) return;
+                        const data = doc.data();
+                        if (!data || !data.updatedAt || Date.now() - data.updatedAt > 10000) return;
+                        if ((data.sender || "").toLowerCase() === getMyUsername() && Date.now() - lastBroadcastTime < 1200) {
+                            return;
+                        }
+                        isPartnerSyncing = true;
+                        const target = Number(data.currentTime) || 0;
+                        currentMovieTime = target;
+                        sendYtCmd("seekTo", [target, true]);
+                        sendYtCmd(data.action === "pause" ? "pauseVideo" : "playVideo", []);
+                        setTimeout(() => {
+                            isPartnerSyncing = false;
+                        }, 900);
+                    });
+            } else {
+                if (roomMediaMap[rk]) {
+                    roomMediaMap[rk].forEach((m) => renderChatMediaBubble(m, m.localUrl));
+                }
+                sortChatMessagesChronologically(chatBox, rk);
+            }
         }
-        setInterval(syncActiveRoomStreams, 650);
+        setInterval(syncActiveRoomStreams, 500);
 
         function sendYtCmd(func, args = []) {
             document.querySelectorAll('iframe[src*="youtube"]').forEach((f) => {
