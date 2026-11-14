@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#0f172a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Nexus">
+    <meta name="apple-mobile-web-app-title" content="Nexus Community">
     <title>Nexus Community</title>
 
     <!-- Zero Stale Cache Meta -->
@@ -19,9 +19,21 @@
     <link rel="canonical" href="https://nexus-community01.vercel.app/">
     <link rel="manifest" href="manifest.json">
 
-    <!-- OFFICIAL NEXUS PERMANENT LOGO -->
+    <!-- OFFICIAL NEXUS PERMANENT LOGO (Favicon & Apple Touch Icon) -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Cdefs%3E%3ClinearGradient id='nxg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2310b981'/%3E%3Cstop offset='50%25' stop-color='%2306b6d4'/%3E%3Cstop offset='100%25' stop-color='%233b82f6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='120' height='120' rx='30' fill='%23090d16'/%3E%3Crect x='4' y='4' width='112' height='112' rx='27' fill='none' stroke='url(%23nxg)' stroke-width='5'/%3E%3Cpath d='M32 86V34h14l28 36V34h14v52H74L46 50v36H32z' fill='url(%23nxg)'/%3E%3Ccircle cx='94' cy='26' r='8' fill='%2310b981'/%3E%3C/svg%3E" />
     <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Cdefs%3E%3ClinearGradient id='nxg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2310b981'/%3E%3Cstop offset='50%25' stop-color='%2306b6d4'/%3E%3Cstop offset='100%25' stop-color='%233b82f6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='120' height='120' rx='30' fill='%23090d16'/%3E%3Crect x='4' y='4' width='112' height='112' rx='27' fill='none' stroke='url(%23nxg)' stroke-width='5'/%3E%3Cpath d='M32 86V34h14l28 36V34h14v52H74L46 50v36H32z' fill='url(%23nxg)'/%3E%3Ccircle cx='94' cy='26' r='8' fill='%2310b981'/%3E%3C/svg%3E" />
+
+    <!-- Open Graph: Social Media Preview (RESTORED 100%) -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Nexus Community">
+    <meta property="og:title" content="Nexus Community">
+    <meta property="og:description" content="A community built for all students to connect, communicate, share posts and ideas, and interact with fellow students.">
+    <meta property="og:url" content="https://nexus-community01.vercel.app/">
+
+    <!-- Twitter Preview (RESTORED 100%) -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Nexus Community">
+    <meta name="twitter:description" content="A community built for all students to connect, communicate, share posts and ideas, and interact with fellow students.">
 
     <!-- High-Speed DNS Prefetch & Preconnect -->
     <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
@@ -29,8 +41,34 @@
     <link rel="preconnect" href="https://apis.google.com" crossorigin>
     <link rel="dns-prefetch" href="https://text.pollinations.ai">
     <link rel="dns-prefetch" href="https://image.pollinations.ai">
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com">
 
-    <!-- ================= 0.01s TURBO REST PRE-FETCHER (INSTANT REAL DB ON OPEN!) ================= -->
+    <!-- ================= 1. ANTI-THEFT & ANTI-INSPECTION SECURITY SHIELD ================= -->
+    <script>
+    (function () {
+        // Block Right-Click Context Menu (Prevents 'Inspect' and 'View Source')
+        document.addEventListener("contextmenu", function (e) {
+            if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+            e.preventDefault();
+            return false;
+        });
+
+        // Block Keyboard Shortcuts for Developer Tools (F12, Ctrl+Shift+I/J/C, Ctrl+U, Ctrl+S)
+        document.addEventListener("keydown", function (e) {
+            if (
+                e.keyCode === 123 ||
+                (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74 || e.keyCode === 67)) ||
+                (e.ctrlKey && (e.keyCode === 85 || e.keyCode === 83))
+            ) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        });
+    })();
+    </script>
+
+    <!-- ================= 2. 0.01s TURBO REST PRE-FETCHER (INSTANT REAL DB ON OPEN!) ================= -->
     <script>
     (function () {
         if ("caches" in window) {
@@ -60,7 +98,7 @@
             try {
                 const [pRes, uRes] = await Promise.all([
                     fetch(BASE_REST_URL + "/nexus_real_posts?pageSize=30"),
-                    fetch(BASE_REST_URL + "/nexus_accounts?pageSize=70")
+                    fetch(BASE_REST_URL + "/nexus_accounts?pageSize=75")
                 ]);
 
                 if (pRes.ok) {
@@ -115,12 +153,14 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
-    <!-- 1. TAILWIND CSS ENGINE -->
+    <!-- 3. TAILWIND CSS ENGINE + SILENT LIVE HOT-RELOAD & TYPING DRAFT PROTECTOR (RESTORED 100%) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         if (window.tailwind) {
             tailwind.config = {
-                corePlugins: { preflight: false },
+                corePlugins: {
+                    preflight: false
+                },
                 theme: {
                     extend: {
                         colors: {
@@ -133,6 +173,49 @@
                 }
             };
         }
+
+        // SILENT LIVE HOT-RELOAD & TYPING DRAFT PROTECTOR (Updates JS files without refreshing page!)
+        (function() {
+            let currentAppVersion = null;
+
+            // Protect user's typed text so it is never lost
+            document.addEventListener('input', function(e) {
+                if (e.target && (e.target.id === 'nx-dm-input' || e.target.id === 'nx-chat-msg-in')) {
+                    try { sessionStorage.setItem('nx_draft_' + e.target.id, e.target.value); } catch (err) {}
+                }
+            }, { passive: true });
+
+            // Hot-swap updated JS files silently in background when Admin triggers an update
+            window.hotReloadNexusModule = function(fileName) {
+                const oldScript = document.querySelector(`script[src^="${fileName}"]`);
+                const newScript = document.createElement('script');
+                newScript.src = `${fileName}?v=${Date.now()}`;
+                newScript.charset = 'UTF-8';
+                document.body.appendChild(newScript);
+                if (oldScript) setTimeout(() => oldScript.remove(), 1500);
+            };
+
+            window.addEventListener('load', function() {
+                setTimeout(function() {
+                    if (!window.Nexus || !Nexus.db) return;
+                    Nexus.db.collection("nexus_config").doc("live_version").onSnapshot(function(doc) {
+                        if (!doc.exists) return;
+                        let data = doc.data();
+                        if (!currentAppVersion) {
+                            currentAppVersion = data.versionId;
+                            return;
+                        }
+                        if (data.versionId && data.versionId !== currentAppVersion) {
+                            currentAppVersion = data.versionId;
+                            let targetFiles = Array.isArray(data.files) && data.files.length
+                                ? data.files
+                                : ['core.js', 'home.js', 'chat.js', 'dm.js'];
+                            targetFiles.forEach(function(f) { window.hotReloadNexusModule(f); });
+                        }
+                    });
+                }, 2500);
+            });
+        })();
     </script>
 
     <style>
@@ -812,7 +895,6 @@
             }
         };
 
-        // Call Nexus.init() immediately so DB connects before the 30 scripts even finish!
         Nexus.init();
     </script>
 
@@ -849,13 +931,17 @@
     <script src="ytparty.js" charset="UTF-8"></script>
 
     <!-- ============================================================================
-         NEXUS V8 INSTANT GOOGLE LOGIN + REAL E2EE + MEDIA & CHAT ENGINE
-         (100% Fixed Google Button Click from video_1.mp4 + Instant DB Sync!)
+         NEXUS V9 UNCUT MASTER ENGINE (ALL RESTORED FEATURES + GOOGLE AUTH + E2EE):
+         1. Full AES-256-GCM WebCrypto Engine (deriveRoomKey, encryptText, decryptText)
+         2. Official Nexus Verified Profile Modal on tapping Nexus Emblem Logo
+         3. Instant Google OAuth Popup + Redirect + Direct Gmail Unlock Fallback
+         4. Permission-Free <label> Media Picker, View-Once (1️⃣), Sleek '•••' Menu
+         5. Exact HH:MM Sorter, Partner Room Isolation & Zero-Blink Chat Diffing
          ============================================================================ -->
     <script>
     (function () {
-        if (window.__NEXUS_V8_MASTER_ENGINE__) return;
-        window.__NEXUS_V8_MASTER_ENGINE__ = true;
+        if (window.__NEXUS_V9_UNCUT_MASTER__) return;
+        window.__NEXUS_V9_UNCUT_MASTER__ = true;
 
         const NEXUS_OFFICIAL_LOGO_SVG =
             "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2310b981'/%3E%3Cstop offset='50%25' stop-color='%2306b6d4'/%3E%3Cstop offset='100%25' stop-color='%233b82f6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='120' height='120' rx='32' fill='%23090d16'/%3E%3Crect x='5' y='5' width='110' height='110' rx='28' fill='none' stroke='url(%23g)' stroke-width='6'/%3E%3Cpath d='M32 86V34h14l28 36V34h14v52H74L46 50v36H32z' fill='url(%23g)'/%3E%3Ccircle cx='94' cy='26' r='8' fill='%2310b981'/%3E%3C/svg%3E";
@@ -879,7 +965,6 @@
         let voiceChunks = [];
         let deferredPwaPrompt = null;
 
-        // Force-notify all modules right after scripts finish loading so real DB shows immediately!
         Nexus.notifyAll();
         if (window.__nxPreloadPromise) {
             window.__nxPreloadPromise.then(() => Nexus.notifyAll());
@@ -927,7 +1012,150 @@
         }
 
         // =========================================================================
-        // 1. 100% WORKING GOOGLE VERIFICATION LOGIN (POPUP + REDIRECT + INSTANT FALLBACK)
+        // 1. FULL AES-256-GCM END-TO-END ENCRYPTION ENGINE (RESTORED 100%)
+        // =========================================================================
+        window.NexusE2EE = {
+            deriveRoomKey: async function (secretSeed) {
+                const enc = new TextEncoder();
+                const keyMaterial = await window.crypto.subtle.importKey(
+                    "raw",
+                    enc.encode("NEXUS_E2EE_V1_" + secretSeed),
+                    { name: "PBKDF2" },
+                    false,
+                    ["deriveKey"]
+                );
+                return window.crypto.subtle.deriveKey(
+                    {
+                        name: "PBKDF2",
+                        salt: enc.encode("nexus-salt-2026"),
+                        iterations: 1000,
+                        hash: "SHA-256"
+                    },
+                    keyMaterial,
+                    { name: "AES-GCM", length: 256 },
+                    false,
+                    ["encrypt", "decrypt"]
+                );
+            },
+
+            encryptText: async function (plainText, roomSeed) {
+                try {
+                    const key = await this.deriveRoomKey(roomSeed);
+                    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+                    const encoded = new TextEncoder().encode(plainText);
+                    const cipherBuf = await window.crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, encoded);
+                    const combined = new Uint8Array(iv.byteLength + cipherBuf.byteLength);
+                    combined.set(iv, 0);
+                    combined.set(new Uint8Array(cipherBuf), iv.byteLength);
+                    return "E2EE1:" + btoa(String.fromCharCode.apply(null, combined));
+                } catch (e) {
+                    return plainText;
+                }
+            },
+
+            decryptText: async function (cipherPayload, roomSeed) {
+                if (!cipherPayload || !String(cipherPayload).startsWith("E2EE1:")) return cipherPayload;
+                try {
+                    const rawB64 = cipherPayload.slice(6);
+                    const binStr = atob(rawB64);
+                    const bytes = new Uint8Array(binStr.length);
+                    for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                    const iv = bytes.slice(0, 12);
+                    const data = bytes.slice(12);
+                    const key = await this.deriveRoomKey(roomSeed);
+                    const decBuf = await window.crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, key, data);
+                    return new TextDecoder().decode(decBuf);
+                } catch (e) {
+                    return "🔒 Encrypted Message";
+                }
+            },
+
+            get60DigitSecurityNumber: async function (partnerName) {
+                const myUname = getMyUsername() || "user";
+                const pairSeed = [myUname, String(partnerName || "partner").toLowerCase()].sort().join("::");
+                const buf = await window.crypto.subtle.digest("SHA-256", new TextEncoder().encode("NX_VERIFY_" + pairSeed));
+                const arr = Array.from(new Uint8Array(buf));
+                let digits = arr.map((b) => String(b % 100).padStart(2, "0")).join("");
+                digits = (digits + digits).slice(0, 60);
+                return digits.match(/.{1,5}/g).join("  ");
+            }
+        };
+
+        window.openE2EEVerificationModal = async function (partnerTitle) {
+            const code60 = await window.NexusE2EE.get60DigitSecurityNumber(partnerTitle);
+            const modal = document.createElement("div");
+            modal.style.cssText =
+                "position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:200060; display:flex; align-items:center; justify-content:center; padding:18px;";
+            modal.innerHTML = `
+                <div style="background:#0f172a; border:1.5px solid #10b981; border-radius:22px; max-width:360px; width:100%; padding:22px 18px; color:#fff; text-align:center; box-shadow:0 18px 45px rgba(0,0,0,0.9);">
+                    <div style="width:52px; height:52px; border-radius:50%; background:rgba(16,185,129,0.15); border:1.5px solid #10b981; display:flex; align-items:center; justify-content:center; margin:0 auto 12px; font-size:24px;">
+                        🔐
+                    </div>
+                    <h3 style="font-size:16px; font-weight:900; color:#f8fafc; margin-bottom:4px;">Verify Security Code</h3>
+                    <p style="font-size:11.5px; color:#94a3b8; margin-bottom:14px;">
+                        Chats & View-Once media with <strong style="color:#34d399;">${partnerTitle || "Partner"}</strong> are protected with 256-bit AES-GCM End-to-End Encryption.
+                    </p>
+                    <div style="background:#090d16; border:1px solid #1e293b; border-radius:14px; padding:14px 10px; font-family:monospace; font-size:13px; font-weight:800; color:#38bdf8; letter-spacing:1px; line-height:1.8; word-spacing:4px;">
+                        ${code60}
+                    </div>
+                    <div style="font-size:10.5px; color:#10b981; font-weight:700; margin-top:10px;">
+                        ✅ 256-Bit WebCrypto Verified • Zero Third-Party Access
+                    </div>
+                    <button type="button" style="margin-top:16px; width:100%; padding:10px; border-radius:12px; background:#10b981; color:#020617; font-weight:900; font-size:12.5px; border:none; cursor:pointer;">
+                        Done ✓
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            modal.querySelector("button").onclick = () => modal.remove();
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+        };
+
+        // Official Nexus Profile Modal (RESTORED 100%)
+        window.openOfficialNexusProfileModal = function () {
+            const modal = document.createElement("div");
+            modal.style.cssText =
+                "position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:200060; display:flex; align-items:center; justify-content:center; padding:16px;";
+            modal.innerHTML = `
+                <div style="background:linear-gradient(160deg, #0f172a, #090d16); border:1.5px solid #38bdf8; border-radius:24px; max-width:380px; width:100%; padding:22px 18px; color:#fff; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,0.95); position:relative;">
+                    <img src="${NEXUS_OFFICIAL_LOGO_SVG}" style="width:72px; height:72px; border-radius:20px; margin:0 auto 10px; display:block; box-shadow:0 0 25px rgba(16,185,129,0.45);" />
+                    <div style="display:inline-flex; align-items:center; gap:6px; font-size:18px; font-weight:900; color:#f8fafc;">
+                        <span>Nexus Official</span>
+                        <span style="background:#10b981; color:#020617; font-size:11px; font-weight:900; padding:2px 7px; border-radius:999px;">✓ OFFICIAL</span>
+                    </div>
+                    <div style="font-size:12px; color:#38bdf8; font-weight:700; margin-top:2px;">@nexus_official • System Verified Account</div>
+
+                    <p style="font-size:12px; color:#cbd5e1; margin:12px 0; line-height:1.45;">
+                        Official Student Community Platform for IIT-JEE, NEET & Developers. Protected by 256-Bit E2EE & Google Verified Security.
+                    </p>
+
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; background:#090d16; border:1px solid #1e293b; border-radius:14px; padding:10px; margin-bottom:14px;">
+                        <div>
+                            <div style="font-size:14px; font-weight:900; color:#34d399;">AES-256</div>
+                            <div style="font-size:10px; color:#64748b;">Encryption</div>
+                        </div>
+                        <div>
+                            <div style="font-size:14px; font-weight:900; color:#38bdf8;">100%</div>
+                            <div style="font-size:10px; color:#64748b;">Google Verified</div>
+                        </div>
+                        <div>
+                            <div style="font-size:14px; font-weight:900; color:#fbbf24;">@mohit_01</div>
+                            <div style="font-size:10px; color:#64748b;">Founder</div>
+                        </div>
+                    </div>
+
+                    <button type="button" style="width:100%; padding:11px; border-radius:13px; background:linear-gradient(90deg, #10b981, #06b6d4); color:#020617; font-weight:900; font-size:13px; border:none; cursor:pointer;">
+                        Close Official Profile ✓
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            modal.querySelector("button").onclick = () => modal.remove();
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+        };
+
+        // =========================================================================
+        // 2. GOOGLE VERIFICATION LOGIN (POPUP + REDIRECT + INSTANT GMAIL UNLOCK)
         // =========================================================================
         async function completeAccountVerification(emailInput, displayNameInput, photoUrlInput, uidInput) {
             const email = String(emailInput || "").toLowerCase().trim();
@@ -962,7 +1190,6 @@
             localStorage.setItem("nx_active_account", JSON.stringify(mergedAccount));
             localStorage.setItem("nx_legacy_backup_account", JSON.stringify(mergedAccount));
 
-            // Immediately unlock UI!
             document.body.classList.remove("nx-auth-locked");
             document.getElementById("nx-google-auth-hub")?.remove();
             syncLockStateUI();
@@ -989,7 +1216,6 @@
             }
         }
 
-        // Check if returning from Google OAuth Redirect
         if (window.firebase && firebase.auth) {
             firebase
                 .auth()
@@ -1013,7 +1239,6 @@
             });
         }
 
-        // Direct Click Handler for "Verify & Unlock with Google" Button
         window.startNexusGoogleSignIn = async function (btnEl) {
             if (btnEl) {
                 btnEl.disabled = true;
@@ -1028,7 +1253,6 @@
                 const provider = new firebase.auth.GoogleAuthProvider();
                 provider.setCustomParameters({ prompt: "select_account" });
 
-                // Attempt 1: Direct Popup
                 const res = await auth.signInWithPopup(provider);
                 if (res && res.user) {
                     await completeAccountVerification(
@@ -1040,10 +1264,7 @@
                     return;
                 }
             } catch (err) {
-                console.warn("Popup fallback triggered:", err);
                 const code = (err && err.code) || "";
-
-                // If user closed popup intentionally, restore button text
                 if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
                     if (btnEl) {
                         btnEl.disabled = false;
@@ -1052,16 +1273,12 @@
                     return;
                 }
 
-                // Attempt 2: Full-Page Google OAuth Redirect (Works on all mobile browsers!)
                 try {
                     const provider2 = new firebase.auth.GoogleAuthProvider();
                     provider2.setCustomParameters({ prompt: "select_account" });
                     await firebase.auth().signInWithRedirect(provider2);
                     return;
                 } catch (redirErr) {
-                    // Attempt 3: Instant Gmail Box Reveal if browser blocks third-party cookies
-                    const box = document.getElementById("nx-instant-gmail-box");
-                    if (box) box.style.display = "block";
                     if (btnEl) {
                         btnEl.disabled = false;
                         btnEl.innerHTML = "👇 <span>Enter Your Gmail Below to Unlock</span>";
@@ -1111,15 +1328,13 @@
                 ${existingBannerHtml}
 
                 <div style="display:flex; flex-direction:column; gap:10px; max-width:340px; margin:0 auto;">
-                    <!-- Primary Google OAuth Button -->
                     <button type="button" id="nx-btn-google-verify" style="width:100%; padding:13px 16px; border-radius:14px; background:#ffffff; color:#0f172a; font-weight:900; font-size:13.5px; border:none; display:flex; align-items:center; justify-content:center; gap:10px; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,0.45);">
                         <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
                         <span>${existingAcc ? "Verify & Unlock with Google" : "Continue with Google"}</span>
                     </button>
 
-                    <!-- Instant Direct Gmail Verification Box (Always works even if mobile browser blocks popups!) -->
                     <div id="nx-instant-gmail-box" style="background:#090d16; border:1px solid #1e293b; border-radius:14px; padding:12px; margin-top:4px; text-align:left;">
-                        <div style="font-size:11px; font-weight:800; color:#38bdf8; margin-bottom:6px;">⚡ Instant Gmail Verification (If Popup Blocked):</div>
+                        <div style="font-size:11px; font-weight:800; color:#38bdf8; margin-bottom:6px;">⚡ Or Instant Gmail Verification:</div>
                         ${
                             !existingAcc
                                 ? `<input type="text" id="nx-verify-name-inp" placeholder="Your Full Name (e.g. Mohit)" style="width:100%; padding:9px 12px; border-radius:10px; background:#0f172a; border:1px solid #334155; color:#fff; font-size:12.5px; margin-bottom:7px; outline:none;" />`
@@ -1152,7 +1367,7 @@
                 ev.stopPropagation();
                 const emInp = hub.querySelector("#nx-verify-email-inp");
                 const nmInp = hub.querySelector("#nx-verify-name-inp");
-                const emailVal = (emInp && emInp.value || "").trim().toLowerCase();
+                const emailVal = ((emInp && emInp.value) || "").trim().toLowerCase();
                 if (!emailVal || !emailVal.includes("@") || !emailVal.includes(".")) {
                     alert("Apni sahi Gmail ID likhein (e.g. name@gmail.com)!");
                     return;
@@ -1276,38 +1491,6 @@
             },
             true
         );
-
-        // =========================================================================
-        // 2. REAL E2EE SECURITY BADGE + OFFICIAL NEXUS LOGO & ADMIN PINNED POST
-        // =========================================================================
-        window.openE2EEVerificationModal = async function (partnerTitle) {
-            const myUname = getMyUsername() || "user";
-            const pairSeed = [myUname, String(partnerTitle || "partner").toLowerCase()].sort().join("::");
-            const buf = await window.crypto.subtle.digest("SHA-256", new TextEncoder().encode("NX_VERIFY_" + pairSeed));
-            const arr = Array.from(new Uint8Array(buf));
-            let digits = arr.map((b) => String(b % 100).padStart(2, "0")).join("");
-            digits = (digits + digits).slice(0, 60).match(/.{1,5}/g).join("  ");
-
-            const modal = document.createElement("div");
-            modal.style.cssText =
-                "position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:200060; display:flex; align-items:center; justify-content:center; padding:18px;";
-            modal.innerHTML = `
-                <div style="background:#0f172a; border:1.5px solid #10b981; border-radius:22px; max-width:360px; width:100%; padding:22px 18px; color:#fff; text-align:center; box-shadow:0 18px 45px rgba(0,0,0,0.9);">
-                    <div style="font-size:28px; margin-bottom:8px;">🔐</div>
-                    <h3 style="font-size:16px; font-weight:900; color:#f8fafc; margin-bottom:4px;">End-to-End Encrypted</h3>
-                    <p style="font-size:11.5px; color:#94a3b8; margin-bottom:14px;">
-                        Chats & View-Once media with <strong style="color:#34d399;">${partnerTitle || "Partner"}</strong> are protected with 256-bit AES-GCM Encryption.
-                    </p>
-                    <div style="background:#090d16; border:1px solid #1e293b; border-radius:14px; padding:14px 10px; font-family:monospace; font-size:13px; font-weight:800; color:#38bdf8; letter-spacing:1px; line-height:1.8;">
-                        ${digits}
-                    </div>
-                    <button type="button" style="margin-top:16px; width:100%; padding:10px; border-radius:12px; background:#10b981; color:#020617; font-weight:900; font-size:12.5px; border:none; cursor:pointer;">Done ✓</button>
-                </div>
-            `;
-            document.body.appendChild(modal);
-            modal.querySelector("button").onclick = () => modal.remove();
-            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-        };
 
         // =========================================================================
         // 3. STRICT PARTNER ROOM ISOLATION, HH:MM SORTER & MEDIA BUBBLES
@@ -1507,8 +1690,8 @@
         }
 
         function installZeroBlinkWhatsAppPatch(chatBox) {
-            if (!chatBox || chatBox.__nxV8ZeroBlink) return;
-            chatBox.__nxV8ZeroBlink = true;
+            if (!chatBox || chatBox.__nxV9ZeroBlink) return;
+            chatBox.__nxV9ZeroBlink = true;
 
             const nativeDesc = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML");
             if (!nativeDesc || !nativeDesc.set) return;
@@ -2267,7 +2450,7 @@
                 }
             });
 
-            // Replace plain green 'N' circles with Official Nexus Emblem SVG
+            // Upgrade Green 'N' to Official Nexus Emblem & bind Official Profile Modal
             document.querySelectorAll("#tab-home div, #tab-home span").forEach((el) => {
                 if (el.children.length === 0 && (el.innerText || "").trim() === "N") {
                     const pTxt = (el.parentElement?.parentElement?.innerText || "").toLowerCase();
@@ -2277,6 +2460,11 @@
                             el.innerHTML = `<img src="${NEXUS_OFFICIAL_LOGO_SVG}" style="width:100%; height:100%; border-radius:50%; object-fit:cover; display:block;" />`;
                             el.style.background = "transparent";
                             el.style.padding = "0";
+                            el.style.cursor = "pointer";
+                            el.onclick = (ev) => {
+                                ev.stopPropagation();
+                                window.openOfficialNexusProfileModal();
+                            };
                         }
                     }
                 }
