@@ -45,7 +45,6 @@
     <!-- ================= 0.01s COLD-START REST PRE-FETCHER FOR BRAND NEW VISITORS ================= -->
     <script>
     (function () {
-        // Clear any stale Service Worker caches immediately so updates show right away
         if ("caches" in window) {
             caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => {});
         }
@@ -124,8 +123,10 @@
     })();
     </script>
 
+    <!-- FIREBASE APP, FIRESTORE & AUTHENTICATION SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
     <!-- 1. TAILWIND CSS ENGINE -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -426,7 +427,7 @@
             height: 112px !important;
             transition: height 0.18s ease !important;
         }
-        /* Sleek 3-Dot Button on Media Bubbles (Matches 'Ni yar 11:48' style!) */
+        /* Sleek 3-Dot Button on Media Bubbles */
         .nx-media-dots-btn {
             width: 28px;
             height: 22px;
@@ -447,6 +448,17 @@
         }
         .nx-media-dots-btn:active {
             transform: scale(0.88);
+        }
+        /* Lock Badge on Features When Not Google-Verified */
+        body.nx-auth-locked .nx-fab-post::after,
+        body.nx-auth-locked .nx-media-dots-btn::after {
+            content: "🔒";
+            font-size: 10px;
+            margin-left: 2px;
+        }
+        /* Hide old profile cards inside #tab-profile while locked so user sees clean Google Login Hub first */
+        body.nx-auth-locked #tab-profile > *:not(#nx-google-auth-hub) {
+            display: none !important;
         }
     </style>
 </head>
@@ -622,6 +634,11 @@
                                     isOnlineNow: true,
                                     lastOnline: Date.now()
                                 });
+                                // Keep local googleVerified status intact
+                                if (meParsed.googleVerified) {
+                                    syncedMe.googleVerified = true;
+                                    syncedMe.email = meParsed.email || u.email || '';
+                                }
                                 syncedMe.followersList = copy.followersList;
                                 syncedMe.followingList = copy.followingList;
                                 safeSetLocalCache('nx_active_account', syncedMe);
@@ -732,7 +749,8 @@
                     } catch(e) {}
                 }
 
-                this.db.collection("nexus_accounts").onSnapshot(snap => {
+                // Capped to 80 active accounts for ultra-fast loading speed
+                this.db.collection("nexus_accounts").limit(80).onSnapshot(snap => {
                     this.cloudAccounts = [];
                     snap.forEach(d => this.cloudAccounts.push(d.data()));
                     this.cloudReady = true;
@@ -782,7 +800,9 @@
                     if (cloudMatch) {
                         let merged = Object.assign({}, acc, cloudMatch, {
                             dp: cloudMatch.dp || acc.dp || '',
-                            isOnlineNow: true
+                            isOnlineNow: true,
+                            googleVerified: Boolean(acc.googleVerified || cloudMatch.googleVerified),
+                            email: acc.email || cloudMatch.email || ''
                         });
                         merged.followersList = cleanUniqueList(cloudMatch.followersList);
                         merged.followingList = cleanUniqueList(cloudMatch.followingList);
@@ -894,19 +914,17 @@
     <script src="ytparty.js" charset="UTF-8"></script>
 
     <!-- ============================================================================
-         NEXUS V6 SURGICAL ENGINE (FIXES ALL SCREENSHOT 1000076430.jpg ISSUES):
-         1. Uses Status Anchor ('Online Now' / 'Last seen' / 'Live Room') to get 100%
-            exact Partner Name ('Priyanka', 'CHANCHAL') -> NEVER reads background header!
-         2. Fresh 'nexus_chat_media_v6' Collection -> Wipes all old leaked test photos!
-         3. Exact Minute-of-Day ('11:47' vs '11:48') Sorter -> '11:47' photo NEVER sits
-            below '11:48' messages ('Ni yar', 'Kha')!
-         4. Fixes Watch-Party Top Message Cut-off ('Ap kbhi rj aaye ho kya')
-         5. Sleek '•••' Button on Photos/Videos & Instant View-Once (1️⃣) Modal
+         NEXUS V7 MASTER ENGINE:
+         1. Universal 🔒 Lock for Both Guests & Unverified Dummy Logins (Zero Data Loss!)
+         2. 1-Click Google Verification Merger (Merges Google Email into Old Username & Data!)
+         3. Logs All Verified Emails in Firestore ('nexus_verified_emails') for Admin Mohit
+         4. Permission-Free Native <label> Photo/50MB Video/View-Once Picker (Fixes Priyanka Error)
+         5. Exact Partner Room Isolation, HH:MM Sorter, Sleek '•••' Menu & Zero-Blink Chat
          ============================================================================ -->
     <script>
     (function () {
-        if (window.__NEXUS_V6_SURGICAL_MASTER__) return;
-        window.__NEXUS_V6_SURGICAL_MASTER__ = true;
+        if (window.__NEXUS_V7_MASTER_ENGINE__) return;
+        window.__NEXUS_V7_MASTER_ENGINE__ = true;
 
         const MEDIA_COLLECTION = "nexus_chat_media_v6";
         const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
@@ -923,69 +941,365 @@
         let isRecordingVoice = false;
         let voiceRecorder = null;
         let voiceChunks = [];
+        let deferredPwaPrompt = null;
+
+        window.addEventListener("beforeinstallprompt", (e) => {
+            e.preventDefault();
+            deferredPwaPrompt = e;
+        });
+
+        // Read current account safely without deleting anything
+        function getStoredAccount() {
+            try {
+                const raw = localStorage.getItem("nx_active_account");
+                if (!raw) return null;
+                const acc = JSON.parse(raw);
+                if (acc && acc.username) {
+                    // Always keep a safe backup of legacy account so zero data is ever lost
+                    localStorage.setItem("nx_legacy_backup_account", JSON.stringify(acc));
+                    return acc;
+                }
+            } catch (e) {}
+            try {
+                const backup = localStorage.getItem("nx_legacy_backup_account");
+                if (backup) return JSON.parse(backup);
+            } catch (e) {}
+            return null;
+        }
 
         function getMyUsername() {
-            try {
-                const me = window.Nexus && typeof Nexus.getCurrentUser === "function" ? Nexus.getCurrentUser() : null;
-                if (me && me.username) return me.username.toLowerCase().trim();
-                const raw = JSON.parse(localStorage.getItem("nx_active_account") || "{}");
-                if (raw && raw.username) return raw.username.toLowerCase().trim();
-            } catch (e) {}
-            return "";
+            const acc = getStoredAccount();
+            return acc && acc.username ? acc.username.toLowerCase().trim() : "";
+        }
+
+        // Returns TRUE only if user has completed real Google Sign-In verification!
+        function isGoogleVerifiedAccount() {
+            const acc = getStoredAccount();
+            return Boolean(acc && acc.username && acc.googleVerified === true && acc.email);
         }
 
         // ========================================================================
-        // 1. GUEST REDIRECT & 0.01s INSTANT FOLLOW BUTTON
+        // 1. UNIVERSAL 🔒 LOCK FOR GUESTS & DUMMY LOGINS + ZERO-DATA-LOSS MERGER
         // ========================================================================
+        async function mergeGoogleUserWithExistingAccount(firebaseUser) {
+            if (!firebaseUser) return;
+
+            const email = (firebaseUser.email || "").toLowerCase().trim();
+            const googleName = firebaseUser.displayName || email.split("@")[0] || "Nexus Member";
+            const googleDp = firebaseUser.photoURL || "";
+            const googleUid = firebaseUser.uid || "";
+
+            // Check if user already had a dummy/existing account on this phone or in Firestore
+            let existingAcc = getStoredAccount();
+
+            if (!existingAcc && window.Nexus && Array.isArray(Nexus.users)) {
+                const emailPrefix = email.split("@")[0].replace(/[^a-z0-9_]/g, "");
+                const foundInCloud = Nexus.users.find(
+                    (u) =>
+                        u &&
+                        ((u.email && u.email.toLowerCase() === email) ||
+                            (u.username && u.username.toLowerCase() === emailPrefix))
+                );
+                if (foundInCloud) existingAcc = Object.assign({}, foundInCloud);
+            }
+
+            const finalUsername =
+                existingAcc && existingAcc.username
+                    ? existingAcc.username.toLowerCase().trim()
+                    : (email.split("@")[0] || "user").toLowerCase().replace(/[^a-z0-9_]/g, "") ||
+                      "user_" + Math.floor(1000 + Math.random() * 9000);
+
+            // Merge 100% of old data (username, name, dp, followers, following, bio) + add Google verification!
+            const mergedAccount = Object.assign({}, existingAcc || {}, {
+                username: finalUsername,
+                name: (existingAcc && existingAcc.name) || googleName,
+                dp: (existingAcc && existingAcc.dp) || googleDp,
+                bio: (existingAcc && existingAcc.bio) || "Google Verified Nexus Member ✨",
+                followersList: (existingAcc && existingAcc.followersList) || [],
+                followingList: (existingAcc && existingAcc.followingList) || [],
+                email: email,
+                googleUid: googleUid,
+                googleVerified: true,
+                verified: true,
+                isOnlineNow: true,
+                lastOnline: Date.now(),
+                verifiedAt: Date.now()
+            });
+
+            localStorage.setItem("nx_active_account", JSON.stringify(mergedAccount));
+            localStorage.setItem("nx_legacy_backup_account", JSON.stringify(mergedAccount));
+
+            // Save to Firestore 'nexus_accounts' (keeps old profile & adds email/googleVerified)
+            // AND save to 'nexus_verified_emails' so Admin (Mohit) gets every verified user's email!
+            if (window.Nexus && Nexus.db) {
+                await Promise.allSettled([
+                    Nexus.db.collection("nexus_accounts").doc(finalUsername).set(mergedAccount, { merge: true }),
+                    Nexus.db.collection("nexus_verified_emails").doc(finalUsername).set({
+                        username: finalUsername,
+                        name: mergedAccount.name,
+                        email: email,
+                        googleUid: googleUid,
+                        verifiedAt: Date.now(),
+                        humanTime: new Date().toLocaleString()
+                    })
+                ]);
+            }
+
+            syncLockStateUI();
+            if (window.Nexus) {
+                Nexus.rebuildAllUsersMasterList && Nexus.rebuildAllUsersMasterList();
+                Nexus.notifyAll && Nexus.notifyAll();
+                Nexus.toast && Nexus.toast("🔓 Verified (" + email + ")! All Features & Old Data Unlocked!");
+                Nexus.switchTab && Nexus.switchTab("tab-home");
+            }
+        }
+
+        // Check if returning from mobile Google OAuth Redirect
+        window.addEventListener("load", () => {
+            setTimeout(() => {
+                if (window.firebase && firebase.auth) {
+                    firebase
+                        .auth()
+                        .getRedirectResult()
+                        .then((res) => {
+                            if (res && res.user) mergeGoogleUserWithExistingAccount(res.user);
+                        })
+                        .catch(() => {});
+
+                    firebase.auth().onAuthStateChanged((user) => {
+                        if (user && !isGoogleVerifiedAccount()) {
+                            mergeGoogleUserWithExistingAccount(user);
+                        }
+                    });
+                }
+            }, 400);
+        });
+
+        window.triggerGoogleVerificationLogin = async function () {
+            try {
+                if (!window.firebase || !firebase.auth) {
+                    alert("Firebase Auth loading... 1 second baad dobara tap karein!");
+                    return;
+                }
+                const provider = new firebase.auth.GoogleAuthProvider();
+                provider.setCustomParameters({ prompt: "select_account" });
+
+                try {
+                    const result = await firebase.auth().signInWithPopup(provider);
+                    if (result && result.user) {
+                        await mergeGoogleUserWithExistingAccount(result.user);
+                    }
+                } catch (popupErr) {
+                    if (
+                        popupErr.code === "auth/popup-blocked" ||
+                        popupErr.code === "auth/operation-not-supported-in-this-environment"
+                    ) {
+                        await firebase.auth().signInWithRedirect(provider);
+                    } else if (popupErr.code === "auth/unauthorized-domain") {
+                        alert(
+                            "⚠️ Firebase Console -> Authentication -> Settings -> Authorized domains mein jakar '" +
+                                window.location.hostname +
+                                "' add karein!"
+                        );
+                    } else {
+                        console.warn("Google Auth info:", popupErr);
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        };
+
+        function syncLockStateUI() {
+            const verified = isGoogleVerifiedAccount();
+
+            if (verified) {
+                document.body.classList.remove("nx-auth-locked");
+                document.getElementById("nx-google-auth-hub")?.remove();
+                document.querySelectorAll('input[placeholder*="🔒"]').forEach((inp) => {
+                    inp.placeholder = "Message...";
+                    inp.readOnly = false;
+                });
+                document.querySelectorAll("[data-nx-locked-txt]").forEach((el) => {
+                    el.innerText = el.getAttribute("data-nx-locked-txt");
+                    el.removeAttribute("data-nx-locked-txt");
+                });
+                return;
+            }
+
+            // Locked State (For both Guests AND unverified old Dummy Accounts)
+            document.body.classList.add("nx-auth-locked");
+
+            document.querySelectorAll('input[placeholder*="Message"]').forEach((inp) => {
+                if (!inp.placeholder.includes("🔒")) {
+                    inp.placeholder = "🔒 Verify with Google to Send Message...";
+                    inp.readOnly = true;
+                }
+            });
+
+            document.querySelectorAll("button, span, div").forEach((el) => {
+                if (el.children.length > 0 || el.getAttribute("data-nx-locked-txt")) return;
+                const t = (el.innerText || "").trim();
+                if (t === "Chat →" || t === "Follow" || t === "+ Follow") {
+                    el.setAttribute("data-nx-locked-txt", t);
+                    el.innerText = "🔒 " + t;
+                }
+            });
+
+            const profileTab = document.getElementById("tab-profile");
+            if (profileTab && profileTab.classList.contains("active")) {
+                renderGoogleAuthHubOnProfile();
+            }
+        }
+        setInterval(syncLockStateUI, 350);
+
+        function renderGoogleAuthHubOnProfile() {
+            if (isGoogleVerifiedAccount()) return;
+            const profileTab = document.getElementById("tab-profile");
+            if (!profileTab) return;
+
+            const existingAcc = getStoredAccount();
+            let hub = document.getElementById("nx-google-auth-hub");
+            if (hub) return;
+
+            hub = document.createElement("div");
+            hub.id = "nx-google-auth-hub";
+            hub.style.cssText =
+                "margin:18px 14px; padding:22px 18px; border-radius:22px; background:linear-gradient(145deg, #0f172a, #090d16); border:1.5px solid #10b981; box-shadow:0 18px 45px rgba(0,0,0,0.85); color:#fff; text-align:center;";
+
+            const existingBannerHtml =
+                existingAcc && existingAcc.username
+                    ? `<div style="background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.4); border-radius:14px; padding:10px 12px; margin-bottom:14px; text-align:left; display:flex; align-items:center; gap:10px;">
+                           <div style="width:38px; height:38px; border-radius:50%; background:#10b981; color:#020617; font-weight:900; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:16px;">
+                               ${(existingAcc.name || existingAcc.username)[0].toUpperCase()}
+                           </div>
+                           <div>
+                               <div style="font-size:12.5px; font-weight:800; color:#34d399;">Account Found: @${existingAcc.username}</div>
+                               <div style="font-size:11px; color:#cbd5e1;">Sign in with Google to verify & unlock all your old chats, posts & followers!</div>
+                           </div>
+                       </div>`
+                    : "";
+
+            hub.innerHTML = `
+                <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.45); color:#fbbf24; font-size:11px; font-weight:800; padding:4px 12px; border-radius:999px; margin-bottom:10px;">
+                    🔒 Feature Locked • Verification Required
+                </div>
+                <h2 style="font-size:19px; font-weight:900; color:#f8fafc; margin-bottom:6px;">
+                    ${existingAcc ? "Verify Your Nexus Account" : "Sign in to Nexus Community"}
+                </h2>
+                <p style="font-size:12px; color:#94a3b8; margin-bottom:16px; line-height:1.4;">
+                    ${
+                        existingAcc
+                            ? "Aapka purana data 100% safe hai! Bas 1-Click mein Google se verify karein aur saare locks kholein."
+                            : "Live Chat, + Media Tools, Voice Calls aur Watch-Party unlock karne ke liye Google se login karein."
+                    }
+                </p>
+
+                ${existingBannerHtml}
+
+                <div style="display:flex; flex-direction:column; gap:10px; max-width:340px; margin:0 auto;">
+                    <button type="button" id="nx-btn-google-verify" style="width:100%; padding:13px 16px; border-radius:14px; background:#ffffff; color:#0f172a; font-weight:900; font-size:13.5px; border:none; display:flex; align-items:center; justify-content:center; gap:10px; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,0.45);">
+                        <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                        <span>${existingAcc ? "Verify & Unlock with Google" : "Continue with Google"}</span>
+                    </button>
+
+                    <button type="button" id="nx-btn-install-app-hub" style="width:100%; padding:11px 16px; border-radius:14px; background:linear-gradient(90deg, #10b981, #06b6d4); color:#020617; font-weight:900; font-size:12.5px; border:none; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer;">
+                        📲 <span>Install Official Nexus App</span>
+                    </button>
+                </div>
+            `;
+
+            profileTab.prepend(hub);
+
+            hub.querySelector("#nx-btn-google-verify").onclick = (ev) => {
+                ev.stopPropagation();
+                window.triggerGoogleVerificationLogin();
+            };
+
+            hub.querySelector("#nx-btn-install-app-hub").onclick = async (ev) => {
+                ev.stopPropagation();
+                if (deferredPwaPrompt) {
+                    deferredPwaPrompt.prompt();
+                    await deferredPwaPrompt.userChoice;
+                    deferredPwaPrompt = null;
+                } else {
+                    alert("📲 Browser ke 3-dot (⋮) menu par tap karein aur 'Add to Home screen / Install App' dabayein!");
+                }
+            };
+        }
+
+        // Intercept any click on locked features (+, 3-dot, Message, Send, Chat ->, Follow, Post)
         document.addEventListener(
             "click",
             (e) => {
-                const target = e.target.closest("button, a, span, div");
+                const target = e.target.closest("button, input, label, a, span, div");
                 if (!target) return;
 
-                const myUname = getMyUsername();
-                const txt = (target.innerText || "").trim().toLowerCase();
-
-                if (!myUname) {
-                    const isProtectedAction =
-                        txt === "follow" ||
-                        txt === "+ follow" ||
-                        txt.includes("chat →") ||
-                        txt.includes("message") ||
-                        target.classList.contains("nx-fab-post") ||
-                        (target.tagName === "BUTTON" &&
-                            target.getBoundingClientRect().top > window.innerHeight - 130 &&
-                            !target.classList.contains("nx-nav-item"));
-
-                    if (isProtectedAction && !target.closest("#tab-profile")) {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        if (window.Nexus && Nexus.switchTab) {
-                            Nexus.switchTab("tab-profile");
-                            Nexus.toast("👤 Pehle apna Account banayein ya Login karein!");
-                        }
-                        return;
+                // If already Google-verified, allow everything + give 0.01s Follow feedback
+                if (isGoogleVerifiedAccount()) {
+                    const txt = (target.innerText || "").trim().toLowerCase();
+                    if ((txt === "follow" || txt === "+ follow") && target.children.length === 0) {
+                        target.style.transition = "all 0.1s ease";
+                        target.style.background = "#10b981";
+                        target.style.color = "#020617";
+                        target.innerText = "Following ✓";
                     }
+                    return;
                 }
 
-                if (myUname && (txt === "follow" || txt === "+ follow") && target.children.length === 0) {
-                    target.style.transition = "all 0.1s ease";
-                    target.style.background = "#10b981";
-                    target.style.color = "#020617";
-                    target.innerText = "Following ✓";
+                // Allow clicking inside the Google Auth Hub or Bottom Nav tabs freely
+                if (target.closest("#nx-google-auth-hub")) return;
+                if (target.closest(".nx-bottom-nav") && !target.classList.contains("nx-fab-post")) {
+                    if (target.getAttribute("data-tab") === "tab-profile") {
+                        setTimeout(renderGoogleAuthHubOnProfile, 40);
+                    }
+                    return;
+                }
+
+                const txt = (target.innerText || "").trim();
+                const lower = txt.toLowerCase();
+                const rect = target.getBoundingClientRect();
+
+                const isLockedAction =
+                    txt === "+" ||
+                    txt === "＋" ||
+                    txt === "⋮" ||
+                    txt === "•••" ||
+                    txt.includes("🔒") ||
+                    lower.includes("chat →") ||
+                    lower === "follow" ||
+                    lower === "+ follow" ||
+                    target.classList.contains("nx-fab-post") ||
+                    target.classList.contains("nx-media-dots-btn") ||
+                    (target.tagName === "INPUT" && (target.placeholder || "").includes("Message")) ||
+                    (target.tagName === "BUTTON" && rect.top > window.innerHeight - 135);
+
+                if (isLockedAction) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    document.querySelectorAll(".nx-modal-overlay, #nx-whatsapp-plus-sheet, #nx-media-3dot-popup").forEach((m) => {
+                        m.style.display = "none";
+                    });
+                    if (window.Nexus && Nexus.switchTab) {
+                        Nexus.switchTab("tab-profile");
+                    }
+                    renderGoogleAuthHubOnProfile();
+                    if (window.Nexus && Nexus.toast) {
+                        Nexus.toast("🔒 Feature Locked! Continue with Google to Unlock");
+                    }
                 }
             },
             true
         );
 
         // ========================================================================
-        // 2. 100% EXACT PARTNER / ROOM DETECTOR (VIA 'Online Now' / 'Last seen' ANCHOR)
+        // 2. STRICT PARTNER ROOM DETECTOR & EXACT HH:MM MESSAGE SORTER
         // ========================================================================
         function getStrictOpenChatMessagesBox() {
             const msgInput =
                 document.getElementById("nx-dm-input") ||
                 document.getElementById("nx-chat-msg-in") ||
-                document.querySelector('input[placeholder*="Message"]');
+                document.querySelector('input[placeholder*="Message"], input[placeholder*="🔒"]');
 
             if (!msgInput || msgInput.offsetParent === null) return null;
 
@@ -1030,12 +1344,10 @@
             return (ascii ? ascii + "_" : "u_") + Math.abs(hash).toString(36);
         }
 
-        // Finds the exact partner name right above "Online Now" / "Last seen" / "Live Room"
         function getExactPartnerOrRoomTitle() {
             const chatBox = getStrictOpenChatMessagesBox();
             if (!chatBox) return "";
 
-            // Walk up to the top-level chat view container (which is separate from <header class="nx-header">)
             let chatScreen = chatBox.parentElement;
             while (
                 chatScreen &&
@@ -1048,7 +1360,6 @@
             }
             const root = chatScreen || document.body;
 
-            // Method A: Anchor on subtitle ('Online Now', 'Last seen', 'Offline', 'Live Room')
             const allEls = root.querySelectorAll("div, span, p, small");
             for (const el of allEls) {
                 const r = el.getBoundingClientRect();
@@ -1061,7 +1372,6 @@
                             txt.includes("Live Room")) &&
                         txt.length < 45
                     ) {
-                        // The partner/room title is its previous sibling or parent's first line!
                         const prev = el.previousElementSibling;
                         if (prev && prev.innerText && prev.innerText.trim().length > 1) {
                             return prev.innerText.trim();
@@ -1077,7 +1387,6 @@
                 }
             }
 
-            // Method B: Check topmost visible element at pixel (135, 22) via elementFromPoint
             const topEl = document.elementFromPoint(135, 22);
             if (topEl && !topEl.closest(".nx-header")) {
                 const t = (topEl.innerText || "").split("\n")[0].trim();
@@ -1094,9 +1403,7 @@
             const myUname = getMyUsername() || "guest";
             const lower = title.toLowerCase().trim();
 
-            if (lower.includes("saved messages")) {
-                return "dm_saved_" + myUname;
-            }
+            if (lower.includes("saved messages")) return "dm_saved_" + myUname;
 
             if (
                 lower.includes("student chat") ||
@@ -1127,24 +1434,15 @@
                 }
             }
 
-            if (!partnerKey) {
-                partnerKey = unicodeSafeSlug(cleanLookup);
-            }
-
+            if (!partnerKey) partnerKey = unicodeSafeSlug(cleanLookup);
             return "dm_v6_" + [myUname, partnerKey].sort().join("__");
         }
 
-        // ========================================================================
-        // 3. EXACT TIME SORTER ('11:47' PHOTO ALWAYS STAYS ABOVE '11:48' MESSAGES!)
-        // ========================================================================
         function getBubbleMinuteScore(el) {
-            // 1. If it's our media bubble, compute minute-of-day from its createdAt timestamp
             if (el.classList && el.classList.contains("nx-ig-media-bubble") && el.dataset.msgTs) {
                 const d = new Date(Number(el.dataset.msgTs));
                 return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 100;
             }
-
-            // 2. For native text messages (e.g. "Ni yar 11:48 ✓✓" or "Kha 11:48"), extract the last HH:MM in its text!
             const txt = el.innerText || "";
             const matches = txt.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/g);
             if (matches && matches.length > 0) {
@@ -1156,28 +1454,21 @@
                 }
                 return mins + nativeNodeOrderMap.get(el);
             }
-
             return 9999;
         }
 
         function sortChatMessagesChronologically(chatBox, currentRoomKey) {
             if (!chatBox) return;
 
-            // Remove any old V4/V5 bubble or bubble belonging to a different room
             chatBox.querySelectorAll(".nx-ig-media-bubble").forEach((b) => {
-                if (
-                    b.dataset.roomKey !== currentRoomKey ||
-                    b.querySelector('button[data-react="❤️"]')
-                ) {
+                if (b.dataset.roomKey !== currentRoomKey || b.querySelector('button[data-react="❤️"]')) {
                     b.remove();
                 }
             });
 
-            // Fix Watch-Party Top Message Cut-off: If Watch-Party iframe is visible above chatBox, add top padding
             const hasWatchPartyOpen = document.querySelector('iframe[src*="youtube"]') !== null;
             chatBox.style.paddingTop = hasWatchPartyOpen ? "18px" : "";
 
-            // Place each media bubble in its exact chronological position relative to native messages
             const mediaBubbles = Array.from(chatBox.querySelectorAll(".nx-ig-media-bubble"));
             mediaBubbles.forEach((mb) => {
                 const mScore = getBubbleMinuteScore(mb);
@@ -1188,7 +1479,6 @@
                     const kid = allKids[i];
                     if (kid === mb) continue;
                     const kScore = getBubbleMinuteScore(kid);
-                    // If kid has a strictly newer time (e.g. 11:48 > 11:47), insert media bubble BEFORE kid!
                     if (kScore > mScore) {
                         chatBox.insertBefore(mb, kid);
                         placed = true;
@@ -1202,8 +1492,8 @@
         }
 
         function installZeroBlinkWhatsAppPatch(chatBox) {
-            if (!chatBox || chatBox.__nxV6ZeroBlink) return;
-            chatBox.__nxV6ZeroBlink = true;
+            if (!chatBox || chatBox.__nxV7ZeroBlink) return;
+            chatBox.__nxV7ZeroBlink = true;
 
             const nativeDesc = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML");
             if (!nativeDesc || !nativeDesc.set) return;
@@ -1264,11 +1554,13 @@
         }
 
         // ========================================================================
-        // 4. SLEEK '•••' 3-DOT POPUP & 100% WORKING BLUE VIEW-ONCE (1️⃣)
+        // 3. SLEEK '•••' 3-DOT POPUP & 100% WORKING BLUE VIEW-ONCE (1️⃣)
         // ========================================================================
         document.addEventListener(
             "click",
             async (e) => {
+                if (!isGoogleVerifiedAccount()) return;
+
                 const voBtn = e.target.closest(".nx-open-viewonce");
                 if (voBtn) {
                     e.stopPropagation();
@@ -1439,7 +1731,7 @@
         }
 
         // ========================================================================
-        // 5. MEDIA BUBBLE RENDERER (NO TOP EMOJIS! SLEEK '•••' AT BOTTOM RIGHT)
+        // 4. MEDIA BUBBLE RENDERER
         // ========================================================================
         async function renderChatMediaBubble(msg, localPreviewUrl) {
             if (!msg || !msg.id) return;
@@ -1562,15 +1854,8 @@
         }
 
         // ========================================================================
-        // 6. UPLOAD ENGINE (MULTI-PHOTO, 50MB VIDEO, VIEW ONCE, VOICE NOTE)
+        // 5. PERMISSION-FREE NATIVE <label> PICKER & UPLOAD ENGINE (FIXES PRIYANKA ERROR!)
         // ========================================================================
-        const multiPicker = document.createElement("input");
-        multiPicker.type = "file";
-        multiPicker.style.display = "none";
-        document.body.appendChild(multiPicker);
-
-        let pendingViewOnceFlag = false;
-
         function compressImageToHD(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -1795,17 +2080,6 @@
             }
         }
 
-        multiPicker.onchange = (e) => {
-            if (e.target.files && e.target.files.length) {
-                sendSingleOrMultipleFiles(e.target.files, null, pendingViewOnceFlag);
-            }
-            pendingViewOnceFlag = false;
-            e.target.value = "";
-        };
-
-        // ========================================================================
-        // 7. SINGLE '+' POWER MENU & CLEAN CALL / VOICE NOTE / SETTINGS
-        // ========================================================================
         async function startCleanAudioCall(withVideo) {
             const rk = getSharedRoomKey() || "nexus_room";
             try {
@@ -1862,10 +2136,46 @@
             }
         }
 
+        // Native <label> Permission-Free Plus Menu (Bypasses Android Permission Block!)
         function toggleCompletePlusMenu() {
             if (isRecordingVoice) {
                 toggleVoiceNote();
                 return;
+            }
+
+            if (!document.getElementById("nx-native-inputs-wrap")) {
+                const wrap = document.createElement("div");
+                wrap.id = "nx-native-inputs-wrap";
+                wrap.style.cssText = "position:fixed; left:-9999px; top:-9999px; width:1px; height:1px; overflow:hidden;";
+                wrap.innerHTML = `
+                    <input type="file" id="nx-inp-multi" accept="image/*" multiple />
+                    <input type="file" id="nx-inp-viewonce" accept="image/*,video/*" />
+                    <input type="file" id="nx-inp-bypass" accept="*/*" multiple />
+                    <input type="file" id="nx-inp-video" accept="video/mp4,video/webm,video/*" />
+                    <input type="file" id="nx-inp-camera" accept="image/*" capture="environment" />
+                    <input type="file" id="nx-inp-pdf" accept="application/pdf,*/*" />
+                `;
+                document.body.appendChild(wrap);
+
+                const bindInp = (id, forcedType, isVo) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    el.addEventListener("change", (e) => {
+                        const menuEl = document.getElementById("nx-whatsapp-plus-sheet");
+                        if (menuEl) menuEl.style.display = "none";
+                        if (e.target.files && e.target.files.length) {
+                            sendSingleOrMultipleFiles(e.target.files, forcedType, isVo);
+                        }
+                        e.target.value = "";
+                    });
+                };
+
+                bindInp("nx-inp-multi", null, false);
+                bindInp("nx-inp-viewonce", null, true);
+                bindInp("nx-inp-bypass", "image", false);
+                bindInp("nx-inp-video", "video", false);
+                bindInp("nx-inp-camera", "image", false);
+                bindInp("nx-inp-pdf", "pdf", false);
             }
 
             let menu = document.getElementById("nx-whatsapp-plus-sheet");
@@ -1873,24 +2183,27 @@
                 menu = document.createElement("div");
                 menu.id = "nx-whatsapp-plus-sheet";
                 menu.style.cssText =
-                    "display:none; position:fixed; bottom:70px; right:16px; width:265px; background:#0f172a; border:1.5px solid #10b981; border-radius:20px; padding:10px; z-index:100020; box-shadow:0 18px 45px rgba(0,0,0,0.92); color:#fff;";
+                    "display:none; position:fixed; bottom:70px; right:16px; width:275px; background:#0f172a; border:1.5px solid #10b981; border-radius:20px; padding:10px; z-index:100020; box-shadow:0 18px 45px rgba(0,0,0,0.92); color:#fff;";
 
                 menu.innerHTML = `
                     <div style="font-size:10px; font-weight:900; color:#34d399; padding:2px 6px 6px; text-transform:uppercase; letter-spacing:0.6px;">⚡ Nexus Official Chat Tools</div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:12px;">
-                        <button type="button" data-act="multi-photo" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#fff; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer;">
+                        <label for="nx-inp-multi" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#fff; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer; margin:0;">
                             <span>🖼️</span> <span>Photos (Multi)</span>
-                        </button>
-                        <button type="button" data-act="view-once" style="padding:10px; border-radius:12px; background:linear-gradient(135deg,#0c4a6e,#1e3a8a); border:1px solid #38bdf8; color:#e0f2fe; font-weight:800; display:flex; align-items:center; gap:7px; cursor:pointer;">
+                        </label>
+                        <label for="nx-inp-viewonce" style="padding:10px; border-radius:12px; background:linear-gradient(135deg,#0c4a6e,#1e3a8a); border:1px solid #38bdf8; color:#e0f2fe; font-weight:800; display:flex; align-items:center; gap:7px; cursor:pointer; margin:0;">
                             <span style="width:16px; height:16px; border-radius:50%; background:#38bdf8; color:#020617; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:900;">1</span>
                             <span>View Once</span>
-                        </button>
-                        <button type="button" data-act="video" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#38bdf8; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer;">
+                        </label>
+                        <label for="nx-inp-bypass" style="grid-column:span 2; padding:10px; border-radius:12px; background:rgba(16,185,129,0.14); border:1px dashed #10b981; color:#34d399; font-weight:800; display:flex; align-items:center; justify-content:center; gap:7px; cursor:pointer; margin:0;">
+                            <span>📂</span> <span>Direct Gallery / Files (No Permission Needed)</span>
+                        </label>
+                        <label for="nx-inp-video" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#38bdf8; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer; margin:0;">
                             <span>🎬</span> <span>Video (50MB)</span>
-                        </button>
-                        <button type="button" data-act="camera" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#fff; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer;">
+                        </label>
+                        <label for="nx-inp-camera" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#fff; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer; margin:0;">
                             <span>📸</span> <span>Camera Pic</span>
-                        </button>
+                        </label>
                         <button type="button" data-act="voice" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#fb7185; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer;">
                             <span>🎤</span> <span>Voice Note</span>
                         </button>
@@ -1900,59 +2213,24 @@
                         <button type="button" data-act="video-call" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#818cf8; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer;">
                             <span>📹</span> <span>Video Call</span>
                         </button>
-                        <button type="button" data-act="pdf" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#fbbf24; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer;">
+                        <label for="nx-inp-pdf" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#fbbf24; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer; margin:0;">
                             <span>📄</span> <span>Send PDF</span>
-                        </button>
+                        </label>
                     </div>
                 `;
 
                 document.body.appendChild(menu);
 
-                menu.onclick = (ev) => {
+                menu.addEventListener("click", (ev) => {
+                    ev.stopPropagation();
                     const b = ev.target.closest("button[data-act]");
                     if (!b) return;
-                    ev.stopPropagation();
                     menu.style.display = "none";
                     const act = b.getAttribute("data-act");
-
-                    if (act === "multi-photo") {
-                        pendingViewOnceFlag = false;
-                        multiPicker.accept = "image/*";
-                        multiPicker.multiple = true;
-                        multiPicker.removeAttribute("capture");
-                        multiPicker.click();
-                    } else if (act === "view-once") {
-                        pendingViewOnceFlag = true;
-                        multiPicker.accept = "image/*,video/*";
-                        multiPicker.multiple = false;
-                        multiPicker.removeAttribute("capture");
-                        multiPicker.click();
-                    } else if (act === "video") {
-                        pendingViewOnceFlag = false;
-                        multiPicker.accept = "video/mp4,video/webm,video/*";
-                        multiPicker.multiple = false;
-                        multiPicker.removeAttribute("capture");
-                        multiPicker.click();
-                    } else if (act === "camera") {
-                        pendingViewOnceFlag = false;
-                        multiPicker.accept = "image/*";
-                        multiPicker.multiple = false;
-                        multiPicker.setAttribute("capture", "environment");
-                        multiPicker.click();
-                    } else if (act === "voice") {
-                        toggleVoiceNote();
-                    } else if (act === "audio-call") {
-                        startCleanAudioCall(false);
-                    } else if (act === "video-call") {
-                        startCleanAudioCall(true);
-                    } else if (act === "pdf") {
-                        pendingViewOnceFlag = false;
-                        multiPicker.accept = "application/pdf";
-                        multiPicker.multiple = false;
-                        multiPicker.removeAttribute("capture");
-                        multiPicker.click();
-                    }
-                };
+                    if (act === "voice") toggleVoiceNote();
+                    else if (act === "audio-call") startCleanAudioCall(false);
+                    else if (act === "video-call") startCleanAudioCall(true);
+                });
 
                 document.addEventListener("click", () => {
                     menu.style.display = "none";
@@ -1965,6 +2243,7 @@
         document.addEventListener(
             "click",
             (e) => {
+                if (!isGoogleVerifiedAccount()) return;
                 const btn = e.target.closest("button, span, div, label");
                 if (!btn) return;
                 const r = btn.getBoundingClientRect();
@@ -1981,7 +2260,7 @@
         );
 
         // ========================================================================
-        // 8. UI CLEANER, POST 50MB VIDEO & LIVE ROOM STREAM SYNC
+        // 6. UI CLEANER, POST 50MB VIDEO & LIVE ROOM STREAM SYNC
         // ========================================================================
         function periodicMaintain() {
             document.querySelectorAll("#tab-home div").forEach((card) => {
