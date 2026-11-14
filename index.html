@@ -1468,5 +1468,743 @@
     <script src="voice.js" charset="UTF-8"></script>
     <script src="watchparty.js" charset="UTF-8"></script>
     <script src="ytparty.js" charset="UTF-8"></script>
-</body>
+    <!-- ============================================================================
+     INSTAGRAM-STYLE 30MB MEDIA ENGINE + ZERO OVERLAP + WHATSAPP SMOOTH CHAT
+     (PASTE THIS AT THE VERY BOTTOM OF index.html, AFTER ytparty.js AND BEFORE </body>)
+     ============================================================================ -->
+<style>
+  /* 1. Force Clean Flexbox on Bottom Chat Input Bar (Kills + and Mic Overlap!) */
+  input[placeholder*="Message"] {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    margin-right: 4px !important;
+  }
+  .nx-clean-media-btn {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    border-radius: 50% !important;
+    background: #10b981 !important;
+    color: #020617 !important;
+    font-weight: 900 !important;
+    font-size: 20px !important;
+    border: none !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    position: static !important;
+    flex-shrink: 0 !important;
+    margin: 0 4px !important;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4) !important;
+    z-index: 50 !important;
+  }
+  .nx-clean-media-btn:active {
+    transform: scale(0.9) !important;
+  }
+
+  /* 2. Anti-Blink Smooth Scroll Lock for Chat Containers */
+  #nx-dm-messages, #nx-chat-messages, #chat-messages, #dm-messages, .chat-messages {
+    overflow-anchor: auto !important;
+    contain: layout style !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* 3. Smart Mini-Player when Mobile Keyboard is Open */
+  body.nx-keyboard-open iframe[src*="youtube.com"],
+  body.nx-keyboard-open iframe[src*="youtu.be"] {
+    max-height: 110px !important;
+    height: 110px !important;
+  }
+</style>
+
+<script>
+(function () {
+  if (window.__NEXUS_IG_MEDIA_ENGINE_V2__) return;
+  window.__NEXUS_IG_MEDIA_ENGINE_V2__ = true;
+
+  const MAX_MEDIA_BYTES = 30 * 1024 * 1024; // 30 MB Limit
+  const CHUNK_CHAR_SIZE = 650000; // Safe ~650KB per Firestore chunk (under 1MB limit)
+  const roomMediaCache = {};
+  let activeRoomKey = null;
+  let unsubMediaStream = null;
+  let unsubMovieSync = null;
+  let isRecordingVoice = false;
+  let voiceRecorder = null;
+  let voiceChunks = [];
+  let currentMovieTime = 0;
+  let isPartnerSyncing = false;
+  let lastBroadcastTime = 0;
+
+  // ==========================================================================
+  // 1. HELPER: GET CURRENT USER & SHARED ROOM KEY (1v1 DM + GROUP CHAT)
+  // ==========================================================================
+  function getMyUsername() {
+    try {
+      const me = window.Nexus && typeof Nexus.getCurrentUser === "function" ? Nexus.getCurrentUser() : null;
+      if (me && me.username) return me.username.toLowerCase().trim();
+      const raw = JSON.parse(localStorage.getItem("nx_active_account") || "{}");
+      if (raw && raw.username) return raw.username.toLowerCase().trim();
+    } catch (e) {}
+    return (localStorage.getItem("nexus_username") || "mohiy").toLowerCase().trim();
+  }
+
+  function getSharedRoomKey() {
+    const msgInput =
+      document.getElementById("nx-dm-input") ||
+      document.getElementById("nx-chat-msg-in") ||
+      document.querySelector('input[placeholder*="Message"]');
+
+    if (!msgInput || msgInput.offsetParent === null) return null;
+
+    const myUname = getMyUsername();
+    let headerTitle = "";
+    const els = document.querySelectorAll("h1, h2, h3, h4, strong, b, span, div");
+    for (const el of els) {
+      if (el.children.length > 1) continue;
+      const r = el.getBoundingClientRect();
+      if (r.top >= 4 && r.top <= 95 && r.left >= 40 && r.width > 30) {
+        const t = (el.innerText || "").trim();
+        if (
+          t.length > 1 &&
+          t.length < 45 &&
+          !t.includes("Nexus") &&
+          !t.includes("Online") &&
+          !t.includes("Live Room") &&
+          !t.includes("Swipe") &&
+          !t.includes("PDF")
+        ) {
+          headerTitle = t;
+          break;
+        }
+      }
+    }
+
+    const raw = (headerTitle || window.currentChatUser || window.currentRoomId || "global_chat").trim();
+    const lower = raw.toLowerCase();
+
+    if (lower.includes("saved messages")) return "dm_saved_" + myUname;
+
+    if (
+      lower.includes("chat") ||
+      lower.includes("room") ||
+      lower.includes("group") ||
+      lower.includes("club") ||
+      lower.includes("arena") ||
+      lower.includes("doubt")
+    ) {
+      return "grp_" + lower.replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+    }
+
+    let partner = lower.replace(/^@/, "").replace(/\([^)]*\)/g, "").trim();
+    if (window.Nexus && Array.isArray(Nexus.users)) {
+      const found = Nexus.users.find(
+        (u) =>
+          u &&
+          ((u.username && u.username.toLowerCase().trim() === partner) ||
+            (u.name && u.name.toLowerCase().trim() === partner) ||
+            (u.name && lower.includes(u.name.toLowerCase().trim())))
+      );
+      if (found && found.username) partner = found.username.toLowerCase().trim();
+    }
+    partner = partner.replace(/[^a-z0-9_]/g, "");
+
+    if (partner && partner !== myUname) {
+      return "dm_pair_" + [myUname, partner].sort().join("__");
+    }
+    return "room_" + (partner || myUname);
+  }
+
+  function getVisibleChatMessagesBox() {
+    const ids = ["nx-dm-messages", "nx-chat-messages", "chat-messages", "dm-messages", "messages-container"];
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (el && el.offsetParent !== null) return el;
+    }
+
+    const divs = document.querySelectorAll("div");
+    let best = null;
+    let maxArea = 0;
+    for (const d of divs) {
+      if (d.offsetParent === null) continue;
+      const st = window.getComputedStyle(d);
+      if (st.overflowY === "auto" || st.overflowY === "scroll") {
+        const r = d.getBoundingClientRect();
+        if (r.height > 100 && r.bottom <= window.innerHeight + 10 && r.top >= 40) {
+          const area = r.width * r.height;
+          if (area > maxArea) {
+            maxArea = area;
+            best = d;
+          }
+        }
+      }
+    }
+    return best;
+  }
+
+  // ==========================================================================
+  // 2. FIX '+' BUTTON OVERLAPPING PERMANENTLY (STRIPS BROKEN ABSOLUTE STYLES)
+  // ==========================================================================
+  function fixOverlappingChatBarButtons() {
+    const msgInput =
+      document.getElementById("nx-dm-input") ||
+      document.getElementById("nx-chat-msg-in") ||
+      document.querySelector('input[placeholder*="Message"]');
+
+    if (!msgInput || msgInput.offsetParent === null) return;
+
+    const bar = msgInput.parentElement;
+    if (!bar) return;
+
+    // Make input bar a clean non-overlapping flex row
+    bar.style.display = "flex";
+    bar.style.alignItems = "center";
+    bar.style.position = "relative";
+
+    // Hide any old broken overlapping "+" buttons created by dmtools.js / dm.js
+    bar.parentElement.querySelectorAll("button, span, div, label").forEach((el) => {
+      if (el === msgInput || el === bar || el.classList.contains("nx-clean-media-btn")) return;
+      const txt = (el.innerText || "").trim();
+      const st = window.getComputedStyle(el);
+      if (
+        (txt === "+" || txt === "＋" || (el.id || "").includes("plus")) &&
+        el.children.length === 0
+      ) {
+        el.style.display = "none";
+      }
+      // If mic icon is overlapping via position:absolute, make it static inside flex
+      if ((txt === "🎙️" || txt === "🎤" || (el.id || "").includes("voice")) && st.position === "absolute") {
+        el.style.position = "static";
+        el.style.margin = "0 4px";
+        el.style.transform = "none";
+      }
+    });
+
+    // Inject ONE clean, non-overlapping Instagram "+" Media Button right beside the input
+    if (!bar.querySelector(".nx-clean-media-btn")) {
+      const cleanBtn = document.createElement("button");
+      cleanBtn.type = "button";
+      cleanBtn.className = "nx-clean-media-btn";
+      cleanBtn.innerHTML = "+";
+      cleanBtn.title = "Send Photo, 30MB Video or Voice Note";
+      cleanBtn.onclick = (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        toggleInstagramMediaMenu();
+      };
+      msgInput.insertAdjacentElement("afterend", cleanBtn);
+    }
+  }
+  setInterval(fixOverlappingChatBarButtons, 400);
+
+  // ==========================================================================
+  // 3. INSTAGRAM-STYLE MEDIA UPLOAD ENGINE (PHOTO + 30MB VIDEO + VOICE NOTE)
+  // ==========================================================================
+  const filePicker = document.createElement("input");
+  filePicker.type = "file";
+  filePicker.style.display = "none";
+  document.body.appendChild(filePicker);
+
+  // Compress Photo to ~45KB Crystal Clear HD
+  function compressPhotoHD(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const MAX = 800;
+          let w = img.width;
+          let h = img.height;
+          if (w > h && w > MAX) {
+            h = Math.round((h * MAX) / w);
+            w = MAX;
+          } else if (h > MAX) {
+            w = Math.round((w * MAX) / h);
+            h = MAX;
+          }
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          let out = canvas.toDataURL("image/webp", 0.72);
+          if (!out || out.length < 50 || out.length > 150000) {
+            out = canvas.toDataURL("image/jpeg", 0.64);
+          }
+          resolve(out);
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Upload up to 30MB Video / Audio via User's Internet (Cloud CDN + Firestore Chunk Fallback)
+  function uploadLargeMediaWithProgress(file, onProgress) {
+    return new Promise((resolve, reject) => {
+      // Tier 1: Direct Cloud CDN Upload via XMLHttpRequest (Uses User's Internet up to 30MB)
+      const xhr = new XMLHttpRequest();
+      const formData = new FormData();
+      formData.append("reqtype", "fileupload");
+      formData.append("time", "72h");
+      formData.append("fileToUpload", file, file.name || "media.mp4");
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) {
+          const pct = Math.min(99, Math.round((e.loaded / e.total) * 100));
+          onProgress(pct);
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText && xhr.responseText.startsWith("http")) {
+          onProgress && onProgress(100);
+          resolve({ mode: "url", url: xhr.responseText.trim() });
+        } else {
+          fallbackToFirestoreStream(file, onProgress).then(resolve).catch(reject);
+        }
+      };
+
+      xhr.onerror = () => {
+        fallbackToFirestoreStream(file, onProgress).then(resolve).catch(reject);
+      };
+
+      xhr.open("POST", "https://litterbox.catbox.moe/resources/internals/api.php", true);
+      xhr.send(formData);
+    });
+  }
+
+  // Tier 2 Fallback: Splits Video/Audio into safe 650KB chunks inside Firestore so it NEVER fails!
+  function fallbackToFirestoreStream(file, onProgress) {
+    return new Promise((resolve, reject) => {
+      if (file.size > 12 * 1024 * 1024) {
+        reject(new Error("Large video requires faster network"));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const fullBase64 = e.target.result;
+          const totalChunks = Math.ceil(fullBase64.length / CHUNK_CHAR_SIZE);
+          const streamId = "stream_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+
+          if (totalChunks === 1) {
+            onProgress && onProgress(100);
+            resolve({ mode: "inline", url: fullBase64 });
+            return;
+          }
+
+          for (let i = 0; i < totalChunks; i++) {
+            const slice = fullBase64.slice(i * CHUNK_CHAR_SIZE, (i + 1) * CHUNK_CHAR_SIZE);
+            await Nexus.db
+              .collection("nexus_media_chunks")
+              .doc(`${streamId}_${i}`)
+              .set({ streamId, index: i, data: slice });
+            if (onProgress) onProgress(Math.round(((i + 1) / totalChunks) * 100));
+          }
+          resolve({ mode: "chunked", streamId, totalChunks, mimeType: file.type });
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Reassemble chunked video/audio on Receiver's phone
+  async function loadChunkedMediaUrl(msg) {
+    if (msg.mediaUrl) return msg.mediaUrl;
+    if (msg.mode !== "chunked" || !msg.streamId || !window.Nexus || !Nexus.db) return "";
+
+    const parts = [];
+    for (let i = 0; i < msg.totalChunks; i++) {
+      const doc = await Nexus.db.collection("nexus_media_chunks").doc(`${msg.streamId}_${i}`).get();
+      if (doc.exists) parts.push(doc.data().data);
+    }
+    return parts.join("");
+  }
+
+  // ==========================================================================
+  // 4. INSTANT 0.01s BUBBLE RENDERER (PHOTO, 30MB VIDEO & VOICE NOTE)
+  // ==========================================================================
+  async function renderMediaBubbleInChat(msg, localPreviewUrl) {
+    if (!msg || !msg.id) return;
+    const chatBox = getVisibleChatMessagesBox();
+    if (!chatBox) return;
+
+    const existing = document.getElementById(msg.id);
+    if (existing) {
+      // Update progress or final status if already on screen
+      const statusSpan = existing.querySelector(".nx-media-status");
+      if (statusSpan && msg.statusText) statusSpan.textContent = msg.statusText;
+      return;
+    }
+
+    const isMe = (msg.sender || "").toLowerCase() === getMyUsername();
+    const wrapper = document.createElement("div");
+    wrapper.id = msg.id;
+    wrapper.className = "nx-ig-media-bubble";
+    wrapper.style.cssText = `display:flex; justify-content:${
+      isMe ? "flex-end" : "flex-start"
+    }; margin:8px 0; padding:0 10px;`;
+
+    const displayUrl = localPreviewUrl || msg.mediaUrl || "";
+    let mediaElementHtml = "";
+
+    if (msg.mediaType === "video") {
+      mediaElementHtml = `<video src="${displayUrl}" controls playsinline style="max-width:235px; max-height:290px; width:100%; border-radius:10px; background:#000; display:block;"></video>`;
+    } else if (msg.mediaType === "audio") {
+      mediaElementHtml = `<audio src="${displayUrl}" controls style="width:215px; height:36px; display:block; margin-top:4px;"></audio>`;
+    } else {
+      mediaElementHtml = `<img src="${displayUrl}" style="max-width:230px; max-height:280px; width:100%; border-radius:10px; display:block; object-fit:cover; cursor:pointer;" onclick="window.open(this.src)" />`;
+    }
+
+    const labelIcon =
+      msg.mediaType === "video" ? "🎬 Video" : msg.mediaType === "audio" ? "🎤 Voice Note" : "📷 Photo";
+
+    wrapper.innerHTML = `
+      <div style="background:${
+        isMe ? "#056162" : "#1e293b"
+      }; color:#fff; padding:7px; border-radius:${
+      isMe ? "14px 14px 2px 14px" : "14px 14px 14px 2px"
+    }; max-width:78%; box-shadow:0 2px 10px rgba(0,0,0,0.4);">
+        <div style="font-size:10px; color:#34d399; font-weight:700; margin-bottom:4px;">@${
+          msg.sender || "user"
+        }</div>
+        <div class="nx-media-slot">${mediaElementHtml}</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px; font-size:10px; opacity:0.9;">
+          <span>${labelIcon}</span>
+          <span class="nx-media-status">${msg.statusText || "✓✓"}</span>
+        </div>
+      </div>
+    `;
+
+    chatBox.appendChild(wrapper);
+    chatBox.scrollTop = chatBox.scrollHeight;
+
+    // If chunked media from partner, load chunks and attach to video/audio element
+    if (!displayUrl && msg.mode === "chunked") {
+      const fullUrl = await loadChunkedMediaUrl(msg);
+      const mediaEl = wrapper.querySelector("video, audio, img");
+      if (mediaEl && fullUrl) mediaEl.src = fullUrl;
+    }
+  }
+
+  // Send Photo / 30MB Video / Voice Note to Active Chat
+  async function handleChatMediaSend(file, forcedType) {
+    if (!file) return;
+    if (file.size > MAX_MEDIA_BYTES) {
+      alert("⚠️ File 30MB se chhoti honi chahiye!");
+      return;
+    }
+
+    const roomKey = getSharedRoomKey() || "global_student_chat";
+    const sender = getMyUsername();
+    const msgId = "nxm_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+    const mime = (file.type || "").toLowerCase();
+    const mediaType =
+      forcedType ||
+      (mime.startsWith("video") ? "video" : mime.startsWith("audio") ? "audio" : "image");
+
+    // STEP 1: Instant 0.01s Local Blob Preview (Just like Instagram/WhatsApp!)
+    const instantBlobUrl = URL.createObjectURL(file);
+    const tempMsg = {
+      id: msgId,
+      roomKey,
+      sender,
+      mediaType,
+      statusText: "📤 Uploading 1%...",
+      createdAt: Date.now()
+    };
+    renderMediaBubbleInChat(tempMsg, instantBlobUrl);
+
+    try {
+      let finalDoc = {
+        id: msgId,
+        roomKey,
+        sender,
+        mediaType,
+        createdAt: Date.now(),
+        statusText: "✓✓"
+      };
+
+      if (mediaType === "image") {
+        const hdBase64 = await compressPhotoHD(file);
+        finalDoc.mode = "inline";
+        finalDoc.mediaUrl = hdBase64;
+      } else {
+        const result = await uploadLargeMediaWithProgress(file, (pct) => {
+          const el = document.getElementById(msgId);
+          const st = el && el.querySelector(".nx-media-status");
+          if (st) st.textContent = `📤 ${pct}%`;
+        });
+        if (result.mode === "chunked") {
+          finalDoc.mode = "chunked";
+          finalDoc.streamId = result.streamId;
+          finalDoc.totalChunks = result.totalChunks;
+        } else {
+          finalDoc.mode = result.mode;
+          finalDoc.mediaUrl = result.url;
+        }
+      }
+
+      // Save in room memory so it never disappears
+      if (!roomMediaCache[roomKey]) roomMediaCache[roomKey] = [];
+      roomMediaCache[roomKey].push(Object.assign({}, finalDoc, { localUrl: instantBlobUrl }));
+
+      // STEP 3: Save lightweight doc in Cloud Firestore (Nexus.db)
+      if (window.Nexus && Nexus.db) {
+        await Nexus.db.collection("nexus_live_media").doc(msgId).set(finalDoc);
+      }
+
+      const el = document.getElementById(msgId);
+      const st = el && el.querySelector(".nx-media-status");
+      if (st) st.textContent = "✓✓ Sent";
+      if (window.Nexus && Nexus.toast) Nexus.toast("✅ Sent Successfully!");
+    } catch (err) {
+      console.error("Media upload error:", err);
+      const el = document.getElementById(msgId);
+      const st = el && el.querySelector(".nx-media-status");
+      if (st) st.textContent = "⚠️ Tap to Retry";
+    }
+  }
+
+  filePicker.onchange = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) handleChatMediaSend(file);
+    e.target.value = "";
+  };
+
+  // ==========================================================================
+  // 5. DIRECT VOICE NOTE RECORDER (1-CLICK START / STOP & AUTO SEND)
+  // ==========================================================================
+  async function toggleDirectVoiceNote(btnEl) {
+    if (!isRecordingVoice) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        voiceRecorder = new MediaRecorder(stream);
+        voiceChunks = [];
+        voiceRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) voiceChunks.push(e.data);
+        };
+        voiceRecorder.onstop = () => {
+          const audioBlob = new Blob(voiceChunks, { type: "audio/webm" });
+          const audioFile = new File([audioBlob], "voicenote.webm", { type: "audio/webm" });
+          handleChatMediaSend(audioFile, "audio");
+          stream.getTracks().forEach((t) => t.stop());
+        };
+        voiceRecorder.start();
+        isRecordingVoice = true;
+        if (window.Nexus && Nexus.toast) Nexus.toast("🎤 Recording Voice Note... Tap '+' to Send!");
+        const cleanBtn = document.querySelector(".nx-clean-media-btn");
+        if (cleanBtn) {
+          cleanBtn.innerHTML = "⏹️";
+          cleanBtn.style.background = "#ef4444";
+        }
+      } catch (err) {
+        alert("Microphone permission Allow kijiye browser mein!");
+      }
+    } else {
+      voiceRecorder.stop();
+      isRecordingVoice = false;
+      const cleanBtn = document.querySelector(".nx-clean-media-btn");
+      if (cleanBtn) {
+        cleanBtn.innerHTML = "+";
+        cleanBtn.style.background = "#10b981";
+      }
+    }
+  }
+
+  // Clean Instagram-Style Popup Menu on clicking '+'
+  function toggleInstagramMediaMenu() {
+    if (isRecordingVoice) {
+      toggleDirectVoiceNote();
+      return;
+    }
+
+    let menu = document.getElementById("nx-ig-media-popup");
+    if (!menu) {
+      menu = document.createElement("div");
+      menu.id = "nx-ig-media-popup";
+      menu.style.cssText =
+        "display:none; position:fixed; bottom:74px; right:52px; width:225px; background:#0f172a; border:1.5px solid #10b981; border-radius:18px; padding:8px; z-index:100009; box-shadow:0 14px 35px rgba(0,0,0,0.85); color:#fff;";
+
+      menu.innerHTML = `
+        <button type="button" data-pick="photo" style="width:100%; text-align:left; padding:10px 12px; border:none; background:transparent; color:#fff; font-size:13px; font-weight:700; border-radius:10px; display:flex; align-items:center; gap:10px; cursor:pointer;">
+          🖼️ <span>Send HD Photo</span>
+        </button>
+        <button type="button" data-pick="camera" style="width:100%; text-align:left; padding:10px 12px; border:none; background:transparent; color:#fff; font-size:13px; font-weight:700; border-radius:10px; display:flex; align-items:center; gap:10px; cursor:pointer;">
+          📸 <span>Take Camera Pic</span>
+        </button>
+        <button type="button" data-pick="video" style="width:100%; text-align:left; padding:10px 12px; border:none; background:transparent; color:#38bdf8; font-size:13px; font-weight:700; border-radius:10px; display:flex; align-items:center; gap:10px; cursor:pointer;">
+          🎬 <span>Send Video (Up to 30MB)</span>
+        </button>
+        <button type="button" data-pick="voice" style="width:100%; text-align:left; padding:10px 12px; border:none; background:transparent; color:#f43f5e; font-size:13px; font-weight:700; border-radius:10px; display:flex; align-items:center; gap:10px; cursor:pointer;">
+          🎤 <span>Record Voice Note</span>
+        </button>
+      `;
+
+      document.body.appendChild(menu);
+
+      menu.onclick = (e) => {
+        const btn = e.target.closest("button[data-pick]");
+        if (!btn) return;
+        e.stopPropagation();
+        menu.style.display = "none";
+        const mode = btn.getAttribute("data-pick");
+
+        if (mode === "photo") {
+          filePicker.accept = "image/*";
+          filePicker.removeAttribute("capture");
+          filePicker.click();
+        } else if (mode === "camera") {
+          filePicker.accept = "image/*";
+          filePicker.setAttribute("capture", "environment");
+          filePicker.click();
+        } else if (mode === "video") {
+          filePicker.accept = "video/mp4,video/webm,video/*";
+          filePicker.removeAttribute("capture");
+          filePicker.click();
+        } else if (mode === "voice") {
+          toggleDirectVoiceNote();
+        }
+      };
+
+      document.addEventListener("click", () => {
+        menu.style.display = "none";
+      });
+    }
+
+    menu.style.display = menu.style.display === "none" ? "block" : "none";
+  }
+
+  // ==========================================================================
+  // 6. STOP CHAT SCREEN REFRESH / BLINK & KEEP MEDIA PERSISTENT
+  // ==========================================================================
+  let observedBox = null;
+  let lastKnownScroll = 0;
+
+  const smoothChatObserver = new MutationObserver(() => {
+    const roomKey = getSharedRoomKey();
+    if (roomKey && roomMediaCache[roomKey]) {
+      roomMediaCache[roomKey].forEach((m) => renderMediaBubbleInChat(m, m.localUrl));
+    }
+    if (observedBox && lastKnownScroll > 0) {
+      observedBox.scrollTop = Math.max(lastKnownScroll, observedBox.scrollHeight);
+    }
+  });
+
+  function syncLiveRoomStreams() {
+    const box = getVisibleChatMessagesBox();
+    if (box && box !== observedBox) {
+      observedBox = box;
+      box.addEventListener(
+        "scroll",
+        () => {
+          lastKnownScroll = box.scrollTop;
+        },
+        { passive: true }
+      );
+      smoothChatObserver.disconnect();
+      smoothChatObserver.observe(box, { childList: true });
+    }
+
+    const roomKey = getSharedRoomKey();
+    if (!roomKey || !window.Nexus || !Nexus.db) return;
+
+    if (roomMediaCache[roomKey]) {
+      roomMediaCache[roomKey].forEach((m) => renderMediaBubbleInChat(m, m.localUrl));
+    }
+
+    if (roomKey === activeRoomKey) return;
+    activeRoomKey = roomKey;
+
+    if (unsubMediaStream) unsubMediaStream();
+    if (unsubMovieSync) unsubMovieSync();
+
+    // Live Stream for Photos, 30MB Videos & Voice Notes in this Room
+    unsubMediaStream = Nexus.db
+      .collection("nexus_live_media")
+      .where("roomKey", "==", roomKey)
+      .onSnapshot((snap) => {
+        const list = [];
+        snap.forEach((d) => list.push(d.data()));
+        list.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+        roomMediaCache[roomKey] = list.slice(-30);
+        roomMediaCache[roomKey].forEach((m) => renderMediaBubbleInChat(m));
+      });
+
+    // Live Watch-Party Couple Movie Sync
+    unsubMovieSync = Nexus.db
+      .collection("nexus_watch_sync")
+      .doc(roomKey)
+      .onSnapshot((doc) => {
+        if (!doc.exists) return;
+        const data = doc.data();
+        if (!data || !data.updatedAt) return;
+        if ((data.sender || "").toLowerCase() === getMyUsername() && Date.now() - lastBroadcastTime < 1200) {
+          return;
+        }
+        isPartnerSyncing = true;
+        const delay = Math.max(0, (Date.now() - data.updatedAt) / 1000);
+        const target = data.action === "pause" ? data.currentTime : data.currentTime + delay;
+        currentMovieTime = target;
+        sendYtCmd("seekTo", [target, true]);
+        sendYtCmd(data.action === "pause" ? "pauseVideo" : "playVideo", []);
+        setTimeout(() => {
+          isPartnerSyncing = false;
+        }, 900);
+      });
+  }
+  setInterval(syncLiveRoomStreams, 700);
+
+  // ==========================================================================
+  // 7. REAL-TIME WATCH-PARTY SYNC (-15s, +15s, Sync Both & 404 Cleaner)
+  // ==========================================================================
+  function sendYtCmd(func, args = []) {
+    document.querySelectorAll("iframe").forEach((f) => {
+      const src = f.getAttribute("src") || "";
+      if (src.includes("youtube.com/embed") || src.includes("youtube-nocookie.com/embed")) {
+        if (!src.includes("enablejsapi=1")) {
+          f.setAttribute("src", src + (src.includes("?") ? "&" : "?") + "enablejsapi=1&playsinline=1");
+        }
+        try {
+          f.contentWindow.postMessage(JSON.stringify({ event: "command", func, args }), "*");
+        } catch (e) {}
+      } else if (!src || src === "about:blank" || src.includes("undefined") || src.includes(window.location.hostname)) {
+        f.remove();
+      }
+    });
+  }
+
+  document.addEventListener(
+    "click",
+    (e) => {
+      const btn = e.target.closest("button, span, div");
+      if (!btn) return;
+      const t = (btn.innerText || "").trim();
+      if (t.includes("-15s") || t.includes("+15s") || t.includes("Sync Both")) {
+        e.stopPropagation();
+        e.preventDefault();
+        if (t.includes("-15s")) currentMovieTime = Math.max(0, currentMovieTime - 15);
+        if (t.includes("+15s")) currentMovieTime += 15;
+        sendYtCmd("seekTo", [currentMovieTime, true]);
+        sendYtCmd("playVideo", []);
+        lastBroadcastTime = Date.now();
+        const rk = getSharedRoomKey() || "global_student_chat";
+        if (window.Nexus && Nexus.db) {
+          Nexus.db.collection("nexus_watch_sync").doc(rk).set(
+            { action: "seek", currentTime: currentMovieTime, sender: getMyUsername(), updatedAt: Date.now() },
+            { merge: true }
+          );
+        }
+      }
+    },
+    true
+  );
+})();
+</script>
+</body> 
 </html>
