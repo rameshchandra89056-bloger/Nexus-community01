@@ -6,19 +6,29 @@
     <meta name="theme-color" content="#0f172a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Nexus Community">
+    <meta name="apple-mobile-web-app-title" content="Nexus">
     <title>Nexus Community</title>
+
+    <!-- Zero Stale Cache Meta -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+
     <meta name="google-site-verification" content="St-XEDZblKFItxe1p0K3Wrinq22wuVgi0_cSYmJ4d-4" />
     <meta name="description" content="Nexus Community is an online community for students of all subjects and backgrounds to connect, communicate, share posts and ideas, and interact with fellow students.">
     <link rel="canonical" href="https://nexus-community01.vercel.app/">
     <link rel="manifest" href="manifest.json">
+
+    <!-- OFFICIAL NEXUS PERMANENT LOGO (Favicon & App Install Icon) -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Cdefs%3E%3ClinearGradient id='nxg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2310b981'/%3E%3Cstop offset='50%25' stop-color='%2306b6d4'/%3E%3Cstop offset='100%25' stop-color='%233b82f6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='120' height='120' rx='30' fill='%23090d16'/%3E%3Crect x='4' y='4' width='112' height='112' rx='27' fill='none' stroke='url(%23nxg)' stroke-width='5'/%3E%3Cpath d='M32 86V34h14l28 36V34h14v52H74L46 50v36H32z' fill='url(%23nxg)'/%3E%3Ccircle cx='94' cy='26' r='8' fill='%2310b981'/%3E%3C/svg%3E" />
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Cdefs%3E%3ClinearGradient id='nxg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2310b981'/%3E%3Cstop offset='50%25' stop-color='%2306b6d4'/%3E%3Cstop offset='100%25' stop-color='%233b82f6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='120' height='120' rx='30' fill='%23090d16'/%3E%3Crect x='4' y='4' width='112' height='112' rx='27' fill='none' stroke='url(%23nxg)' stroke-width='5'/%3E%3Cpath d='M32 86V34h14l28 36V34h14v52H74L46 50v36H32z' fill='url(%23nxg)'/%3E%3Ccircle cx='94' cy='26' r='8' fill='%2310b981'/%3E%3C/svg%3E" />
 
     <!-- Open Graph: Social Media Preview -->
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Nexus Community">
     <meta property="og:title" content="Nexus Community">
     <meta property="og:description" content="A community built for all students to connect, communicate, share posts and ideas, and interact with fellow students.">
-    <meta property="og:url" content="https://nexus-community01.netlify.app/">
+    <meta property="og:url" content="https://nexus-community01.vercel.app/">
 
     <!-- Twitter Preview -->
     <meta name="twitter:card" content="summary">
@@ -56,7 +66,7 @@
             };
         }
 
-        // 2. SILENT LIVE HOT-RELOAD & TYPING DRAFT PROTECTOR (Updates JS files without refreshing page!)
+        // 2. SILENT LIVE HOT-RELOAD & TYPING DRAFT PROTECTOR
         (function() {
             let currentAppVersion = null;
 
@@ -145,14 +155,24 @@
             z-index: 1000;
         }
         .nx-logo {
-            font-size: 22px;
-            font-weight: 800;
-            color: #60a5fa;
+            font-size: 21px;
+            font-weight: 900;
+            background: linear-gradient(90deg, #34d399, #38bdf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
             cursor: pointer;
             user-select: none;
+            letter-spacing: -0.3px;
+        }
+        .nx-official-emblem {
+            width: 30px;
+            height: 30px;
+            border-radius: 9px;
+            flex-shrink: 0;
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
         }
         .nx-live-dot {
             width: 8px;
@@ -317,13 +337,7 @@
         #nx-stories-bar::-webkit-scrollbar {
             display: none;
         }
-
-        /* ================= INSTAGRAM-STYLE UI, ZERO OVERLAP & SMOOTH CHAT ================= */
-        #nx-dm-messages, #nx-chat-messages, #chat-messages, #dm-messages {
-            overflow-anchor: auto !important;
-            scroll-behavior: auto !important;
-        }
-        /* Smart Mini-Theater Mode when Mobile Keyboard Opens */
+        /* Smart Mini-Theater when Keyboard is Open */
         body.nx-keyboard-open iframe[src*="youtube.com"],
         body.nx-keyboard-open iframe[src*="youtu.be"] {
             max-height: 112px !important;
@@ -336,7 +350,22 @@
 
     <header class="nx-header">
         <div class="nx-logo" id="nx-main-logo" onclick="Nexus.switchTab('tab-home')">
-            Nexus <span class="nx-live-dot" id="nx-offline-dot"></span>
+            <!-- Official Nexus Permanent Vector Emblem -->
+            <svg class="nx-official-emblem" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="nxLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#10b981"/>
+                        <stop offset="50%" stop-color="#06b6d4"/>
+                        <stop offset="100%" stop-color="#3b82f6"/>
+                    </linearGradient>
+                </defs>
+                <rect width="120" height="120" rx="28" fill="#090d16"/>
+                <rect x="4" y="4" width="112" height="112" rx="25" fill="none" stroke="url(#nxLogoGrad)" stroke-width="6"/>
+                <path d="M32 86V34h14l28 36V34h14v52H74L46 50v36H32z" fill="url(#nxLogoGrad)"/>
+                <circle cx="94" cy="26" r="8" fill="#10b981"/>
+            </svg>
+            <span>Nexus</span>
+            <span class="nx-live-dot" id="nx-offline-dot"></span>
         </div>
         <div class="nx-header-actions">
             <button type="button" class="nx-icon-btn" onclick="Nexus.openNotifications()">
@@ -420,6 +449,7 @@
 
         let lastUsersProfileHash = '';
 
+        // 100% COMPLETE NEXUS CORE ENGINE (SO NEW USERS SEE REAL DATABASE INSTANTLY WITHOUT REFRESH!)
         window.Nexus = {
             config: {
                 apiKey: "AIzaSyCKMUVSgImQ39LRuREmhqyd7NTyE-TNyrQ",
@@ -580,7 +610,6 @@
                 try {
                     if (!firebase.apps.length) firebase.initializeApp(this.config);
                     this.db = firebase.firestore();
-                    this.db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
                 } catch (e) {
                     return;
                 }
@@ -601,6 +630,7 @@
                     } catch(e) {}
                 }
 
+                // Live Accounts Stream
                 this.db.collection("nexus_accounts").onSnapshot(snap => {
                     this.cloudAccounts = [];
                     snap.forEach(d => this.cloudAccounts.push(d.data()));
@@ -617,9 +647,17 @@
                     }
                 });
 
+                // Live Real Posts Stream (Filters out old "refresh kar lain" dummy announcement automatically)
                 this.db.collection("nexus_real_posts").orderBy("createdAt", "desc").limit(50).onSnapshot(snap => {
                     this.posts = [];
-                    snap.forEach(d => { let p = d.data(); p.id = d.id; this.posts.push(p); });
+                    snap.forEach(d => {
+                        let p = d.data();
+                        p.id = d.id;
+                        const txt = String(p.content || p.text || '').toLowerCase();
+                        if (!txt.includes('website ko refresh kar lain') && !txt.includes('ek baar refresh')) {
+                            this.posts.push(p);
+                        }
+                    });
                     let ultraLightPosts = this.posts.slice(0, 25).map(p => Object.assign({}, p, {
                         image: (p.image && p.image.length > 90000) ? '' : p.image
                     }));
@@ -679,14 +717,20 @@
                 setTimeout(() => { t.style.display = 'none'; }, 2200);
             },
 
+            // UPGRADED: Supports BOTH Photos AND up to 50MB Videos natively in Post Modal & Chat!
             compressImage: function(file, maxW, quality, callback) {
+                if (!file) return;
+                if (file.type && file.type.startsWith('video/') && typeof window.__nxUploadVideoForPost === 'function') {
+                    window.__nxUploadVideoForPost(file, callback);
+                    return;
+                }
                 const reader = new FileReader();
                 reader.onload = e => {
                     const img = new Image();
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
                         let w = img.width, h = img.height;
-                        const maxDim = Math.min(maxW || 720, 720);
+                        const maxDim = Math.min(maxW || 780, 780);
                         if (w > h && w > maxDim) {
                             h = Math.round((h * maxDim) / w);
                             w = maxDim;
@@ -697,9 +741,9 @@
                         canvas.width = w;
                         canvas.height = h;
                         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                        let out = canvas.toDataURL('image/webp', quality || 0.68);
-                        if (!out || out.length < 50 || out.length > 140000) {
-                            out = canvas.toDataURL('image/jpeg', 0.6);
+                        let out = canvas.toDataURL('image/webp', quality || 0.7);
+                        if (!out || out.length < 50 || out.length > 150000) {
+                            out = canvas.toDataURL('image/jpeg', 0.64);
                         }
                         callback(out);
                     };
@@ -710,10 +754,16 @@
         };
 
         document.addEventListener('DOMContentLoaded', () => Nexus.init());
-        setTimeout(() => Nexus.init(), 150);
+        setTimeout(() => Nexus.init(), 100);
+        // Re-notify modules once all 30 scripts finish parsing so new users NEVER need to refresh!
+        window.addEventListener('load', () => {
+            setTimeout(() => Nexus.notifyAll(), 250);
+            setTimeout(() => Nexus.notifyAll(), 900);
+            setTimeout(() => Nexus.notifyAll(), 2000);
+        });
     </script>
 
-    <!-- ================= AAPKI SAARI 30 PURANI .JS FILES (100% INTACT) ================= -->
+    <!-- ================= ALL 30 ORIGINAL NEXUS .JS FILES (100% INTACT & UTF-8) ================= -->
     <script src="about.js" charset="UTF-8"></script>
     <script src="advance.js" charset="UTF-8"></script>
     <script src="ai.js" charset="UTF-8"></script>
@@ -746,19 +796,20 @@
     <script src="ytparty.js" charset="UTF-8"></script>
 
     <!-- ============================================================================
-         NEXUS V3 SURGICAL ENGINE (RUNS AFTER ALL 30 FILES - ZERO DUPLICATE '+' ICON):
-         1. NO second '+' button! Uses your single original '+' icon with 7 Pro Features
-         2. Strict Chat Container Match (Photos NEVER appear in DM Inbox user list!)
-         3. Chronological Message Order (New text messages ALWAYS appear BELOW photos)
-         4. Post Modal 50MB Video + Photo Upload Support (Plays in Home Feed like Reels)
-         5. Removes Home Page "Synced with @mohiy at 628:30" banner completely
+         NEXUS OFFICIAL WHATSAPP-GRADE ENGINE (RUNS AFTER ALL 30 FILES):
+         1. Zero-Blink Smart DOM Diffing on Chat Box (No screen refresh on sending messages!)
+         2. Complete '+' Power Menu: Multiple Photos, 50MB Video, Blue View-Once (1️⃣),
+            Voice Note, Clean HD Audio Call, Watch-Party & PDF
+         3. Tailwind CSS Framed Photos/Videos with Live Reactions (❤️🔥😂👍) & Delete (🗑️)
+         4. Kills Duplicate Watch-Party Box & Restores "Share Nexus" in Settings Tab
+         5. Full 50MB Video Upload in Post Modal & Home Feed Video Player
          ============================================================================ -->
     <script>
     (function () {
-        if (window.__NEXUS_V3_SURGICAL_ENGINE__) return;
-        window.__NEXUS_V3_SURGICAL_ENGINE__ = true;
+        if (window.__NEXUS_WHATSAPP_MASTER_V4__) return;
+        window.__NEXUS_WHATSAPP_MASTER_V4__ = true;
 
-        const MAX_VIDEO_BYTES = 50 * 1024 * 1024; // 50 MB Limit
+        const MAX_VIDEO_BYTES = 50 * 1024 * 1024; // 50 MB
         const CHUNK_CHAR_SIZE = 650000;
         const roomMediaMap = {};
         let activeRoomKey = null;
@@ -771,10 +822,6 @@
         let voiceRecorder = null;
         let voiceChunks = [];
 
-        // Remove any leftover toast or duplicate button from older patches
-        document.getElementById("nx-live-sync-toast")?.remove();
-        document.querySelectorAll(".nx-clean-media-btn").forEach((b) => b.remove());
-
         function getMyUsername() {
             try {
                 const me = window.Nexus && typeof Nexus.getCurrentUser === "function" ? Nexus.getCurrentUser() : null;
@@ -786,10 +833,9 @@
         }
 
         // ========================================================================
-        // 1. STRICT CHAT BOX DETECTOR (NEVER MATCHES DM INBOX USER LIST!)
+        // 1. STRICT OPEN CHAT CONTAINER & ZERO-BLINK WHATSAPP DOM DIFFING PATCH
         // ========================================================================
         function getStrictOpenChatMessagesBox() {
-            // A conversation is ONLY open if the bottom Message input bar is visible on screen
             const msgInput =
                 document.getElementById("nx-dm-input") ||
                 document.getElementById("nx-chat-msg-in") ||
@@ -797,21 +843,19 @@
 
             if (!msgInput || msgInput.offsetParent === null) return null;
 
-            // Check known message container IDs first
             const exactIds = ["nx-dm-messages", "nx-chat-messages", "chat-messages", "dm-messages"];
             for (const id of exactIds) {
                 const el = document.getElementById(id);
                 if (el && el.offsetParent !== null && !el.innerText.includes("Chat →")) {
+                    installZeroBlinkWhatsAppPatch(el);
                     return el;
                 }
             }
 
-            // Walk up from msgInput to find its sibling scrollable messages area
             let parent = msgInput.parentElement;
             while (parent && parent !== document.body) {
-                const children = parent.children;
-                for (let i = 0; i < children.length; i++) {
-                    const child = children[i];
+                for (let i = 0; i < parent.children.length; i++) {
+                    const child = parent.children[i];
                     if (child.contains(msgInput)) continue;
                     const st = window.getComputedStyle(child);
                     if (
@@ -820,6 +864,7 @@
                         !child.innerText.includes("Chat →") &&
                         !child.innerText.includes("Save private notes")
                     ) {
+                        installZeroBlinkWhatsAppPatch(child);
                         return child;
                     }
                 }
@@ -828,59 +873,92 @@
             return null;
         }
 
-        // Cleanup any accidental photo bubble that ever got injected into the DM Inbox user list
-        function cleanDmInboxListAndFixPlusOverlap() {
-            // 1. If a container has "Chat →" (DM Inbox user list), remove any media bubbles from it
-            document.querySelectorAll("div").forEach((d) => {
-                if (d.innerText && d.innerText.includes("Chat →")) {
-                    d.querySelectorAll(".nx-ig-media-bubble, .nx-persistent-photo-msg").forEach((b) => b.remove());
+        // Intercepts innerHTML on the chat box so dm.js/chat.js NEVER blinks or wipes the screen!
+        function installZeroBlinkWhatsAppPatch(chatBox) {
+            if (!chatBox || chatBox.__nxZeroBlinkInstalled) return;
+            chatBox.__nxZeroBlinkInstalled = true;
+
+            const nativeDesc = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML");
+            if (!nativeDesc || !nativeDesc.set) return;
+
+            Object.defineProperty(chatBox, "innerHTML", {
+                configurable: true,
+                get: function () {
+                    return nativeDesc.get.call(this);
+                },
+                set: function (newHtml) {
+                    const rk = getSharedRoomKey() || "default";
+                    const prevRk = this.dataset.nxRoom || "";
+
+                    if (!newHtml || !newHtml.trim() || (prevRk && prevRk !== rk)) {
+                        this.dataset.nxRoom = rk;
+                        nativeDesc.set.call(this, newHtml);
+                        if (roomMediaMap[rk]) {
+                            roomMediaMap[rk].forEach((m) => renderChatMediaBubble(m, m.localUrl));
+                        }
+                        this.scrollTop = this.scrollHeight;
+                        return;
+                    }
+
+                    this.dataset.nxRoom = rk;
+                    const temp = document.createElement("div");
+                    nativeDesc.set.call(temp, newHtml);
+
+                    const incNodes = Array.from(temp.children);
+                    const curNodes = Array.from(this.children).filter(
+                        (el) => !el.classList.contains("nx-ig-media-bubble")
+                    );
+
+                    if (curNodes.length === 0) {
+                        nativeDesc.set.call(this, newHtml);
+                        Array.from(this.children).forEach((c, idx) => {
+                            if (!c.dataset.msgTs) {
+                                c.dataset.msgTs = String(Date.now() - (incNodes.length - idx) * 1000);
+                            }
+                        });
+                        if (roomMediaMap[rk]) {
+                            roomMediaMap[rk].forEach((m) => renderChatMediaBubble(m, m.localUrl));
+                        }
+                        this.scrollTop = this.scrollHeight;
+                        return;
+                    }
+
+                    const nearBottom = this.scrollHeight - this.scrollTop - this.clientHeight < 140;
+
+                    incNodes.forEach((inc, i) => {
+                        const cur = curNodes[i];
+                        if (!cur) {
+                            inc.dataset.msgTs = String(Date.now());
+                            this.appendChild(inc);
+                        } else if (cur.innerHTML !== inc.innerHTML) {
+                            nativeDesc.set.call(cur, inc.innerHTML);
+                            cur.className = inc.className;
+                        }
+                    });
+
+                    if (curNodes.length > incNodes.length) {
+                        for (let j = incNodes.length; j < curNodes.length; j++) {
+                            curNodes[j].remove();
+                        }
+                    }
+
+                    if (nearBottom) {
+                        this.scrollTop = this.scrollHeight;
+                    }
                 }
             });
+        }
 
-            // 2. Ensure ONLY ONE '+' button exists in the chat input bar (No duplicate '+' icon!)
+        // ========================================================================
+        // 2. RESOLVE SHARED ROOM KEY (1v1 COUPLE DM & GROUP CHAT)
+        // ========================================================================
+        function getSharedRoomKey() {
             const msgInput =
                 document.getElementById("nx-dm-input") ||
                 document.getElementById("nx-chat-msg-in") ||
                 document.querySelector('input[placeholder*="Message"]');
 
-            if (msgInput && msgInput.offsetParent !== null) {
-                const bar = msgInput.parentElement;
-                if (bar) {
-                    bar.style.display = "flex";
-                    bar.style.alignItems = "center";
-                    bar.style.gap = "6px";
-
-                    // Find all '+' buttons inside the input bar and keep ONLY the first original one
-                    const plusButtons = [];
-                    bar.parentElement.querySelectorAll("button, span, div").forEach((el) => {
-                        if (el === bar || el === msgInput) return;
-                        const t = (el.innerText || "").trim();
-                        if ((t === "+" || t === "＋") && el.children.length === 0) {
-                            plusButtons.push(el);
-                        }
-                    });
-
-                    if (plusButtons.length > 1) {
-                        for (let i = 1; i < plusButtons.length; i++) {
-                            plusButtons[i].style.display = "none";
-                        }
-                    }
-                    if (plusButtons[0]) {
-                        plusButtons[0].style.position = "static";
-                        plusButtons[0].style.flexShrink = "0";
-                        plusButtons[0].style.zIndex = "30";
-                    }
-                }
-            }
-        }
-        setInterval(cleanDmInboxListAndFixPlusOverlap, 350);
-
-        // ========================================================================
-        // 2. RESOLVE SHARED ROOM KEY FOR 1v1 DM & GROUP CHAT
-        // ========================================================================
-        function getSharedRoomKey() {
-            const chatBox = getStrictOpenChatMessagesBox();
-            if (!chatBox) return null;
+            if (!msgInput || msgInput.offsetParent === null) return null;
 
             const myUname = getMyUsername();
             let headerTitle = "";
@@ -942,56 +1020,133 @@
         }
 
         // ========================================================================
-        // 3. CHRONOLOGICAL MESSAGE ORDERING (NEW MESSAGES ALWAYS AT THE BOTTOM!)
+        // 3. KILL EXTRA WATCH-PARTY BOX + RESTORE "SHARE NEXUS" IN SETTINGS
         // ========================================================================
-        function stampNewNativeMessagesWithTime(chatBox) {
-            if (!chatBox) return;
-            const now = Date.now();
-            Array.from(chatBox.children).forEach((child) => {
-                if (!child.dataset.msgTs) {
-                    // Existing old messages get a slightly earlier timestamp on initial load,
-                    // while newly sent messages get the current timestamp so they stay at the bottom!
-                    child.dataset.msgTs = String(chatBox.dataset.initializedTs ? now : now - 60000);
+        function globalUiCleanerAndSettingsEnhancer() {
+            // A. Remove "All members ek bar website ko refresh kar lain" dummy card if rendered
+            document.querySelectorAll("#tab-home div").forEach((card) => {
+                if (
+                    card.children.length >= 2 &&
+                    card.children.length <= 6 &&
+                    card.innerText &&
+                    card.innerText.includes("website ko refresh kar lain")
+                ) {
+                    card.style.display = "none";
                 }
             });
-            chatBox.dataset.initializedTs = "1";
-        }
 
-        function insertBubbleInChronologicalOrder(chatBox, wrapper, msgTimestamp) {
-            stampNewNativeMessagesWithTime(chatBox);
-            wrapper.dataset.msgTs = String(msgTimestamp);
+            // B. Kill extra duplicate Watch-Party box (Keep only 1 clean player!)
+            document.querySelectorAll("iframe").forEach((frame) => {
+                const src = (frame.getAttribute("src") || "").trim();
+                const bad =
+                    !src ||
+                    src === "about:blank" ||
+                    src.includes("undefined") ||
+                    (src.includes(window.location.hostname) && !src.includes("vault.html"));
+                if (bad) {
+                    const box = frame.closest('[id*="watch"], [class*="watch"]');
+                    if (box && !box.innerText.includes("Playing in Sync")) box.style.display = "none";
+                    frame.remove();
+                }
+            });
 
-            const children = Array.from(chatBox.children);
-            let inserted = false;
-            for (let i = 0; i < children.length; i++) {
-                const childTs = Number(children[i].dataset.msgTs || 0);
-                if (childTs > msgTimestamp) {
-                    chatBox.insertBefore(wrapper, children[i]);
-                    inserted = true;
-                    break;
+            const ytFrames = Array.from(document.querySelectorAll('iframe[src*="youtube"]'));
+            if (ytFrames.length > 1) {
+                // If two YouTube Watch-Party boxes opened at once, hide the older top duplicate
+                for (let i = 0; i < ytFrames.length - 1; i++) {
+                    const dupBox = ytFrames[i].closest("div");
+                    if (dupBox) dupBox.style.display = "none";
+                    ytFrames[i].remove();
                 }
             }
-            if (!inserted) {
-                chatBox.appendChild(wrapper);
+
+            // C. Ensure ONLY ONE '+' button in bottom chat bar & zero overlap
+            const msgInput =
+                document.getElementById("nx-dm-input") ||
+                document.getElementById("nx-chat-msg-in") ||
+                document.querySelector('input[placeholder*="Message"]');
+
+            if (msgInput && msgInput.offsetParent !== null) {
+                const bar = msgInput.parentElement;
+                if (bar) {
+                    bar.style.display = "flex";
+                    bar.style.alignItems = "center";
+                    bar.style.gap = "6px";
+                    const plusBtns = [];
+                    bar.parentElement.querySelectorAll("button, span, div").forEach((el) => {
+                        if (el === bar || el === msgInput) return;
+                        const t = (el.innerText || "").trim();
+                        if ((t === "+" || t === "＋") && el.children.length === 0) plusBtns.push(el);
+                    });
+                    if (plusBtns.length > 1) {
+                        for (let i = 1; i < plusBtns.length; i++) plusBtns[i].style.display = "none";
+                    }
+                    if (plusBtns[0]) {
+                        plusBtns[0].style.position = "static";
+                        plusBtns[0].style.flexShrink = "0";
+                    }
+                }
+            }
+
+            // D. Restore "🚀 Share Nexus" Card inside #tab-settings
+            const settingsTab = document.getElementById("tab-settings");
+            if (
+                settingsTab &&
+                settingsTab.classList.contains("active") &&
+                !document.getElementById("nx-share-nexus-card")
+            ) {
+                const shareCard = document.createElement("div");
+                shareCard.id = "nx-share-nexus-card";
+                shareCard.className =
+                    "mx-4 my-3 p-4 rounded-2xl bg-gradient-to-r from-emerald-950/90 via-slate-900 to-cyan-950/90 border border-emerald-500/40 shadow-xl flex items-center justify-between";
+                shareCard.innerHTML = `
+                    <div>
+                        <div class="text-sm font-extrabold text-emerald-400 flex items-center gap-1.5">🚀 Share Nexus App</div>
+                        <div class="text-xs text-slate-300 mt-0.5">Invite friends & study partners to Nexus Community</div>
+                    </div>
+                    <button type="button" id="nx-share-now-btn" class="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-extrabold text-xs shadow-lg active:scale-95 transition">
+                        Share 🔗
+                    </button>
+                `;
+                settingsTab.prepend(shareCard);
+                shareCard.querySelector("#nx-share-now-btn").onclick = async () => {
+                    const shareData = {
+                        title: "Nexus Community",
+                        text: "🔥 Join me on Nexus Community (Live Chat, Watch-Party & Study Vault): ",
+                        url: "https://nexus-community01.vercel.app/"
+                    };
+                    if (navigator.share) {
+                        try { await navigator.share(shareData); return; } catch (e) {}
+                    }
+                    try {
+                        await navigator.clipboard.writeText(shareData.text + shareData.url);
+                        Nexus.toast("✅ Nexus Link Copied! Share on WhatsApp");
+                    } catch (e) {
+                        window.open("https://wa.me/?text=" + encodeURIComponent(shareData.text + shareData.url));
+                    }
+                };
             }
         }
+        setInterval(globalUiCleanerAndSettingsEnhancer, 400);
 
         // ========================================================================
-        // 4. MEDIA ENGINE: PHOTO + 50MB VIDEO + VOICE NOTE + POLL + CODE + PDF
+        // 4. MULTIPLE PHOTOS + 50MB VIDEO + BLUE VIEW-ONCE (1️⃣) + DELETE & REACT
         // ========================================================================
-        const chatFilePicker = document.createElement("input");
-        chatFilePicker.type = "file";
-        chatFilePicker.style.display = "none";
-        document.body.appendChild(chatFilePicker);
+        const multiPicker = document.createElement("input");
+        multiPicker.type = "file";
+        multiPicker.style.display = "none";
+        document.body.appendChild(multiPicker);
 
-        function compressPhotoFast(file) {
+        let pendingViewOnceFlag = false;
+
+        function compressImageToHD(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const img = new Image();
                     img.onload = () => {
                         const canvas = document.createElement("canvas");
-                        const MAX = 800;
+                        const MAX = 820;
                         let w = img.width;
                         let h = img.height;
                         if (w > h && w > MAX) {
@@ -1006,7 +1161,7 @@
                         canvas.getContext("2d").drawImage(img, 0, 0, w, h);
                         let out = canvas.toDataURL("image/webp", 0.72);
                         if (!out || out.length < 50 || out.length > 150000) {
-                            out = canvas.toDataURL("image/jpeg", 0.64);
+                            out = canvas.toDataURL("image/jpeg", 0.65);
                         }
                         resolve(out);
                     };
@@ -1018,61 +1173,76 @@
             });
         }
 
-        function uploadVideoOrFileUpTo50MB(file, onProgress) {
+        function uploadUpTo50MB(file, onProgress) {
             return new Promise((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
-                const formData = new FormData();
-                formData.append("reqtype", "fileupload");
-                formData.append("time", "72h");
-                formData.append("fileToUpload", file, file.name || "video.mp4");
+                const fd = new FormData();
+                fd.append("reqtype", "fileupload");
+                fd.append("time", "72h");
+                fd.append("fileToUpload", file, file.name || "media.mp4");
 
                 xhr.upload.onprogress = (e) => {
                     if (e.lengthComputable && onProgress) {
                         onProgress(Math.min(99, Math.round((e.loaded / e.total) * 100)));
                     }
                 };
-
                 xhr.onload = () => {
                     if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText && xhr.responseText.startsWith("http")) {
                         onProgress && onProgress(100);
                         resolve({ mode: "url", url: xhr.responseText.trim() });
                     } else {
-                        fallbackChunkUpload(file, onProgress).then(resolve).catch(reject);
+                        chunkFallback(file, onProgress).then(resolve).catch(reject);
                     }
                 };
-
-                xhr.onerror = () => {
-                    fallbackChunkUpload(file, onProgress).then(resolve).catch(reject);
-                };
-
+                xhr.onerror = () => chunkFallback(file, onProgress).then(resolve).catch(reject);
                 xhr.open("POST", "https://litterbox.catbox.moe/resources/internals/api.php", true);
-                xhr.send(formData);
+                xhr.send(fd);
             });
         }
 
-        function fallbackChunkUpload(file, onProgress) {
+        // Expose video uploader for Nexus.compressImage (Post Modal 50MB Video Support!)
+        window.__nxUploadVideoForPost = async function (file, callback) {
+            if (file.size > MAX_VIDEO_BYTES) {
+                alert("⚠️ Video 50MB se chhoti honi chahiye!");
+                return;
+            }
+            Nexus.toast("📤 Uploading Video 1%...");
+            try {
+                const res = await uploadUpTo50MB(file, (pct) => {
+                    const t = document.getElementById("nx-toast");
+                    if (t) {
+                        t.innerText = `📤 Uploading Video ${pct}%...`;
+                        t.style.display = "block";
+                    }
+                });
+                Nexus.toast("✅ Video Ready! Tap Post to Publish");
+                if (callback && res.url) callback(res.url);
+            } catch (e) {
+                Nexus.toast("⚠️ Network slow, try smaller video");
+            }
+        };
+
+        function chunkFallback(file, onProgress) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = async (e) => {
                     try {
-                        const base64 = e.target.result;
-                        const totalChunks = Math.ceil(base64.length / CHUNK_CHAR_SIZE);
-                        const streamId = "str_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
-
-                        if (totalChunks === 1) {
+                        const b64 = e.target.result;
+                        const total = Math.ceil(b64.length / CHUNK_CHAR_SIZE);
+                        const sid = "str_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+                        if (total === 1) {
                             onProgress && onProgress(100);
-                            resolve({ mode: "inline", url: base64 });
+                            resolve({ mode: "inline", url: b64 });
                             return;
                         }
-                        for (let i = 0; i < totalChunks; i++) {
-                            const part = base64.slice(i * CHUNK_CHAR_SIZE, (i + 1) * CHUNK_CHAR_SIZE);
+                        for (let i = 0; i < total; i++) {
                             await Nexus.db
                                 .collection("nexus_media_chunks")
-                                .doc(`${streamId}_${i}`)
-                                .set({ streamId, index: i, data: part });
-                            onProgress && onProgress(Math.round(((i + 1) / totalChunks) * 100));
+                                .doc(`${sid}_${i}`)
+                                .set({ streamId: sid, index: i, data: b64.slice(i * CHUNK_CHAR_SIZE, (i + 1) * CHUNK_CHAR_SIZE) });
+                            onProgress && onProgress(Math.round(((i + 1) / total) * 100));
                         }
-                        resolve({ mode: "chunked", streamId, totalChunks });
+                        resolve({ mode: "chunked", streamId: sid, totalChunks: total });
                     } catch (err) {
                         reject(err);
                     }
@@ -1082,9 +1252,9 @@
             });
         }
 
-        async function loadChunkedStream(msg) {
+        async function loadChunkedMedia(msg) {
             if (msg.mediaUrl) return msg.mediaUrl;
-            if (msg.mode !== "chunked" || !msg.streamId || !window.Nexus || !Nexus.db) return "";
+            if (msg.mode !== "chunked" || !msg.streamId || !Nexus.db) return "";
             const parts = [];
             for (let i = 0; i < msg.totalChunks; i++) {
                 const d = await Nexus.db.collection("nexus_media_chunks").doc(`${msg.streamId}_${i}`).get();
@@ -1093,7 +1263,50 @@
             return parts.join("");
         }
 
-        async function renderChatMediaItem(msg, localPreviewUrl) {
+        // Open View-Once Modal & Mark as Opened in Firestore
+        async function openViewOnceMediaModal(msg) {
+            if (msg.opened) {
+                Nexus.toast("1️⃣ This View-Once media has already been opened!");
+                return;
+            }
+            let url = msg.mediaUrl || "";
+            if (!url && msg.mode === "chunked") url = await loadChunkedMedia(msg);
+            if (!url) return;
+
+            const overlay = document.createElement("div");
+            overlay.style.cssText =
+                "position:fixed; inset:0; background:rgba(2,6,23,0.96); z-index:200000; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px;";
+            overlay.innerHTML = `
+                <div class="text-sky-400 font-extrabold text-sm mb-3 flex items-center gap-2">1️⃣ View Once Media • Disappears after closing</div>
+                ${
+                    msg.mediaType === "video"
+                        ? `<video src="${url}" controls autoplay playsinline class="max-w-full max-h-[75dvh] rounded-2xl border border-sky-500/40 shadow-2xl"></video>`
+                        : `<img src="${url}" class="max-w-full max-h-[75dvh] rounded-2xl border border-sky-500/40 shadow-2xl object-contain" />`
+                }
+                <button type="button" class="mt-5 px-6 py-2.5 rounded-full bg-rose-600 text-white font-extrabold text-xs shadow-lg">Close & Burn 🔥</button>
+            `;
+            document.body.appendChild(overlay);
+
+            // Mark opened in Firestore immediately
+            msg.opened = true;
+            if (Nexus.db) {
+                Nexus.db.collection("nexus_live_media").doc(msg.id).set({ opened: true, mediaUrl: "" }, { merge: true }).catch(() => {});
+            }
+
+            overlay.querySelector("button").onclick = () => {
+                overlay.remove();
+                const bubble = document.getElementById(msg.id);
+                if (bubble) {
+                    const slot = bubble.querySelector(".nx-media-slot");
+                    if (slot) {
+                        slot.innerHTML = `<div class="px-3.5 py-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-400 font-bold text-xs flex items-center gap-2">1️⃣ <span>Opened</span></div>`;
+                    }
+                }
+            };
+        }
+
+        // Tailwind CSS Framed Media Bubble with Reactions (❤️🔥😂👍) & Delete (🗑️)
+        async function renderChatMediaBubble(msg, localPreviewUrl) {
             if (!msg || !msg.id) return;
             const chatBox = getStrictOpenChatMessagesBox();
             if (!chatBox) return;
@@ -1102,45 +1315,51 @@
             if (existing) {
                 const st = existing.querySelector(".nx-media-status");
                 if (st && msg.statusText) st.textContent = msg.statusText;
+                const reactBadge = existing.querySelector(".nx-react-badge");
+                if (reactBadge) {
+                    reactBadge.textContent = msg.reaction || "";
+                    reactBadge.style.display = msg.reaction ? "inline-flex" : "none";
+                }
+                if (msg.opened && msg.viewOnce) {
+                    const slot = existing.querySelector(".nx-media-slot");
+                    if (slot) {
+                        slot.innerHTML = `<div class="px-3.5 py-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-400 font-bold text-xs flex items-center gap-2">1️⃣ <span>Opened</span></div>`;
+                    }
+                }
                 return;
             }
 
             const isMe = (msg.sender || "").toLowerCase() === getMyUsername();
             const wrapper = document.createElement("div");
             wrapper.id = msg.id;
-            wrapper.className = "nx-ig-media-bubble";
-            wrapper.style.cssText = `display:flex; justify-content:${
-                isMe ? "flex-end" : "flex-start"
-            }; margin:8px 0; padding:0 10px;`;
+            wrapper.className = "nx-ig-media-bubble flex " + (isMe ? "justify-end" : "justify-start") + " my-2.5 px-2.5";
+            wrapper.dataset.msgTs = String(msg.createdAt || Date.now());
 
-            const url = localPreviewUrl || msg.mediaUrl || "";
-            let bodyHtml = "";
+            const displayUrl = localPreviewUrl || msg.mediaUrl || "";
+            let mediaContentHtml = "";
 
-            if (msg.mediaType === "video") {
-                bodyHtml = `<video src="${url}" controls playsinline style="max-width:235px; max-height:290px; width:100%; border-radius:10px; background:#000; display:block;"></video>`;
+            if (msg.viewOnce) {
+                if (msg.opened) {
+                    mediaContentHtml = `<div class="px-3.5 py-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-400 font-bold text-xs flex items-center gap-2">1️⃣ <span>Opened</span></div>`;
+                } else {
+                    mediaContentHtml = `
+                        <button type="button" class="nx-open-viewonce px-4 py-3 rounded-xl bg-gradient-to-r from-sky-950 to-blue-950 border border-sky-400/60 text-sky-300 font-extrabold text-xs flex items-center gap-2.5 shadow-lg active:scale-95 transition cursor-pointer">
+                            <span class="w-6 h-6 rounded-full bg-sky-500 text-slate-950 flex items-center justify-center font-black text-[11px]">1</span>
+                            <span>${msg.mediaType === "video" ? "View Once Video" : "View Once Photo"} • Tap to Open</span>
+                        </button>`;
+                }
+            } else if (msg.mediaType === "video") {
+                mediaContentHtml = `<video src="${displayUrl}" controls playsinline class="max-w-[240px] max-h-[300px] w-full rounded-xl border border-white/15 bg-black shadow-md block"></video>`;
             } else if (msg.mediaType === "audio") {
-                bodyHtml = `<audio src="${url}" controls style="width:210px; height:36px; display:block; margin-top:4px;"></audio>`;
-            } else if (msg.mediaType === "code") {
-                bodyHtml = `<pre style="background:#020617; color:#38bdf8; padding:10px; border-radius:8px; font-family:monospace; font-size:11.5px; overflow-x:auto; max-width:240px; border:1px solid #1e293b;">${
-                    (msg.text || "").replace(/</g, "&lt;")
-                }</pre>`;
-            } else if (msg.mediaType === "poll") {
-                bodyHtml = `
-                    <div style="background:#0f172a; padding:10px; border-radius:10px; min-width:210px; border:1px solid #10b981;">
-                        <div style="font-weight:800; font-size:12.5px; margin-bottom:6px; color:#f8fafc;">📊 ${msg.question || "Poll"}</div>
-                        ${(msg.options || [])
-                            .map(
-                                (opt) =>
-                                    `<button type="button" onclick="this.style.background='#10b981';this.style.color='#020617';this.innerText='✅ '+this.innerText" style="width:100%; text-align:left; margin-top:4px; padding:6px 10px; border-radius:8px; border:1px solid #334155; background:#1e293b; color:#fff; font-size:11.5px; font-weight:700; cursor:pointer;">${opt}</button>`
-                            )
-                            .join("")}
+                mediaContentHtml = `
+                    <div class="flex items-center gap-2 bg-slate-950/70 p-1.5 rounded-xl border border-white/10">
+                        <audio src="${displayUrl}" controls class="w-[190px] h-8 block"></audio>
+                        <button type="button" class="nx-audio-speed px-2 py-1 rounded-lg bg-emerald-500 text-slate-950 font-black text-[10px]">1x</button>
                     </div>`;
             } else if (msg.mediaType === "pdf") {
-                bodyHtml = `<a href="${url}" target="_blank" download="${msg.fileName || "document.pdf"}" style="display:flex; align-items:center; gap:8px; background:#0f172a; padding:10px 12px; border-radius:10px; color:#38bdf8; text-decoration:none; font-weight:700; font-size:12px; border:1px solid #334155;">📄 <span>${
-                    msg.fileName || "Open PDF / Notes"
-                }</span></a>`;
+                mediaContentHtml = `<a href="${displayUrl}" target="_blank" download="${msg.fileName || "notes.pdf"}" class="px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-cyan-500/40 text-cyan-300 font-bold text-xs flex items-center gap-2 no-underline">📄 <span>${msg.fileName || "Open PDF Notes"}</span></a>`;
             } else {
-                bodyHtml = `<img src="${url}" style="max-width:230px; max-height:280px; width:100%; border-radius:10px; display:block; object-fit:cover; cursor:pointer;" onclick="window.open(this.src)" />`;
+                mediaContentHtml = `<img src="${displayUrl}" class="max-w-[235px] max-h-[290px] w-full rounded-xl border border-white/15 object-cover shadow-md block cursor-pointer hover:opacity-95 transition" onclick="window.open(this.src)" />`;
             }
 
             const timeStr = new Date(msg.createdAt || Date.now()).toLocaleTimeString([], {
@@ -1149,27 +1368,107 @@
             });
 
             wrapper.innerHTML = `
-                <div style="background:${
-                    isMe ? "#056162" : "#1e293b"
-                }; color:#fff; padding:7px; border-radius:${
-                isMe ? "14px 14px 2px 14px" : "14px 14px 14px 2px"
-            }; max-width:78%; box-shadow:0 2px 10px rgba(0,0,0,0.4);">
-                    <div style="font-size:10px; color:#34d399; font-weight:700; margin-bottom:4px;">@${
-                        msg.sender || "user"
-                    }</div>
-                    ${bodyHtml}
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px; font-size:9.5px; opacity:0.85; gap:8px;">
-                        <span>${timeStr}</span>
-                        <span class="nx-media-status">${msg.statusText || "✓✓"}</span>
+                <div class="relative max-w-[80%] rounded-2xl p-2 ${
+                    isMe
+                        ? "bg-gradient-to-br from-emerald-900/95 via-teal-900/95 to-slate-900 border border-emerald-500/40 rounded-br-sm"
+                        : "bg-gradient-to-br from-slate-800/95 to-slate-900 border border-slate-700 rounded-bl-sm"
+                } text-white shadow-xl">
+                    <!-- Top Header: Sender + Reaction Emojis + Delete Option -->
+                    <div class="flex items-center justify-between gap-3 mb-1 px-0.5">
+                        <span class="text-[10px] font-extrabold text-emerald-300">@${msg.sender || "user"}</span>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" data-react="❤️" class="nx-react-btn text-[11px] hover:scale-125 transition bg-transparent border-0 cursor-pointer">❤️</button>
+                            <button type="button" data-react="🔥" class="nx-react-btn text-[11px] hover:scale-125 transition bg-transparent border-0 cursor-pointer">🔥</button>
+                            <button type="button" data-react="😂" class="nx-react-btn text-[11px] hover:scale-125 transition bg-transparent border-0 cursor-pointer">😂</button>
+                            <button type="button" data-react="👍" class="nx-react-btn text-[11px] hover:scale-125 transition bg-transparent border-0 cursor-pointer">👍</button>
+                            ${
+                                isMe
+                                    ? `<button type="button" class="nx-del-media-btn text-[11px] text-rose-400 hover:text-rose-300 ml-1 bg-transparent border-0 cursor-pointer" title="Delete for Everyone">🗑️</button>`
+                                    : ""
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Media Slot -->
+                    <div class="nx-media-slot">${mediaContentHtml}</div>
+
+                    <!-- Bottom Footer: Reaction Pill + Timestamp + Read Status -->
+                    <div class="flex items-center justify-between gap-2 mt-1.5 px-1 text-[10px] text-slate-300">
+                        <span class="nx-react-badge px-1.5 py-0.5 rounded-full bg-slate-950/90 border border-slate-700 text-[11px]" style="display:${
+                            msg.reaction ? "inline-flex" : "none"
+                        }">${msg.reaction || ""}</span>
+                        <span class="ml-auto opacity-80">${timeStr}</span>
+                        <span class="nx-media-status font-bold text-emerald-300">${msg.statusText || "✓✓"}</span>
                     </div>
                 </div>
             `;
 
-            insertBubbleInChronologicalOrder(chatBox, wrapper, msg.createdAt || Date.now());
+            // Insert in exact chronological position
+            const children = Array.from(chatBox.children);
+            const msgTs = Number(msg.createdAt || Date.now());
+            let inserted = false;
+            for (let i = 0; i < children.length; i++) {
+                const cTs = Number(children[i].dataset.msgTs || 0);
+                if (cTs > msgTs) {
+                    chatBox.insertBefore(wrapper, children[i]);
+                    inserted = true;
+                    break;
+                }
+            }
+            if (!inserted) chatBox.appendChild(wrapper);
             chatBox.scrollTop = chatBox.scrollHeight;
 
-            if (!url && msg.mode === "chunked") {
-                const full = await loadChunkedStream(msg);
+            // Bind View-Once Click
+            const voBtn = wrapper.querySelector(".nx-open-viewonce");
+            if (voBtn) voBtn.onclick = () => openViewOnceMediaModal(msg);
+
+            // Bind Audio Speed 1x / 1.5x / 2x
+            const speedBtn = wrapper.querySelector(".nx-audio-speed");
+            if (speedBtn) {
+                speedBtn.onclick = () => {
+                    const aud = wrapper.querySelector("audio");
+                    if (!aud) return;
+                    aud.playbackRate = aud.playbackRate === 1 ? 1.5 : aud.playbackRate === 1.5 ? 2 : 1;
+                    speedBtn.textContent = aud.playbackRate + "x";
+                };
+            }
+
+            // Bind Reaction Buttons
+            wrapper.querySelectorAll(".nx-react-btn").forEach((rBtn) => {
+                rBtn.onclick = (ev) => {
+                    ev.stopPropagation();
+                    const emoji = rBtn.getAttribute("data-react");
+                    const badge = wrapper.querySelector(".nx-react-badge");
+                    if (badge) {
+                        badge.textContent = emoji;
+                        badge.style.display = "inline-flex";
+                    }
+                    if (Nexus.db) {
+                        Nexus.db.collection("nexus_live_media").doc(msg.id).set({ reaction: emoji }, { merge: true }).catch(() => {});
+                    }
+                };
+            });
+
+            // Bind Delete Button (Deletes from both phones via Firestore)
+            const delBtn = wrapper.querySelector(".nx-del-media-btn");
+            if (delBtn) {
+                delBtn.onclick = async (ev) => {
+                    ev.stopPropagation();
+                    wrapper.remove();
+                    const rk = getSharedRoomKey();
+                    if (rk && roomMediaMap[rk]) {
+                        roomMediaMap[rk] = roomMediaMap[rk].filter((x) => x.id !== msg.id);
+                    }
+                    if (Nexus.db) {
+                        await Nexus.db.collection("nexus_live_media").doc(msg.id).delete().catch(() => {});
+                    }
+                    Nexus.toast("🗑️ Deleted for Everyone");
+                };
+            }
+
+            // Load chunked media if needed
+            if (!displayUrl && msg.mode === "chunked" && !msg.viewOnce) {
+                const full = await loadChunkedMedia(msg);
                 const mediaEl = wrapper.querySelector("video, audio, img, a");
                 if (mediaEl && full) {
                     if (mediaEl.tagName === "A") mediaEl.href = full;
@@ -1178,105 +1477,148 @@
             }
         }
 
-        async function sendChatMediaFile(file, forcedType) {
-            if (!file) return;
-            if (file.size > MAX_VIDEO_BYTES) {
-                alert("⚠️ File 50MB se chhoti honi chahiye!");
-                return;
-            }
+        // Send 1 or Multiple Files (Photos / 50MB Videos / View-Once / Voice Notes)
+        async function sendSingleOrMultipleFiles(fileList, forcedType, isViewOnce) {
+            if (!fileList || !fileList.length) return;
+            const files = Array.from(fileList);
 
-            const roomKey = getSharedRoomKey();
-            if (!roomKey) return;
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (file.size > MAX_VIDEO_BYTES) {
+                    alert(`⚠️ ${file.name} 50MB se badi hai!`);
+                    continue;
+                }
 
-            const sender = getMyUsername();
-            const msgId = "nxm_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
-            const mime = (file.type || "").toLowerCase();
-            const mediaType =
-                forcedType ||
-                (mime.startsWith("video")
-                    ? "video"
-                    : mime.startsWith("audio")
-                    ? "audio"
-                    : mime.includes("pdf")
-                    ? "pdf"
-                    : "image");
+                const rk = getSharedRoomKey();
+                if (!rk) return;
 
-            const nowTs = Date.now();
-            const localUrl = URL.createObjectURL(file);
+                const sender = getMyUsername();
+                const msgId = "nxm_" + Date.now() + "_" + i + "_" + Math.random().toString(36).slice(2, 5);
+                const mime = (file.type || "").toLowerCase();
+                const mediaType =
+                    forcedType ||
+                    (mime.startsWith("video")
+                        ? "video"
+                        : mime.startsWith("audio")
+                        ? "audio"
+                        : mime.includes("pdf")
+                        ? "pdf"
+                        : "image");
 
-            const tempMsg = {
-                id: msgId,
-                roomKey,
-                sender,
-                mediaType,
-                fileName: file.name || "file",
-                statusText: "📤 1%...",
-                createdAt: nowTs
-            };
-            renderChatMediaItem(tempMsg, localUrl);
+                const nowTs = Date.now() + i;
+                const localUrl = URL.createObjectURL(file);
 
-            try {
-                const finalDoc = {
+                const tempDoc = {
                     id: msgId,
-                    roomKey,
+                    roomKey: rk,
                     sender,
                     mediaType,
+                    viewOnce: Boolean(isViewOnce),
+                    opened: false,
                     fileName: file.name || "file",
-                    createdAt: nowTs,
-                    statusText: "✓✓"
+                    statusText: "📤 1%",
+                    createdAt: nowTs
                 };
+                renderChatMediaBubble(tempDoc, localUrl);
 
-                if (mediaType === "image") {
-                    finalDoc.mode = "inline";
-                    finalDoc.mediaUrl = await compressPhotoFast(file);
-                } else {
-                    const res = await uploadVideoOrFileUpTo50MB(file, (pct) => {
-                        const el = document.getElementById(msgId);
-                        const st = el && el.querySelector(".nx-media-status");
-                        if (st) st.textContent = `📤 ${pct}%`;
-                    });
-                    if (res.mode === "chunked") {
-                        finalDoc.mode = "chunked";
-                        finalDoc.streamId = res.streamId;
-                        finalDoc.totalChunks = res.totalChunks;
+                try {
+                    const finalDoc = {
+                        id: msgId,
+                        roomKey: rk,
+                        sender,
+                        mediaType,
+                        viewOnce: Boolean(isViewOnce),
+                        opened: false,
+                        fileName: file.name || "file",
+                        createdAt: nowTs,
+                        statusText: "✓✓"
+                    };
+
+                    if (mediaType === "image") {
+                        finalDoc.mode = "inline";
+                        finalDoc.mediaUrl = await compressImageToHD(file);
                     } else {
-                        finalDoc.mode = res.mode;
-                        finalDoc.mediaUrl = res.url;
+                        const res = await uploadUpTo50MB(file, (pct) => {
+                            const el = document.getElementById(msgId);
+                            const st = el && el.querySelector(".nx-media-status");
+                            if (st) st.textContent = `📤 ${pct}%`;
+                        });
+                        if (res.mode === "chunked") {
+                            finalDoc.mode = "chunked";
+                            finalDoc.streamId = res.streamId;
+                            finalDoc.totalChunks = res.totalChunks;
+                        } else {
+                            finalDoc.mode = res.mode;
+                            finalDoc.mediaUrl = res.url;
+                        }
                     }
+
+                    if (!roomMediaMap[rk]) roomMediaMap[rk] = [];
+                    roomMediaMap[rk].push(Object.assign({}, finalDoc, { localUrl }));
+
+                    if (Nexus.db) {
+                        await Nexus.db.collection("nexus_live_media").doc(msgId).set(finalDoc);
+                    }
+
+                    const el = document.getElementById(msgId);
+                    const st = el && el.querySelector(".nx-media-status");
+                    if (st) st.textContent = "✓✓";
+                } catch (err) {
+                    const el = document.getElementById(msgId);
+                    const st = el && el.querySelector(".nx-media-status");
+                    if (st) st.textContent = "⚠️ Retry";
                 }
-
-                if (!roomMediaMap[roomKey]) roomMediaMap[roomKey] = [];
-                roomMediaMap[roomKey].push(Object.assign({}, finalDoc, { localUrl }));
-
-                if (window.Nexus && Nexus.db) {
-                    await Nexus.db.collection("nexus_live_media").doc(msgId).set(finalDoc);
-                }
-
-                const el = document.getElementById(msgId);
-                const st = el && el.querySelector(".nx-media-status");
-                if (st) st.textContent = "✓✓";
-                if (window.Nexus && Nexus.toast) Nexus.toast("✅ Sent!");
-            } catch (err) {
-                console.error(err);
-                const el = document.getElementById(msgId);
-                const st = el && el.querySelector(".nx-media-status");
-                if (st) st.textContent = "⚠️ Failed";
             }
+            Nexus.toast(files.length > 1 ? `✅ ${files.length} Photos Sent!` : "✅ Sent!");
         }
 
-        chatFilePicker.onchange = (e) => {
-            const f = e.target.files && e.target.files[0];
-            if (f) sendChatMediaFile(f);
+        multiPicker.onchange = (e) => {
+            if (e.target.files && e.target.files.length) {
+                sendSingleOrMultipleFiles(e.target.files, null, pendingViewOnceFlag);
+            }
+            pendingViewOnceFlag = false;
             e.target.value = "";
         };
 
         // ========================================================================
-        // 5. SINGLE '+' ICON POWER MENU (ALL EXISTING + 4 NEW ADVANCED FEATURES)
+        // 5. WHATSAPP-CLEAN HD VOICE CALL & VOICE NOTE RECORDER
         // ========================================================================
-        async function toggleVoiceNoteRecording() {
+        async function startCleanAudioCall(withVideo) {
+            const rk = getSharedRoomKey() || "nexus_room";
+            // Pre-warm microphone with Echo Cancellation & Noise Suppression for crystal clear voice!
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                    video: Boolean(withVideo)
+                });
+                stream.getTracks().forEach((t) => t.stop());
+            } catch (e) {}
+
+            const roomName = "NexusCleanCall_" + rk.replace(/[^a-zA-Z0-9]/g, "");
+            const videoFlag = withVideo ? "false" : "true";
+            const url = `https://meet.jit.si/${roomName}#config.startWithVideoMuted=${videoFlag}&config.startWithAudioMuted=false&config.prejoinPageEnabled=false&config.disableAP=false&config.enableNoisyMicDetection=false`;
+
+            const callModal = document.createElement("div");
+            callModal.style.cssText = "position:fixed; inset:0; background:#020617; z-index:200005; display:flex; flex-direction:column;";
+            callModal.innerHTML = `
+                <div class="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 text-white">
+                    <div class="flex items-center gap-2 font-extrabold text-sm text-emerald-400">
+                        <span>${withVideo ? "📹 HD Video Call" : "📞 HD Crystal Voice Call"}</span>
+                    </div>
+                    <button type="button" id="nx-close-call-modal" class="px-4 py-1.5 rounded-full bg-rose-600 text-white font-extrabold text-xs">End Call ☎️</button>
+                </div>
+                <iframe src="${url}" allow="camera; microphone; fullscreen; autoplay" class="flex-1 w-full border-0"></iframe>
+            `;
+            document.body.appendChild(callModal);
+            callModal.querySelector("#nx-close-call-modal").onclick = () => callModal.remove();
+        }
+
+        async function toggleVoiceNote() {
             if (!isRecordingVoice) {
                 try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                    });
                     voiceRecorder = new MediaRecorder(stream);
                     voiceChunks = [];
                     voiceRecorder.ondataavailable = (e) => {
@@ -1284,13 +1626,13 @@
                     };
                     voiceRecorder.onstop = () => {
                         const blob = new Blob(voiceChunks, { type: "audio/webm" });
-                        const file = new File([blob], "voice.webm", { type: "audio/webm" });
-                        sendChatMediaFile(file, "audio");
+                        const file = new File([blob], "voicenote.webm", { type: "audio/webm" });
+                        sendSingleOrMultipleFiles([file], "audio", false);
                         stream.getTracks().forEach((t) => t.stop());
                     };
                     voiceRecorder.start();
                     isRecordingVoice = true;
-                    if (window.Nexus && Nexus.toast) Nexus.toast("🎤 Recording Voice... Tap '+' or Mic to Send!");
+                    Nexus.toast("🎤 Recording HD Voice... Tap '+' Again to Send!");
                 } catch (e) {
                     alert("Microphone permission Allow kijiye!");
                 }
@@ -1300,108 +1642,98 @@
             }
         }
 
-        function openSinglePlusPowerMenu() {
+        // ========================================================================
+        // 6. COMPLETE '+' POWER MENU (WITH BLUE VIEW-ONCE 1️⃣, MULTI-PHOTO, 50MB VIDEO)
+        // ========================================================================
+        function toggleCompletePlusMenu() {
             if (isRecordingVoice) {
-                toggleVoiceNoteRecording();
+                toggleVoiceNote();
                 return;
             }
 
-            let menu = document.getElementById("nx-v3-plus-menu");
+            let menu = document.getElementById("nx-whatsapp-plus-sheet");
             if (!menu) {
                 menu = document.createElement("div");
-                menu.id = "nx-v3-plus-menu";
+                menu.id = "nx-whatsapp-plus-sheet";
                 menu.style.cssText =
-                    "display:none; position:fixed; bottom:72px; right:48px; width:235px; background:#0f172a; border:1.5px solid #10b981; border-radius:18px; padding:8px; z-index:100009; box-shadow:0 16px 40px rgba(0,0,0,0.9); color:#fff;";
+                    "display:none; position:fixed; bottom:70px; right:16px; width:260px; background:#0f172a; border:1.5px solid #10b981; border-radius:20px; padding:10px; z-index:100020; box-shadow:0 18px 45px rgba(0,0,0,0.92); color:#fff;";
 
                 menu.innerHTML = `
-                    <div style="font-size:10px; font-weight:800; color:#10b981; padding:4px 10px; text-transform:uppercase; letter-spacing:0.5px;">⚡ Share Media & Tools</div>
-                    <button type="button" data-act="photo" style="width:100%; text-align:left; padding:9px 12px; border:none; background:transparent; color:#fff; font-size:13px; font-weight:700; border-radius:10px; display:flex; align-items:center; gap:10px; cursor:pointer;">
-                        🖼️ <span>Send HD Photo</span>
-                    </button>
-                    <button type="button" data-act="camera" style="width:100%; text-align:left; padding:9px 12px; border:none; background:transparent; color:#fff; font-size:13px; font-weight:700; border-radius:10px; display:flex; align-items:center; gap:10px; cursor:pointer;">
-                        📸 <span>Take Camera Pic</span>
-                    </button>
-                    <button type="button" data-act="video" style="width:100%; text-align:left; padding:9px 12px; border:none; background:transparent; color:#38bdf8; font-size:13px; font-weight:700; border-radius:10px; display:flex; align-items:center; gap:10px; cursor:pointer;">
-                        🎬 <span>Send Video (Up to 50MB)</span>
-                    </button>
-                    <button type="button" data-act="voice" style="width:100%; text-align:left; padding:9px 12px; border:none; background:transparent; color:#f43f5e; font-size:13px; font-weight:700; border-radius:10px; display:flex; align-items:center; gap:10px; cursor:pointer;">
-                        🎤 <span>Record Voice Note</span>
-                    </button>
-                    <button type="button" data-act="pdf" style="width:100%; text-align:left; padding:9px 12px; border:none; background:transparent; color:#a78bfa; font-size:13px; font-weight:700; border-radius:10px; display:flex; align-items:center; gap:10px; cursor:pointer;">
-                        📄 <span>Send PDF / Study Notes</span>
-                    </button>
-                    <button type="button" data-act="poll" style="width:100%; text-align:left; padding:9px 12px; border:none; background:transparent; color:#fbbf24; font-size:13px; font-weight:700; border-radius:10px; display:flex; align-items:center; gap:10px; cursor:pointer;">
-                        📊 <span>Create Live Chat Poll</span>
-                    </button>
-                    <button type="button" data-act="code" style="width:100%; text-align:left; padding:9px 12px; border:none; background:transparent; color:#34d399; font-size:13px; font-weight:700; border-radius:10px; display:flex; align-items:center; gap:10px; cursor:pointer;">
-                        💻 <span>Share Code / JEE Formula</span>
-                    </button>
+                    <div class="text-[10px] font-black text-emerald-400 px-2 pb-1.5 uppercase tracking-wider">⚡ Nexus Official Chat Tools</div>
+                    <div class="grid grid-cols-2 gap-1.5 text-xs">
+                        <button type="button" data-act="multi-photo" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left font-bold text-white flex items-center gap-2 cursor-pointer">
+                            <span>🖼️</span> <span>Photos (Multi)</span>
+                        </button>
+                        <button type="button" data-act="view-once" class="p-2.5 rounded-xl bg-sky-950/90 hover:bg-sky-900 border border-sky-500/50 text-left font-extrabold text-sky-300 flex items-center gap-2 cursor-pointer">
+                            <span class="w-4 h-4 rounded-full bg-sky-400 text-slate-950 flex items-center justify-center text-[10px] font-black">1</span>
+                            <span>View Once</span>
+                        </button>
+                        <button type="button" data-act="video" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left font-bold text-cyan-300 flex items-center gap-2 cursor-pointer">
+                            <span>🎬</span> <span>Video (50MB)</span>
+                        </button>
+                        <button type="button" data-act="camera" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left font-bold text-white flex items-center gap-2 cursor-pointer">
+                            <span>📸</span> <span>Camera Pic</span>
+                        </button>
+                        <button type="button" data-act="voice" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left font-bold text-rose-400 flex items-center gap-2 cursor-pointer">
+                            <span>🎤</span> <span>Voice Note</span>
+                        </button>
+                        <button type="button" data-act="audio-call" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left font-bold text-emerald-300 flex items-center gap-2 cursor-pointer">
+                            <span>📞</span> <span>Voice Call</span>
+                        </button>
+                        <button type="button" data-act="video-call" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left font-bold text-indigo-300 flex items-center gap-2 cursor-pointer">
+                            <span>📹</span> <span>Video Call</span>
+                        </button>
+                        <button type="button" data-act="pdf" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left font-bold text-amber-300 flex items-center gap-2 cursor-pointer">
+                            <span>📄</span> <span>Send PDF</span>
+                        </button>
+                    </div>
                 `;
 
                 document.body.appendChild(menu);
 
-                menu.onclick = async (e) => {
-                    const btn = e.target.closest("button[data-act]");
-                    if (!btn) return;
-                    e.stopPropagation();
+                menu.onclick = (ev) => {
+                    const b = ev.target.closest("button[data-act]");
+                    if (!b) return;
+                    ev.stopPropagation();
                     menu.style.display = "none";
-                    const act = btn.getAttribute("data-act");
+                    const act = b.getAttribute("data-act");
 
-                    if (act === "photo") {
-                        chatFilePicker.accept = "image/*";
-                        chatFilePicker.removeAttribute("capture");
-                        chatFilePicker.click();
-                    } else if (act === "camera") {
-                        chatFilePicker.accept = "image/*";
-                        chatFilePicker.setAttribute("capture", "environment");
-                        chatFilePicker.click();
+                    if (act === "multi-photo") {
+                        pendingViewOnceFlag = false;
+                        multiPicker.accept = "image/*";
+                        multiPicker.multiple = true;
+                        multiPicker.removeAttribute("capture");
+                        multiPicker.click();
+                    } else if (act === "view-once") {
+                        pendingViewOnceFlag = true;
+                        multiPicker.accept = "image/*,video/*";
+                        multiPicker.multiple = false;
+                        multiPicker.removeAttribute("capture");
+                        multiPicker.click();
                     } else if (act === "video") {
-                        chatFilePicker.accept = "video/mp4,video/webm,video/*";
-                        chatFilePicker.removeAttribute("capture");
-                        chatFilePicker.click();
-                    } else if (act === "pdf") {
-                        chatFilePicker.accept = "application/pdf";
-                        chatFilePicker.removeAttribute("capture");
-                        chatFilePicker.click();
+                        pendingViewOnceFlag = false;
+                        multiPicker.accept = "video/mp4,video/webm,video/*";
+                        multiPicker.multiple = false;
+                        multiPicker.removeAttribute("capture");
+                        multiPicker.click();
+                    } else if (act === "camera") {
+                        pendingViewOnceFlag = false;
+                        multiPicker.accept = "image/*";
+                        multiPicker.multiple = false;
+                        multiPicker.setAttribute("capture", "environment");
+                        multiPicker.click();
                     } else if (act === "voice") {
-                        toggleVoiceNoteRecording();
-                    } else if (act === "poll") {
-                        const q = prompt("📊 Poll ka sawal likhein (e.g. Aaj kaunsa chapter padhna hai?):");
-                        if (!q) return;
-                        const o1 = prompt("Option 1:", "Physics") || "Option 1";
-                        const o2 = prompt("Option 2:", "Maths") || "Option 2";
-                        const roomKey = getSharedRoomKey();
-                        if (!roomKey) return;
-                        const pollDoc = {
-                            id: "nxm_" + Date.now(),
-                            roomKey,
-                            sender: getMyUsername(),
-                            mediaType: "poll",
-                            question: q,
-                            options: [o1, o2],
-                            createdAt: Date.now()
-                        };
-                        renderChatMediaItem(pollDoc);
-                        if (window.Nexus && Nexus.db) {
-                            await Nexus.db.collection("nexus_live_media").doc(pollDoc.id).set(pollDoc);
-                        }
-                    } else if (act === "code") {
-                        const codeTxt = prompt("💻 Apna Code ya Formula paste karein:");
-                        if (!codeTxt) return;
-                        const roomKey = getSharedRoomKey();
-                        if (!roomKey) return;
-                        const codeDoc = {
-                            id: "nxm_" + Date.now(),
-                            roomKey,
-                            sender: getMyUsername(),
-                            mediaType: "code",
-                            text: codeTxt,
-                            createdAt: Date.now()
-                        };
-                        renderChatMediaItem(codeDoc);
-                        if (window.Nexus && Nexus.db) {
-                            await Nexus.db.collection("nexus_live_media").doc(codeDoc.id).set(codeDoc);
-                        }
+                        toggleVoiceNote();
+                    } else if (act === "audio-call") {
+                        startCleanAudioCall(false);
+                    } else if (act === "video-call") {
+                        startCleanAudioCall(true);
+                    } else if (act === "pdf") {
+                        pendingViewOnceFlag = false;
+                        multiPicker.accept = "application/pdf";
+                        multiPicker.multiple = false;
+                        multiPicker.removeAttribute("capture");
+                        multiPicker.click();
                     }
                 };
 
@@ -1413,7 +1745,6 @@
             menu.style.display = menu.style.display === "none" ? "block" : "none";
         }
 
-        // Hook the single existing '+' button in the bottom chat bar
         document.addEventListener(
             "click",
             (e) => {
@@ -1422,48 +1753,35 @@
                 const r = btn.getBoundingClientRect();
                 if (r.top <= window.innerHeight - 140 || btn.classList.contains("nx-fab-post")) return;
 
-                const txt = (btn.innerText || "").trim();
-                if ((txt === "+" || txt === "＋") && getStrictOpenChatMessagesBox()) {
+                const t = (btn.innerText || "").trim();
+                if ((t === "+" || t === "＋") && getStrictOpenChatMessagesBox()) {
                     e.stopPropagation();
                     e.preventDefault();
-                    openSinglePlusPowerMenu();
+                    toggleCompletePlusMenu();
                 }
             },
             true
         );
 
         // ========================================================================
-        // 6. POST MODAL: ADD 50MB VIDEO + PHOTO UPLOAD & RENDER VIDEO IN HOME FEED
+        // 7. UPGRADE POST MODAL FOR 50MB VIDEO & RENDER VIDEOS IN HOME FEED
         // ========================================================================
-        const postVideoPicker = document.createElement("input");
-        postVideoPicker.type = "file";
-        postVideoPicker.accept = "video/mp4,video/webm,video/*";
-        postVideoPicker.style.display = "none";
-        document.body.appendChild(postVideoPicker);
-
-        function enhancePostModalAndHomeFeedVideos() {
-            // A. Inject "🎬 Upload Video Post (<50MB)" inside Post Modal (Screenshot 3)
+        function upgradePostModalAndFeedVideos() {
             const postModal = document.getElementById("tab-post-modal");
-            if (postModal && postModal.offsetParent !== null && !document.getElementById("nx-post-video-btn")) {
-                const uploadBox = Array.from(postModal.querySelectorAll("div, label, button")).find(
-                    (el) => el.innerText && el.innerText.includes("Tap to Upload Photo")
+            if (postModal && postModal.offsetParent !== null) {
+                // Allow native file input inside Post Modal to pick both Photos AND Videos!
+                postModal.querySelectorAll('input[type="file"]').forEach((inp) => {
+                    if (!inp.accept.includes("video")) {
+                        inp.setAttribute("accept", "image/*,video/mp4,video/webm,video/*");
+                    }
+                });
+                const lbl = Array.from(postModal.querySelectorAll("div, span, p")).find(
+                    (el) => el.children.length === 0 && el.innerText && el.innerText.includes("Tap to Upload Photo")
                 );
-                if (uploadBox && uploadBox.parentElement) {
-                    const vidBtn = document.createElement("button");
-                    vidBtn.type = "button";
-                    vidBtn.id = "nx-post-video-btn";
-                    vidBtn.style.cssText =
-                        "width:100%; margin-top:10px; padding:12px; border-radius:14px; border:1.5px dashed #38bdf8; background:rgba(56,189,248,0.08); color:#38bdf8; font-weight:800; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;";
-                    vidBtn.innerHTML = "🎬 <span>Tap to Upload Video Post (Up to 50MB)</span>";
-                    vidBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        postVideoPicker.click();
-                    };
-                    uploadBox.insertAdjacentElement("afterend", vidBtn);
-                }
+                if (lbl) lbl.innerText = "📸🎬 Tap to Upload Photo or Video (<50MB)";
             }
 
-            // B. Convert any video URLs inside Home Feed posts into playable <video> players
+            // Turn any video URLs inside Home Feed into sleek playable video tags
             document.querySelectorAll("#tab-home img").forEach((img) => {
                 const src = img.getAttribute("src") || "";
                 if (src.match(/\.(mp4|webm|mov)(\?|$)/i) || src.startsWith("data:video/")) {
@@ -1471,89 +1789,25 @@
                     v.src = src;
                     v.controls = true;
                     v.playsInline = true;
-                    v.style.cssText = "width:100%; max-height:420px; border-radius:12px; background:#000; margin-top:8px;";
+                    v.className = "w-full max-h-[420px] rounded-2xl border border-slate-800 bg-black mt-2 shadow-lg";
                     img.replaceWith(v);
                 }
             });
         }
-        setInterval(enhancePostModalAndHomeFeedVideos, 600);
-
-        postVideoPicker.onchange = async (e) => {
-            const file = e.target.files && e.target.files[0];
-            e.target.value = "";
-            if (!file) return;
-            if (file.size > MAX_VIDEO_BYTES) {
-                alert("⚠️ Video 50MB se chhoti honi chahiye!");
-                return;
-            }
-
-            const btn = document.getElementById("nx-post-video-btn");
-            const txtArea = document.querySelector("#tab-post-modal textarea, #tab-post-modal input[type='text']");
-            const caption = (txtArea && txtArea.value.trim()) || "🎬 Watch this video!";
-
-            try {
-                if (btn) btn.innerHTML = "📤 <span>Uploading Video 1%...</span>";
-                const res = await uploadVideoOrFileUpTo50MB(file, (pct) => {
-                    if (btn) btn.innerHTML = `📤 <span>Uploading Video ${pct}%...</span>`;
-                });
-
-                const me = (window.Nexus && Nexus.getCurrentUser && Nexus.getCurrentUser()) || {
-                    username: getMyUsername(),
-                    name: getMyUsername()
-                };
-
-                const postDoc = {
-                    username: me.username || getMyUsername(),
-                    author: me.name || me.username || getMyUsername(),
-                    dp: me.dp || "",
-                    content: caption,
-                    text: caption,
-                    image: res.url || "",
-                    videoUrl: res.url || "",
-                    isVideo: true,
-                    likes: 0,
-                    likedBy: [],
-                    comments: [],
-                    createdAt: Date.now()
-                };
-
-                if (window.Nexus && Nexus.db) {
-                    await Nexus.db.collection("nexus_real_posts").add(postDoc);
-                }
-                if (window.Nexus && Nexus.toast) Nexus.toast("🎉 Video Post Published!");
-                const postModal = document.getElementById("tab-post-modal");
-                if (postModal) postModal.style.display = "none";
-            } catch (err) {
-                alert("⚠️ Network slow hai, chhoti video try karein!");
-                if (btn) btn.innerHTML = "🎬 <span>Tap to Upload Video Post (Up to 50MB)</span>";
-            }
-        };
+        setInterval(upgradePostModalAndFeedVideos, 500);
 
         // ========================================================================
-        // 7. LIVE ROOM LISTENERS & SILENT WATCH-PARTY SYNC (NO HOME PAGE BANNER!)
+        // 8. LIVE FIRESTORE MEDIA & WATCH-PARTY SYNC LISTENERS
         // ========================================================================
-        let observedChat = null;
-        const chatObserver = new MutationObserver(() => {
-            const rk = getSharedRoomKey();
-            if (rk && roomMediaMap[rk]) {
-                roomMediaMap[rk].forEach((m) => renderChatMediaItem(m, m.localUrl));
-            }
-        });
-
-        function checkActiveChatAndStreams() {
+        function syncActiveRoomStreams() {
             const chatBox = getStrictOpenChatMessagesBox();
-            if (chatBox && chatBox !== observedChat) {
-                observedChat = chatBox;
-                stampNewNativeMessagesWithTime(chatBox);
-                chatObserver.disconnect();
-                chatObserver.observe(chatBox, { childList: true });
-            }
+            if (!chatBox || !window.Nexus || !Nexus.db) return;
 
             const rk = getSharedRoomKey();
-            if (!rk || !window.Nexus || !Nexus.db) return;
+            if (!rk) return;
 
             if (roomMediaMap[rk]) {
-                roomMediaMap[rk].forEach((m) => renderChatMediaItem(m, m.localUrl));
+                roomMediaMap[rk].forEach((m) => renderChatMediaBubble(m, m.localUrl));
             }
 
             if (rk === activeRoomKey) return;
@@ -1566,11 +1820,25 @@
                 .collection("nexus_live_media")
                 .where("roomKey", "==", rk)
                 .onSnapshot((snap) => {
-                    const arr = [];
-                    snap.forEach((d) => arr.push(d.data()));
-                    arr.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-                    roomMediaMap[rk] = arr.slice(-30);
-                    roomMediaMap[rk].forEach((m) => renderChatMediaItem(m));
+                    const currentIds = new Set();
+                    const list = [];
+                    snap.forEach((d) => {
+                        currentIds.add(d.id);
+                        list.push(d.data());
+                    });
+
+                    // Remove deleted media bubbles immediately on both phones
+                    if (roomMediaMap[rk]) {
+                        roomMediaMap[rk].forEach((oldItem) => {
+                            if (!currentIds.has(oldItem.id)) {
+                                document.getElementById(oldItem.id)?.remove();
+                            }
+                        });
+                    }
+
+                    list.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+                    roomMediaMap[rk] = list.slice(-35);
+                    roomMediaMap[rk].forEach((m) => renderChatMediaBubble(m));
                 });
 
             unsubSync = Nexus.db
@@ -1579,7 +1847,6 @@
                 .onSnapshot((doc) => {
                     if (!doc.exists) return;
                     const data = doc.data();
-                    // Ignore old sync events older than 10 seconds so "628:30" never happens!
                     if (!data || !data.updatedAt || Date.now() - data.updatedAt > 10000) return;
                     if ((data.sender || "").toLowerCase() === getMyUsername() && Date.now() - lastBroadcastTime < 1200) {
                         return;
@@ -1587,33 +1854,24 @@
                     isPartnerSyncing = true;
                     const target = Number(data.currentTime) || 0;
                     currentMovieTime = target;
-                    sendYtCommand("seekTo", [target, true]);
-                    sendYtCommand(data.action === "pause" ? "pauseVideo" : "playVideo", []);
+                    sendYtCmd("seekTo", [target, true]);
+                    sendYtCmd(data.action === "pause" ? "pauseVideo" : "playVideo", []);
                     setTimeout(() => {
                         isPartnerSyncing = false;
                     }, 900);
                 });
         }
-        setInterval(checkActiveChatAndStreams, 600);
+        setInterval(syncActiveRoomStreams, 650);
 
-        function sendYtCommand(func, args = []) {
-            document.querySelectorAll("iframe").forEach((f) => {
+        function sendYtCmd(func, args = []) {
+            document.querySelectorAll('iframe[src*="youtube"]').forEach((f) => {
                 const src = f.getAttribute("src") || "";
-                if (src.includes("youtube.com/embed") || src.includes("youtube-nocookie.com/embed")) {
-                    if (!src.includes("enablejsapi=1")) {
-                        f.setAttribute("src", src + (src.includes("?") ? "&" : "?") + "enablejsapi=1&playsinline=1");
-                    }
-                    try {
-                        f.contentWindow.postMessage(JSON.stringify({ event: "command", func, args }), "*");
-                    } catch (e) {}
-                } else if (
-                    !src ||
-                    src === "about:blank" ||
-                    src.includes("undefined") ||
-                    (src.includes(window.location.hostname) && !src.includes("vault.html"))
-                ) {
-                    f.remove();
+                if (!src.includes("enablejsapi=1")) {
+                    f.setAttribute("src", src + (src.includes("?") ? "&" : "?") + "enablejsapi=1&playsinline=1");
                 }
+                try {
+                    f.contentWindow.postMessage(JSON.stringify({ event: "command", func, args }), "*");
+                } catch (e) {}
             });
         }
     })();
