@@ -1,34 +1,33 @@
 /* ============================================================================
-   NEXUS OFFICIAL PROFILE.JS (V27 FINAL MASTER - 100% REAL BIO, REAL TIME & ZERO FILTER BUG)
-   1. Fixes "🔍 Filtering posts... [Clear ✕]" Blank Home Bug (1000076947.jpg / 76948.jpg):
-      - Auto-clears any active post filter on #tab-home so all posts ALWAYS stay visible!
-      - Capture-phase click on Story Bar opens Public Profile directly without triggering
-        home.js post filtering!
-   2. Fixes Ayush '20m ago' Jumping to Fake '🟢 Live' (1000076947.jpg vs 76948.jpg / 76950.jpg):
-      - Strict 90-second real online check! Never turns a '20m ago' user into fake '🟢 Live'.
-   3. Fixes Bio Editing & Removes Forced Bio Text (1000076948.jpg / 76950.jpg):
-      - Shows 100% exact user bio (no forced replacement!)
-      - Updating Bio/Name in 'Edit profile' updates `nexus_accounts`, `Nexus.users`, AND
-        all of your existing posts in `nexus_real_posts` simultaneously!
-   4. Fixes Chanchal ('꧁༒CHA...') Hardcoded '1h ago' in Story Bar via Unicode-Safe Matcher!
+   NEXUS OFFICIAL PROFILE.JS (V28 FINAL SLEEP-PEACEFULLY MASTER)
+   1. Fixes Group Chat Cards Not Opening on Tap (Video 00:04 - 00:05):
+      - Uses global capture-phase event delegation so chat.js re-renders never
+        break clicking on '🌐 Nexus Global Student Lounge' or any Group Card!
+   2. Fixes Video Posts Turning Black or Disappearing on Home Feed (Video 00:00 & 00:06):
+      - Caches assembled video Blobs in memory (`__nxVideoBlobCache`) and converts
+        hidden/broken `img` tags into working `<video controls>` players instantly!
+   3. Fixes Home Feed Jumping/Flashing Pinned Refresh Card (Video 00:00.5, 00:02, 00:04):
+      - Uses a 0ms synchronous MutationObserver so the old refresh card never flashes!
+   4. Preserves 100% Real Bio Editing, Real Timestamps, Full-Screen Followers & Song
    ============================================================================ */
 (function () {
-    if (window.__NEXUS_INSTAGRAM_PROFILE_V27__) return;
-    window.__NEXUS_INSTAGRAM_PROFILE_V27__ = true;
+    if (window.__NEXUS_INSTAGRAM_PROFILE_V28__) return;
+    window.__NEXUS_INSTAGRAM_PROFILE_V28__ = true;
 
     let currentProfileTabMode = "posts"; // 'posts' | 'videos' | 'vault'
     let currentPublicTabMode = "grid"; // 'grid' | 'feed' | 'videos'
     let activeSongAudio = null;
     let activeSongBtn = null;
     let longPressTimer = null;
-    let activeGroupRoomId = null;
     let unsubActiveGroup = null;
     const realLastSeenCache = {};
+    const videoBlobCache = {};
+    const videoLoadingSet = new Set();
     const backStackLayers = [];
 
-    const v27MasterStyle = document.createElement("style");
-    v27MasterStyle.textContent = `
-        .nx-auto-seen-pill, .nx-dm-open-pill-hidden {
+    const v28MasterStyle = document.createElement("style");
+    v28MasterStyle.textContent = `
+        .nx-auto-seen-pill, .nx-dm-open-pill-hidden, .nx-refresh-spam-hidden {
             display: none !important;
         }
         .nx-ig-highlights-bar::-webkit-scrollbar {
@@ -55,7 +54,7 @@
             100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0; }
         }
     `;
-    document.head.appendChild(v27MasterStyle);
+    document.head.appendChild(v28MasterStyle);
 
     // =========================================================================
     // 1. SINGLE-STEP HARDWARE BACK BUTTON ROUTER
@@ -193,15 +192,48 @@
     }
 
     // =========================================================================
-    // 2. AUTO-CLEAR "🔍 Filtering posts... [Clear ✕]" & PREVENT BLANK HOME SCREEN
-    //    (Fixes 1000076944.jpg, 1000076947.jpg & 1000076948.jpg!)
+    // 2. 0ms SYNCHRONOUS HOME FEED OBSERVER & VIDEO POST RESTORER
+    //    - Stops the "Website ko ek baar refresh 🔄 kar lena" card from EVER flashing!
+    //    - Restores Mohit_01's video posts (`NX_VIDEO_STREAM:...`) so they play smoothly
+    //      instead of showing a black box or disappearing!
     // =========================================================================
-    function guardHomeFeedFromFilterBlankness() {
+    async function resolveVideoStreamToUrl(streamRef) {
+        if (!streamRef) return "";
+        if (!streamRef.startsWith("NX_VIDEO_STREAM:")) return streamRef;
+        if (videoBlobCache[streamRef]) return videoBlobCache[streamRef];
+        if (!window.Nexus || !Nexus.db) return "";
+
+        const parts = streamRef.replace("NX_VIDEO_STREAM:", "").split(":");
+        const sid = parts[0];
+        const total = parseInt(parts[1] || "1", 10);
+        const chunks = [];
+        for (let i = 0; i < total; i++) {
+            try {
+                const d = await Nexus.db.collection("nexus_media_chunks").doc(`${sid}_${i}`).get();
+                if (d.exists && d.data() && d.data().data) {
+                    chunks.push(d.data().data);
+                }
+            } catch (e) {}
+        }
+        if (!chunks.length) return "";
+        const fullDataUrl = chunks.join("");
+        try {
+            const res = await fetch(fullDataUrl);
+            const blob = await res.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            videoBlobCache[streamRef] = blobUrl;
+            return blobUrl;
+        } catch (e) {
+            videoBlobCache[streamRef] = fullDataUrl;
+            return fullDataUrl;
+        }
+    }
+
+    function processHomeTabSynchronously() {
         const homeTab = document.getElementById("tab-home");
         if (!homeTab) return;
 
-        // 1. If home.js injected "🔍 Filtering posts... [Clear ✕]", automatically click "Clear ✕"
-        //    so tapping a Story Bar user with 0 posts NEVER blanks out the Home Feed!
+        // A. Auto-clear "🔍 Filtering posts... [Clear ✕]" if triggered
         homeTab.querySelectorAll("button, span, div").forEach((el) => {
             if (el.children.length === 0) {
                 const txt = (el.innerText || "").trim();
@@ -214,8 +246,113 @@
                 }
             }
         });
+
+        // B. 0ms Hide of hardcoded "Website ko ek baar refresh 🔄 kar lena" card so it NEVER flashes!
+        const storyBar = document.getElementById("nx-stories-bar") || homeTab.querySelector("div:first-child");
+        homeTab.querySelectorAll("div, article, section").forEach((card) => {
+            if (!card || card === homeTab || card === storyBar || (storyBar && card.contains(storyBar))) return;
+            if (card.children.length >= 2 && card.children.length <= 12) {
+                const t = (card.innerText || "").toLowerCase();
+                if (
+                    (t.includes("website ko") && t.includes("refresh")) ||
+                    (t.includes("post by nexus") && t.includes("official announcement") && t.includes("refresh"))
+                ) {
+                    // Only hide the individual post card, NEVER the feed container!
+                    const hasOtherPostsInside = card.querySelectorAll("article").length > 1;
+                    if (!hasOtherPostsInside) {
+                        card.classList.add("nx-refresh-spam-hidden");
+                        card.style.display = "none";
+                    }
+                }
+            }
+        });
+
+        // C. Fix Video Posts on Home Feed (Restores hidden `img[src^="NX_VIDEO_STREAM:"]` or matches video post from `Nexus.posts`)
+        homeTab.querySelectorAll("img").forEach((img) => {
+            const src = img.getAttribute("src") || "";
+            if (
+                src.startsWith("NX_VIDEO_STREAM:") ||
+                src.startsWith("data:video/") ||
+                src.match(/\.(mp4|webm|mov)(\?|$)/i)
+            ) {
+                const parentWrap = img.parentElement;
+                // Hide the '🔍 Full View' button on video posts so it doesn't block the video!
+                if (parentWrap) {
+                    parentWrap.querySelectorAll("button, span, div").forEach((b) => {
+                        if (b.children.length === 0 && (b.innerText || "").includes("Full View")) {
+                            b.style.display = "none";
+                        }
+                    });
+                }
+
+                const v = document.createElement("video");
+                v.controls = true;
+                v.playsInline = true;
+                v.preload = "metadata";
+                v.style.cssText =
+                    "width:100%; max-height:440px; min-height:220px; border-radius:16px; border:1px solid #1e293b; background:#000; margin-top:8px; display:block; object-fit:contain;";
+                img.replaceWith(v);
+
+                resolveVideoStreamToUrl(src).then((playableUrl) => {
+                    if (playableUrl) v.src = playableUrl;
+                });
+            }
+        });
+
+        // D. Also check existing `<video>` elements on Home Feed whose `src` was lost or not yet resolved
+        homeTab.querySelectorAll("video").forEach((v) => {
+            const parentWrap = v.parentElement;
+            if (parentWrap) {
+                parentWrap.querySelectorAll("button, span, div").forEach((b) => {
+                    if (b.children.length === 0 && (b.innerText || "").includes("Full View")) {
+                        b.style.display = "none";
+                    }
+                });
+            }
+            const currentSrc = v.getAttribute("src") || "";
+            if (currentSrc.startsWith("NX_VIDEO_STREAM:")) {
+                if (videoBlobCache[currentSrc]) {
+                    v.src = videoBlobCache[currentSrc];
+                } else if (!videoLoadingSet.has(currentSrc)) {
+                    videoLoadingSet.add(currentSrc);
+                    resolveVideoStreamToUrl(currentSrc).then((playableUrl) => {
+                        videoLoadingSet.delete(currentSrc);
+                        if (playableUrl) v.src = playableUrl;
+                    });
+                }
+            } else if (!currentSrc && window.Nexus && Array.isArray(Nexus.posts)) {
+                // Find matching video post in `Nexus.posts` for this card
+                const card = v.closest("article, div[style*='border-radius']");
+                const cardTxt = (card && card.innerText) || "";
+                const matchedVidPost = Nexus.posts.find(
+                    (p) =>
+                        p &&
+                        (String(p.image || "").startsWith("NX_VIDEO_STREAM:") ||
+                            String(p.videoUrl || "").startsWith("NX_VIDEO_STREAM:")) &&
+                        cardTxt.includes(p.author || p.username || "Mohit")
+                );
+                if (matchedVidPost) {
+                    const streamRef = matchedVidPost.videoUrl || matchedVidPost.image;
+                    resolveVideoStreamToUrl(streamRef).then((playableUrl) => {
+                        if (playableUrl) v.src = playableUrl;
+                    });
+                }
+            }
+        });
     }
-    setInterval(guardHomeFeedFromFilterBlankness, 250);
+
+    // Attach 0ms MutationObserver to `#tab-home` so changes happen BEFORE screen paint (Zero Flicker!)
+    function attachZeroFlickerHomeObserver() {
+        const homeTab = document.getElementById("tab-home");
+        if (!homeTab || homeTab.__v28ObserverBound) return;
+        homeTab.__v28ObserverBound = true;
+        const obs = new MutationObserver(() => {
+            processHomeTabSynchronously();
+        });
+        obs.observe(homeTab, { childList: true, subtree: true });
+        processHomeTabSynchronously();
+    }
+    setInterval(attachZeroFlickerHomeObserver, 250);
 
     // =========================================================================
     // 3. FOLLOWERS / FOLLOWING AUTO-CROSS-SYNC ENGINE
@@ -267,9 +404,6 @@
 
     // =========================================================================
     // 4. STRICT REAL TIMESTAMP & STORY BAR ENGINE
-    //    - Fixes Ayush '20m ago' jumping to fake '🟢 Live' (1000076947.jpg vs 76948.jpg!)
-    //    - Fixes Chanchal ('꧁༒CHA...') hardcoded '1h ago'
-    //    - Capture-phase Story Bar click opens Public Profile directly!
     // =========================================================================
     function extractTrueTimestamp(u) {
         if (!u) return 0;
@@ -290,7 +424,6 @@
             const val = Number(candidates[i] || 0);
             if (val > 1000000000000 && val <= now + 60000) {
                 const diffMin = Math.round((now - val) / 60000);
-                // Ignore the old artificial 1-hour fallback (`Date.now() - 3600000`)
                 if (diffMin >= 58 && diffMin <= 62 && !u.verifiedAt && !u.lastSeen) {
                     continue;
                 }
@@ -304,8 +437,6 @@
         return 0;
     }
 
-    // STRICT 90-SECOND ONLINE CHECK: A user who was active '20m ago' (like Ayush in 1000076947.jpg)
-    // will NEVER be falsely marked as '🟢 Live'!
     function isUserTrulyOnlineRightNow(u) {
         if (!u) return false;
         const myKey = getMyUsername();
@@ -315,7 +446,7 @@
         const ts = extractTrueTimestamp(u);
         if (!ts) return false;
         const ageMs = Date.now() - ts;
-        return ageMs >= 0 && ageMs <= 90 * 1000; // Strictly active within the last 90 seconds!
+        return ageMs >= 0 && ageMs <= 90 * 1000;
     }
 
     window.formatRealNexusLastSeen = function (ts, isOnline) {
@@ -334,7 +465,6 @@
         const clean = String(identifier).toLowerCase().replace(/^@/, "").replace(/\.+$/, "").trim();
         if (!clean) return null;
 
-        // Strip decorative Unicode symbols (like '꧁༒CHA...' -> 'cha') so Chanchal ALWAYS matches!
         const alphaLookup = clean.replace(/[^a-z0-9]/g, "");
 
         return (
@@ -359,7 +489,6 @@
     }
 
     function syncUnifiedStoryBarPresence() {
-        // Hide any stray '💬 DM Open' pill anywhere
         document.querySelectorAll("#tab-home span, #tab-home div, #tab-profile span, #tab-profile div").forEach((el) => {
             if (el.children.length === 0 && (el.innerText || "").trim().includes("DM Open")) {
                 el.classList.add("nx-dm-open-pill-hidden");
@@ -405,8 +534,6 @@
                     }
                     badgeFound = true;
 
-                    // If `home.js` already rendered a specific real relative time (like '20m ago' for Ayush in 76947.jpg)
-                    // and `trueTs` is 0, preserve that real time instead of overwriting it!
                     if (!isLive && !realLabel && bt !== "1h ago" && bt.endsWith("ago")) {
                         return;
                     }
@@ -428,19 +555,12 @@
                         badge.style.borderRadius = "999px";
                         badge.style.padding = "1px 7px";
                         badge.style.display = "inline-block";
-                    } else if (bt === "1h ago") {
-                        // Replace fake hardcoded '1h ago' on Chanchal/old accounts with clean 'Active' pill
-                        badge.innerText = "Member";
-                        badge.style.background = "#0f172a";
-                        badge.style.border = "1px solid #334155";
-                        badge.style.color = "#94a3b8";
                     }
                 }
             });
 
-            // Capture-Phase Click Handler (`true`): Prevents `home.js` from triggering "🔍 Filtering posts..."!
-            if (!card.dataset.v27CaptureBound) {
-                card.dataset.v27CaptureBound = "1";
+            if (!card.dataset.v28CaptureBound) {
+                card.dataset.v28CaptureBound = "1";
                 card.addEventListener(
                     "click",
                     (ev) => {
@@ -456,7 +576,8 @@
     setInterval(syncUnifiedStoryBarPresence, 300);
 
     // =========================================================================
-    // 5. 💬 ALL GROUP CHATS HUB & LIVE GROUP MESSENGER (#tab-community)
+    // 5. 💬 ALL GROUP CHATS HUB & CAPTURE-PHASE CLICK DELEGATION
+    //    (Fixes Video 00:04 - 00:05 where tapping Group Card didn't open!)
     // =========================================================================
     const OFFICIAL_GROUPS = [
         {
@@ -497,6 +618,55 @@
         }
     }
 
+    function getAllAvailableGroups() {
+        return [...OFFICIAL_GROUPS, ...getCustomSavedGroups()];
+    }
+
+    // GLOBAL CAPTURE-PHASE CLICK DELEGATION FOR GROUP CARDS & "+ NEW GROUP" BUTTON!
+    // Even if `chat.js` re-renders `#tab-community` 100 times, tapping ANY Group Card ALWAYS opens immediately!
+    document.addEventListener(
+        "click",
+        (e) => {
+            const grpCard = e.target.closest("[data-gopen-idx]");
+            if (grpCard) {
+                e.stopPropagation();
+                e.preventDefault();
+                const allGroups = getAllAvailableGroups();
+                const idx = Number(grpCard.getAttribute("data-gopen-idx") || 0);
+                const targetGrp = allGroups[idx] || OFFICIAL_GROUPS[0];
+                window.openNexusGroupChatRoom(targetGrp);
+                return;
+            }
+
+            const newGrpBtn = e.target.closest("#nx-create-custom-grp");
+            if (newGrpBtn) {
+                e.stopPropagation();
+                e.preventDefault();
+                if (!isUserVerified()) {
+                    if (window.Nexus) Nexus.switchTab("tab-profile");
+                    return;
+                }
+                const gName = prompt("🌐 Enter New Group Chat Name (e.g. Class 11 Physics Group):");
+                if (!gName || gName.trim().length < 3) return;
+                const gSub = prompt("Enter Group Topic / Subtitle:", "Live Study & Discussion Group") || "Live Study Group";
+                const customList = getCustomSavedGroups();
+                const newGrp = {
+                    id: "grp_custom_" + Date.now(),
+                    name: "🔥 " + gName.trim(),
+                    subtitle: gSub.trim(),
+                    badge: "CUSTOM",
+                    color: "#f59e0b"
+                };
+                customList.unshift(newGrp);
+                localStorage.setItem("nx_custom_groups_v1", JSON.stringify(customList.slice(0, 10)));
+                document.getElementById("nx-all-groups-hub")?.remove();
+                injectAllGroupChatsSectionInCommunityTab();
+                window.openNexusGroupChatRoom(newGrp);
+            }
+        },
+        true
+    );
+
     window.openNexusGroupChatRoom = function (groupObj) {
         if (!isUserVerified()) {
             if (window.Nexus && Nexus.switchTab) Nexus.switchTab("tab-profile");
@@ -510,7 +680,6 @@
             unsubActiveGroup = null;
         }
 
-        activeGroupRoomId = groupObj.id;
         window.currentRoomId = groupObj.id;
 
         window.__nxPushBackLayer("nx-group-chat-fullscreen", () => {
@@ -744,7 +913,7 @@
         const commTab = document.getElementById("tab-community");
         if (!commTab || document.getElementById("nx-all-groups-hub")) return;
 
-        const allGroups = [...OFFICIAL_GROUPS, ...getCustomSavedGroups()];
+        const allGroups = getAllAvailableGroups();
         const hub = document.createElement("div");
         hub.id = "nx-all-groups-hub";
         hub.style.cssText =
@@ -781,7 +950,7 @@
                                 g.subtitle || "Tap to join group chat"
                             }</div>
                         </div>
-                        <div style="margin-top:8px; font-size:11px; font-weight:900; color:#38bdf8;">Join Group Chat →</div>
+                        <div style="margin-top:8px; font-size:11px; font-weight:900; color:#38bdf8;">Open Group Room →</div>
                     </div>
                 `
                     )
@@ -790,38 +959,8 @@
         `;
 
         commTab.prepend(hub);
-
-        hub.querySelectorAll("[data-gopen-idx]").forEach((card) => {
-            card.onclick = () => {
-                const g = allGroups[Number(card.getAttribute("data-gopen-idx"))];
-                if (g) window.openNexusGroupChatRoom(g);
-            };
-        });
-
-        hub.querySelector("#nx-create-custom-grp").onclick = () => {
-            if (!isUserVerified()) {
-                if (window.Nexus) Nexus.switchTab("tab-profile");
-                return;
-            }
-            const gName = prompt("🌐 Enter New Group Chat Name (e.g. Class 11 Physics Group):");
-            if (!gName || gName.trim().length < 3) return;
-            const gSub = prompt("Enter Group Topic / Subtitle:", "Live Study & Discussion Group") || "Live Study Group";
-            const customList = getCustomSavedGroups();
-            const newGrp = {
-                id: "grp_custom_" + Date.now(),
-                name: "🔥 " + gName.trim(),
-                subtitle: gSub.trim(),
-                badge: "CUSTOM",
-                color: "#f59e0b"
-            };
-            customList.unshift(newGrp);
-            localStorage.setItem("nx_custom_groups_v1", JSON.stringify(customList.slice(0, 10)));
-            hub.remove();
-            injectAllGroupChatsSectionInCommunityTab();
-            window.openNexusGroupChatRoom(newGrp);
-        };
     }
-    setInterval(injectAllGroupChatsSectionInCommunityTab, 500);
+    setInterval(injectAllGroupChatsSectionInCommunityTab, 400);
 
     // =========================================================================
     // 6. 🖼️ OFFICIAL NEXUS HD MEDIA LIGHTBOX VIEWER
@@ -845,7 +984,7 @@
     }
 
     window.openNexusHdMediaLightbox = function (imgSrc, postObj) {
-        if (!imgSrc) return;
+        if (!imgSrc || String(imgSrc).startsWith("NX_VIDEO_STREAM:")) return;
         document.getElementById("nx-hd-media-lightbox")?.remove();
 
         window.__nxPushBackLayer("nx-hd-media-lightbox", () => {
@@ -1043,7 +1182,7 @@
             ) {
                 const card = fullViewBtn.closest("article, div");
                 const img = card && card.querySelector("img:not([style*='border-radius: 50%'])");
-                if (img && img.src) {
+                if (img && img.src && !String(img.src).startsWith("NX_VIDEO_STREAM:")) {
                     e.stopPropagation();
                     e.preventDefault();
                     window.openNexusHdMediaLightbox(img.src, null);
@@ -1053,7 +1192,7 @@
 
             if (target.tagName === "IMG" && target.closest("#tab-home")) {
                 const r = target.getBoundingClientRect();
-                if (r.width > 180 && r.height > 120) {
+                if (r.width > 180 && r.height > 120 && !String(target.src).startsWith("NX_VIDEO_STREAM:")) {
                     e.stopPropagation();
                     e.preventDefault();
                     window.openNexusHdMediaLightbox(target.src, null);
@@ -1731,21 +1870,6 @@
     // =========================================================================
     // 9. 📱 SCROLLABLE POST FEED WITH 100% REAL STATS & STRICT OWNER-ONLY MENU
     // =========================================================================
-    async function loadVideoChunksForFeed(streamRef, videoEl) {
-        if (!streamRef || !streamRef.startsWith("NX_VIDEO_STREAM:") || !window.Nexus || !Nexus.db) return;
-        const parts = streamRef.replace("NX_VIDEO_STREAM:", "").split(":");
-        const sid = parts[0];
-        const total = parseInt(parts[1] || "1", 10);
-        const chunks = [];
-        for (let i = 0; i < total; i++) {
-            try {
-                const d = await Nexus.db.collection("nexus_media_chunks").doc(`${sid}_${i}`).get();
-                if (d.exists) chunks.push(d.data().data);
-            } catch (e) {}
-        }
-        if (chunks.length && videoEl) videoEl.src = chunks.join("");
-    }
-
     function openSystematicPostThreeDotSheet(postObj, onUpdateCallback) {
         document.getElementById("nx-sys-post-3dot-sheet")?.remove();
         window.__nxPushBackLayer("nx-sys-post-3dot-sheet", () => {
@@ -1959,11 +2083,12 @@
                 let mediaHtml = "";
                 if (img) {
                     if (isVid) {
+                        const cachedBlob = videoBlobCache[img] || "";
                         mediaHtml = `<video data-stream-ref="${
                             String(img).startsWith("NX_VIDEO_STREAM:") ? img : ""
                         }" src="${
-                            String(img).startsWith("NX_VIDEO_STREAM:") ? "" : img
-                        }" controls playsinline style="width:100%; max-height:460px; background:#000; display:block; border-top:1px solid #1e293b; border-bottom:1px solid #1e293b;"></video>`;
+                            cachedBlob || (String(img).startsWith("NX_VIDEO_STREAM:") ? "" : img)
+                        }" controls playsinline style="width:100%; max-height:460px; min-height:220px; background:#000; display:block; border-top:1px solid #1e293b; border-bottom:1px solid #1e293b;"></video>`;
                     } else {
                         mediaHtml = `
                             <div class="nx-feed-photo-open" data-fidx="${idx}" style="position:relative; cursor:pointer;">
@@ -2081,7 +2206,11 @@
 
         containerEl.querySelectorAll("video[data-stream-ref]").forEach((v) => {
             const ref = v.getAttribute("data-stream-ref");
-            if (ref) loadVideoChunksForFeed(ref, v);
+            if (ref && !v.getAttribute("src")) {
+                resolveVideoStreamToUrl(ref).then((playableUrl) => {
+                    if (playableUrl) v.src = playableUrl;
+                });
+            }
         });
 
         containerEl.querySelectorAll("[data-card-author]").forEach((el) => {
@@ -2239,7 +2368,7 @@
     };
 
     // =========================================================================
-    // 10. COMPLETE FULL-SCREEN PUBLIC PROFILE & AVATAR ZOOM (EXACT USER BIO!)
+    // 10. COMPLETE FULL-SCREEN PUBLIC PROFILE & AVATAR ZOOM
     // =========================================================================
     window.openAvatarLongPressZoomModal = function (userObj) {
         if (!userObj || !userObj.username) return;
@@ -2469,7 +2598,6 @@
                                 </div>
                             </div>
 
-                            <!-- Shows User's Exact Real Bio (No Forced Fake Text!) -->
                             <div style="background:linear-gradient(145deg,#0f172a,#090d16); border:1px solid #1e293b; border-radius:14px; padding:9px 11px;">
                                 <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:${
                                     userObj.bio ? "4px" : "0"
@@ -2776,7 +2904,6 @@
             localStorage.setItem("nx_active_account", JSON.stringify(me));
             localStorage.setItem("nx_legacy_backup_account", JSON.stringify(me));
 
-            // Update inside `Nexus.users`, `Nexus.cloudAccounts` and `Nexus.posts` in memory immediately!
             if (window.Nexus) {
                 if (Array.isArray(Nexus.users)) {
                     Nexus.users.forEach((u) => {
@@ -2808,7 +2935,6 @@
                 }
             }
 
-            // Update Firestore `nexus_accounts` AND all of your posts in `nexus_real_posts` so old 'jee asperient' is replaced everywhere!
             if (window.Nexus && Nexus.db) {
                 await Nexus.db
                     .collection("nexus_accounts")
@@ -2897,9 +3023,6 @@
 
         const profileVisitors = cleanUniqueList(me.profileViewsBy || []);
         const mySong = getNormalizedProfileSong(me);
-        const totalPostLikes = allMyPosts.reduce((s, p) => s + Math.max((p.likedBy || []).length, Number(p.likes || 0)), 0);
-
-        // Shows your 100% exact real `me.bio` (Never overrides what you type in Edit Profile!)
         const exactMyBio = (me.bio || "").trim() || "Tap 'Edit profile' below to write your custom bio ✨";
 
         const dpHtml = me.dp
@@ -2972,7 +3095,7 @@
                                        ${pinBadge}
                                        ${dotsBadge}
                                        ${isVid ? `<div style="font-size:20px; margin-bottom:4px;">🎬</div>` : ""}
-                                       <div>${(p.content || p.text || "Post").slice(0, 50)}</div>
+                                       <div>${(p.content || p.text || "Video Post").slice(0, 50)}</div>
                                    </div>`;
                        })
                        .join("")}
@@ -3031,7 +3154,6 @@
                                 </div>
                             </div>
 
-                            <!-- Clickable Bio Card (Tap to Edit Your Custom Bio Anytime!) -->
                             <div id="nx-my-bio-card-trigger" style="background:linear-gradient(145deg,#0f172a,#090d16); border:1px solid rgba(16,185,129,0.35); border-radius:14px; padding:9px 11px; cursor:pointer;" title="Tap to edit bio">
                                 <div style="display:flex; align-items:center; justify-content:space-between; gap:4px; margin-bottom:4px; flex-wrap:wrap;">
                                     <span style="font-size:10px; font-weight:900; color:#020617; background:linear-gradient(90deg,#10b981,#38bdf8); padding:2px 7px; border-radius:6px;">
@@ -3193,6 +3315,7 @@
             }
         });
         Nexus.listeners.onPosts.push(() => {
+            processHomeTabSynchronously();
             const pTab = document.getElementById("tab-profile");
             if (pTab && pTab.classList.contains("active") && isUserVerified()) {
                 renderMyInstagramProfileTab();
