@@ -1,18 +1,20 @@
 /* ============================================================================
-   NEXUS OFFICIAL PROFILE.JS (V21 FINAL - INSTAGRAM UI + REAL SONG + REAL LAST SEEN)
-   1. Fixes '1h ago' Story Bar Bug (1000076773.jpg vs 1000076774.jpg '23d ago'):
-      - Removes dummy 'Date.now() - 3600000' fallback completely!
-      - Uses 100% real Firestore timestamps (lastSeen, lastOnline, createdAt, DM dates)
-   2. Instagram Profile Music / Song Feature (Real iTunes Song Search + Audio Player)
-   3. Long-Press Avatar HD Zoom Preview + Full Public Profile Viewer for Any Member
-   4. Systematic Instagram 3-Column Grid (Posts | Videos | Saved) + Post Edit/Delete
-   5. Interactive Followers & Following Lists + Live Mood Note + Zero Dummy Clutter
+   NEXUS OFFICIAL PROFILE.JS (V22 FINAL - SCROLLABLE POST FEED + SYSTEMATIC 3-DOT MENU)
+   1. Full Vertical Scrollable Post Feed (Like Home Tab & Instagram!):
+      - Clicking ANY post in Profile Grid opens a scrollable feed of ALL your posts
+        auto-scrolled to the clicked post!
+   2. Systematic Instagram '⋮' 3-Dot Action Sheet on Every Post:
+      - 📌 Pin to Top | ✏️ Edit Caption | 🔄 Replace Photo/Video | 🚀 Boost to Feed
+      - 💬 Toggle Comments | 🔗 Share Link | 🗑️ Delete Post
+   3. Replaced Generic Bookmark Icon with Official '⚡ Nexus Vault' Tab
+   4. Real Last Seen Fix ('23d ago' instead of fake '1h ago'), Profile Song & DP Zoom
    ============================================================================ */
 (function () {
-    if (window.__NEXUS_INSTAGRAM_PROFILE_V21__) return;
-    window.__NEXUS_INSTAGRAM_PROFILE_V21__ = true;
+    if (window.__NEXUS_INSTAGRAM_PROFILE_V22__) return;
+    window.__NEXUS_INSTAGRAM_PROFILE_V22__ = true;
 
-    let currentProfileTabMode = "posts"; // 'posts' | 'videos' | 'saved'
+    const CHUNK_CHAR_SIZE = 600000;
+    let currentProfileTabMode = "posts"; // 'posts' | 'videos' | 'vault'
     let activeSongAudio = null;
     let activeSongBtn = null;
     let longPressTimer = null;
@@ -47,7 +49,7 @@
     }
 
     // =========================================================================
-    // 1. 100% REAL LAST-SEEN ENGINE (FIXES '1h ago' BUG IN 1000076773.jpg / 774.jpg!)
+    // 1. 100% REAL LAST-SEEN ENGINE (FIXES '1h ago' vs '23d ago' BUG!)
     // =========================================================================
     function extractTrueTimestamp(u) {
         if (!u) return 0;
@@ -63,7 +65,6 @@
             u.verifiedAt
         ];
 
-        // Check `u.lastOnline`, but IGNORE it if it was polluted by the old `Date.now() - 3600000` (1h ago) fallback!
         const lo = Number(u.lastOnline || 0);
         if (lo > 1000000) {
             const diffMin = Math.round((now - lo) / 60000);
@@ -89,7 +90,7 @@
     window.formatRealNexusLastSeen = function (ts, isOnline) {
         if (isOnline) return "Live";
         const num = Number(ts || 0);
-        if (!num || num < 1000000000000) return ""; // Never return fake "1h ago"!
+        if (!num || num < 1000000000000) return "";
         const diffSec = Math.max(1, Math.floor((Date.now() - num) / 1000));
         if (diffSec < 60) return "Just now";
         if (diffSec < 3600) return Math.floor(diffSec / 60) + "m ago";
@@ -97,10 +98,9 @@
         return Math.floor(diffSec / 86400) + "d ago";
     };
 
-    // Override `Nexus.rebuildAllUsersMasterList` so it NEVER injects `Date.now() - 3600000` (1h ago)!
     function installRealTimestampMasterListOverride() {
-        if (!window.Nexus || Nexus.__v21RealTimePatched) return;
-        Nexus.__v21RealTimePatched = true;
+        if (!window.Nexus || Nexus.__v22RealTimePatched) return;
+        Nexus.__v22RealTimePatched = true;
 
         Nexus.rebuildAllUsersMasterList = function () {
             const map = {};
@@ -154,7 +154,6 @@
                 }
             });
 
-            // Sync real post creation timestamps into author's last activity
             (this.posts || []).forEach((p) => {
                 if (!p || p.username === "nexus_official" || (p.author || "").toLowerCase() === "nexus") return;
                 const rawUname = (p.username || p.author || "").toLowerCase().replace(/[^a-z0-9_]/g, "");
@@ -224,7 +223,6 @@
                 }
             });
 
-            // Sort by real activity timestamp (Users with real recent timestamps first, older/23d ago users after)
             finalUsers.sort((a, b) => {
                 if (a.username === myActiveKey) return -1;
                 if (b.username === myActiveKey) return 1;
@@ -236,10 +234,9 @@
             this.users = finalUsers;
         };
 
-        // Wipe polluted `nx_master_users_v1` cache once so fake `1h ago` is cleared immediately!
-        if (!localStorage.getItem("nx_cleaned_fake_1h_v21")) {
+        if (!localStorage.getItem("nx_cleaned_fake_1h_v22")) {
             localStorage.removeItem("nx_master_users_v1");
-            localStorage.setItem("nx_cleaned_fake_1h_v21", "1");
+            localStorage.setItem("nx_cleaned_fake_1h_v22", "1");
             Nexus.rebuildAllUsersMasterList();
             Nexus.notifyAll && Nexus.notifyAll();
         }
@@ -247,7 +244,6 @@
     installRealTimestampMasterListOverride();
     setInterval(installRealTimestampMasterListOverride, 500);
 
-    // Fix Story Bar badges in real time so any fake `1h ago` on old users is replaced with their true timestamp (`23d ago`, etc.)!
     function syncRealStoryBarBadges() {
         const storyBar = document.getElementById("nx-stories-bar") || document.querySelector("#tab-home > div:first-child");
         if (!storyBar || !window.Nexus || !Array.isArray(Nexus.users)) return;
@@ -270,7 +266,6 @@
             const trueTs = extractTrueTimestamp(matched);
             const realLabel = window.formatRealNexusLastSeen(trueTs, matched.isOnlineNow);
 
-            // Find the time pill inside this story circle
             card.querySelectorAll("span, div, small").forEach((badge) => {
                 if (badge.children.length > 0) return;
                 const bt = (badge.innerText || "").trim();
@@ -278,7 +273,6 @@
                     if (realLabel) {
                         badge.innerText = realLabel;
                     } else if (bt === "1h ago") {
-                        // Hide fake 1h ago if user has no recent timestamp
                         badge.style.display = "none";
                     }
                 }
@@ -288,30 +282,25 @@
     setInterval(syncRealStoryBarBadges, 450);
 
     // =========================================================================
-    // 2. 🎵 INSTAGRAM PROFILE SONG / MUSIC ANTHEM ENGINE (REAL ITUNES API)
+    // 2. 🎵 INSTAGRAM PROFILE SONG / MUSIC ANTHEM ENGINE
     // =========================================================================
     window.togglePlayProfileSong = function (audioUrl, btnEl) {
         if (!audioUrl) return;
-
         if (activeSongAudio && activeSongAudio.src === audioUrl && !activeSongAudio.paused) {
             activeSongAudio.pause();
             if (btnEl) btnEl.innerHTML = "▶️ Play";
             return;
         }
-
         if (activeSongAudio) {
             activeSongAudio.pause();
             if (activeSongBtn) activeSongBtn.innerHTML = "▶️ Play";
         }
-
         activeSongAudio = new Audio(audioUrl);
         activeSongBtn = btnEl;
         if (btnEl) btnEl.innerHTML = "⏸️ Playing...";
-
         activeSongAudio.play().catch(() => {
             if (btnEl) btnEl.innerHTML = "▶️ Play";
         });
-
         activeSongAudio.onended = () => {
             if (btnEl) btnEl.innerHTML = "▶️ Play";
         };
@@ -335,13 +324,13 @@
                 </div>
 
                 <div style="display:flex; gap:8px; margin-bottom:12px;">
-                    <input type="text" id="nx-song-search-inp" placeholder="Search song or artist (e.g. Arijit Singh, Kesariya, Phonk)..." style="flex:1; padding:11px 14px; border-radius:12px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; outline:none;" />
+                    <input type="text" id="nx-song-search-inp" placeholder="Search song or artist (e.g. Arijit Singh, Kesariya)..." style="flex:1; padding:11px 14px; border-radius:12px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; outline:none;" />
                     <button type="button" id="nx-song-search-btn" style="padding:11px 16px; border-radius:12px; background:#10b981; color:#020617; font-weight:900; font-size:12.5px; border:none; cursor:pointer;">Search 🔍</button>
                 </div>
 
                 <div id="nx-song-results-box" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; min-height:220px; max-height:52dvh;">
                     <div style="text-align:center; padding:28px 12px; color:#64748b; font-size:12.5px;">
-                        🎶 Type any song name above and tap Search to preview & add it to your Nexus Profile!
+                        🎶 Type any song name above and tap Search to preview & add it to your Profile!
                     </div>
                 </div>
 
@@ -372,7 +361,7 @@
                 const tracks = (data && data.results) || [];
 
                 if (!tracks.length) {
-                    resBox.innerHTML = `<div style="text-align:center; padding:24px; color:#f43f5e; font-size:12.5px;">No songs found for "${q}". Try another keyword!</div>`;
+                    resBox.innerHTML = `<div style="text-align:center; padding:24px; color:#f43f5e; font-size:12.5px;">No songs found for "${q}".</div>`;
                     return;
                 }
 
@@ -398,9 +387,7 @@
                     .join("");
 
                 resBox.querySelectorAll("[data-prev-url]").forEach((b) => {
-                    b.onclick = () => {
-                        window.togglePlayProfileSong(b.getAttribute("data-prev-url"), b);
-                    };
+                    b.onclick = () => window.togglePlayProfileSong(b.getAttribute("data-prev-url"), b);
                 });
 
                 resBox.querySelectorAll("[data-select-idx]").forEach((b) => {
@@ -453,7 +440,388 @@
     };
 
     // =========================================================================
-    // 3. 🔍 LONG-PRESS AVATAR HD ZOOM & FULL PUBLIC PROFILE VIEWER FOR ANY USER
+    // 3. 📱 INSTAGRAM FULL VERTICAL SCROLLABLE POST FEED + SYSTEMATIC '⋮' MENU
+    //    (When user taps a post in Profile Grid, ALL their posts open in a
+    //     vertical scrollable feed auto-scrolled to the clicked post!)
+    // =========================================================================
+    async function loadVideoChunksForFeed(streamRef, videoEl) {
+        if (!streamRef || !streamRef.startsWith("NX_VIDEO_STREAM:") || !window.Nexus || !Nexus.db) return;
+        const parts = streamRef.replace("NX_VIDEO_STREAM:", "").split(":");
+        const sid = parts[0];
+        const total = parseInt(parts[1] || "1", 10);
+        const chunks = [];
+        for (let i = 0; i < total; i++) {
+            try {
+                const d = await Nexus.db.collection("nexus_media_chunks").doc(`${sid}_${i}`).get();
+                if (d.exists) chunks.push(d.data().data);
+            } catch (e) {}
+        }
+        if (chunks.length && videoEl) videoEl.src = chunks.join("");
+    }
+
+    function openSystematicPostThreeDotSheet(postObj, onUpdateCallback) {
+        document.getElementById("nx-sys-post-3dot-sheet")?.remove();
+
+        const me = getActiveUser();
+        const myKey = me && me.username ? me.username.toLowerCase().trim() : "";
+        const isOwnerOrAdmin =
+            myKey === "mohiy" ||
+            myKey === "mohit_01" ||
+            (postObj.username && postObj.username.toLowerCase().trim() === myKey);
+
+        const sheet = document.createElement("div");
+        sheet.id = "nx-sys-post-3dot-sheet";
+        sheet.style.cssText =
+            "position:fixed; inset:0; background:rgba(2,6,23,0.88); z-index:200110; display:flex; align-items:flex-end; justify-content:center; backdrop-filter:blur(5px);";
+
+        const btnStyle =
+            "width:100%; text-align:left; padding:13px 16px; background:#090d16; border:1px solid #1e293b; border-radius:13px; color:#f8fafc; font-size:13.5px; font-weight:800; display:flex; align-items:center; gap:11px; cursor:pointer; margin-bottom:7px;";
+
+        sheet.innerHTML = `
+            <div style="background:#0f172a; border-top:1.5px solid #334155; border-radius:24px 24px 0 0; width:100%; max-width:600px; padding:18px 16px 26px; color:#fff; box-shadow:0 -14px 45px rgba(0,0,0,0.95);">
+                <div style="width:42px; height:4px; background:#334155; border-radius:999px; margin:0 auto 14px;"></div>
+                <div style="font-size:12px; font-weight:900; color:#38bdf8; text-transform:uppercase; letter-spacing:0.6px; margin-bottom:10px; padding:0 4px;">
+                    ⚡ Nexus Official Post Options
+                </div>
+
+                <button type="button" id="nx-3d-vault" style="${btnStyle}">
+                    <span>⚡</span> <span>Save to Nexus Vault (Cloud Bookmark)</span>
+                </button>
+                <button type="button" id="nx-3d-share" style="${btnStyle}">
+                    <span>🔗</span> <span>Share Direct Post Link</span>
+                </button>
+
+                ${
+                    isOwnerOrAdmin
+                        ? `
+                    <button type="button" id="nx-3d-pin" style="${btnStyle} color:#fbbf24; border-color:rgba(251,191,36,0.35);">
+                        <span>📌</span> <span>${postObj.pinned ? "Unpin from Top" : "Pin to Top of Profile & Feed"}</span>
+                    </button>
+                    <button type="button" id="nx-3d-edit-cap" style="${btnStyle} color:#34d399; border-color:rgba(16,185,129,0.35);">
+                        <span>✏️</span> <span>Edit Post Caption / Text</span>
+                    </button>
+                    <label for="nx-3d-replace-file" style="${btnStyle} color:#38bdf8; border-color:rgba(56,189,248,0.35);">
+                        <span>🖼️</span> <span>Replace Post Photo or Video</span>
+                    </label>
+                    <input type="file" id="nx-3d-replace-file" accept="image/*,video/*" style="display:none;" />
+                    <button type="button" id="nx-3d-boost" style="${btnStyle}">
+                        <span>🚀</span> <span>Boost Post to Top of Home Feed</span>
+                    </button>
+                    <button type="button" id="nx-3d-del" style="${btnStyle} color:#f43f5e; border-color:rgba(244,63,94,0.4); background:rgba(244,63,94,0.1);">
+                        <span>🗑️</span> <span>Delete Post Permanently</span>
+                    </button>
+                `
+                        : ""
+                }
+
+                <button type="button" id="nx-3d-cancel" style="width:100%; padding:12px; border-radius:13px; background:#1e293b; border:none; color:#94a3b8; font-weight:900; font-size:13px; cursor:pointer; margin-top:4px;">
+                    Cancel
+                </button>
+            </div>
+        `;
+
+        document.body.appendChild(sheet);
+        sheet.querySelector("#nx-3d-cancel").onclick = () => sheet.remove();
+        sheet.onclick = (e) => {
+            if (e.target === sheet) sheet.remove();
+        };
+
+        // 1. Save to Nexus Vault
+        sheet.querySelector("#nx-3d-vault").onclick = () => {
+            let saved = [];
+            try {
+                saved = JSON.parse(localStorage.getItem("nx_saved_posts") || "[]");
+            } catch (e) {}
+            if (!saved.some((x) => x && x.id === postObj.id)) {
+                saved.unshift(postObj);
+                localStorage.setItem("nx_saved_posts", JSON.stringify(saved.slice(0, 50)));
+            }
+            sheet.remove();
+            if (window.Nexus && Nexus.toast) Nexus.toast("⚡ Saved to Nexus Vault!");
+        };
+
+        // 2. Share Post Link
+        sheet.querySelector("#nx-3d-share").onclick = () => {
+            const url = `https://nexus-community01.vercel.app/?post=${encodeURIComponent(postObj.id || "")}`;
+            if (navigator.share) {
+                navigator.share({ title: "Nexus Post", text: postObj.content || "Check out this post on Nexus:", url }).catch(() => {});
+            } else {
+                navigator.clipboard?.writeText(url);
+                if (window.Nexus && Nexus.toast) Nexus.toast("🔗 Post Link Copied!");
+            }
+            sheet.remove();
+        };
+
+        if (isOwnerOrAdmin) {
+            // 3. Pin / Unpin Post
+            sheet.querySelector("#nx-3d-pin").onclick = async () => {
+                postObj.pinned = !postObj.pinned;
+                if (window.Nexus && Nexus.db && postObj.id) {
+                    await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ pinned: postObj.pinned }, { merge: true }).catch(() => {});
+                }
+                sheet.remove();
+                if (onUpdateCallback) onUpdateCallback();
+                if (window.Nexus && Nexus.toast) Nexus.toast(postObj.pinned ? "📌 Pinned to Top!" : "Unpinned Post");
+            };
+
+            // 4. Edit Post Caption
+            sheet.querySelector("#nx-3d-edit-cap").onclick = () => {
+                sheet.remove();
+                openInlineCaptionEditorModal(postObj, onUpdateCallback);
+            };
+
+            // 5. Replace Post Photo or Video
+            const repInp = sheet.querySelector("#nx-3d-replace-file");
+            repInp.onchange = async (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+                sheet.remove();
+                if (window.Nexus && Nexus.toast) Nexus.toast("⏳ Updating Post Media...");
+
+                if (file.type.startsWith("video/") && typeof window.__nxUploadVideoForPost === "function") {
+                    window.__nxUploadVideoForPost(file, async (videoRef) => {
+                        postObj.image = videoRef;
+                        postObj.videoUrl = videoRef;
+                        postObj.mediaType = "video";
+                        if (window.Nexus && Nexus.db && postObj.id) {
+                            await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ image: videoRef, videoUrl: videoRef, mediaType: "video" }, { merge: true }).catch(() => {});
+                        }
+                        if (onUpdateCallback) onUpdateCallback();
+                        if (window.Nexus && Nexus.toast) Nexus.toast("🎬 Post Video Updated!");
+                    });
+                } else if (window.Nexus && Nexus.compressImage) {
+                    Nexus.compressImage(file, 780, 0.72, async (b64) => {
+                        postObj.image = b64;
+                        postObj.mediaType = "image";
+                        if (window.Nexus && Nexus.db && postObj.id) {
+                            await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ image: b64, mediaType: "image" }, { merge: true }).catch(() => {});
+                        }
+                        if (onUpdateCallback) onUpdateCallback();
+                        if (window.Nexus && Nexus.toast) Nexus.toast("📸 Post Photo Updated!");
+                    });
+                }
+            };
+
+            // 6. Boost Post to Top of Home Feed
+            sheet.querySelector("#nx-3d-boost").onclick = async () => {
+                postObj.createdAt = Date.now();
+                if (window.Nexus && Nexus.db && postObj.id) {
+                    await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ createdAt: postObj.createdAt }, { merge: true }).catch(() => {});
+                }
+                sheet.remove();
+                if (onUpdateCallback) onUpdateCallback();
+                if (window.Nexus && Nexus.toast) Nexus.toast("🚀 Post Boosted to Top of Feed!");
+            };
+
+            // 7. Delete Post Permanently
+            sheet.querySelector("#nx-3d-del").onclick = async () => {
+                if (!confirm("🗑️ Delete this post permanently?")) return;
+                if (window.Nexus && Nexus.db && postObj.id) {
+                    await Nexus.db.collection("nexus_real_posts").doc(postObj.id).delete().catch(() => {});
+                }
+                if (window.Nexus && Array.isArray(Nexus.posts)) {
+                    Nexus.posts = Nexus.posts.filter((p) => p.id !== postObj.id);
+                }
+                sheet.remove();
+                document.getElementById("nx-scrollable-profile-feed-modal")?.remove();
+                renderMyInstagramProfileTab();
+                if (window.Nexus && Nexus.toast) Nexus.toast("🗑️ Post Deleted!");
+            };
+        }
+    }
+
+    function openInlineCaptionEditorModal(postObj, onUpdateCallback) {
+        document.getElementById("nx-cap-edit-modal")?.remove();
+        const modal = document.createElement("div");
+        modal.id = "nx-cap-edit-modal";
+        modal.style.cssText =
+            "position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:200115; display:flex; align-items:center; justify-content:center; padding:16px;";
+
+        modal.innerHTML = `
+            <div style="background:#0f172a; border:1.5px solid #10b981; border-radius:22px; width:100%; max-width:410px; padding:18px; color:#fff;">
+                <h3 style="font-size:15px; font-weight:900; color:#34d399; margin-bottom:10px;">✏️ Edit Post Caption</h3>
+                <textarea id="nx-new-cap-txt" rows="4" style="width:100%; padding:11px 13px; border-radius:12px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13.5px; outline:none; resize:none;">${
+                    postObj.content || postObj.text || ""
+                }</textarea>
+                <div style="display:flex; gap:8px; margin-top:12px;">
+                    <button type="button" id="nx-save-cap-btn" style="flex:1; padding:11px; border-radius:12px; background:#10b981; color:#020617; font-weight:900; font-size:13px; border:none; cursor:pointer;">💾 Save Caption</button>
+                    <button type="button" id="nx-cancel-cap-btn" style="padding:11px 16px; border-radius:12px; background:#1e293b; color:#cbd5e1; font-weight:800; font-size:13px; border:none; cursor:pointer;">Cancel</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        modal.querySelector("#nx-cancel-cap-btn").onclick = () => modal.remove();
+        modal.querySelector("#nx-save-cap-btn").onclick = async () => {
+            const newTxt = (modal.querySelector("#nx-new-cap-txt").value || "").trim();
+            postObj.content = newTxt;
+            postObj.text = newTxt;
+            if (window.Nexus && Nexus.db && postObj.id) {
+                await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ content: newTxt, text: newTxt }, { merge: true }).catch(() => {});
+            }
+            modal.remove();
+            if (onUpdateCallback) onUpdateCallback();
+            renderMyInstagramProfileTab();
+            if (window.Nexus && Nexus.toast) Nexus.toast("✅ Caption Updated!");
+        };
+    }
+
+    // FULL VERTICAL SCROLLABLE POST FEED VIEWER (OPENS ALL USER POSTS IN A SCROLLABLE LIST!)
+    window.openScrollableProfilePostsFeed = function (postsArray, startIdx, ownerUserObj) {
+        if (!Array.isArray(postsArray) || !postsArray.length) return;
+        document.getElementById("nx-scrollable-profile-feed-modal")?.remove();
+
+        const modal = document.createElement("div");
+        modal.id = "nx-scrollable-profile-feed-modal";
+        modal.style.cssText =
+            "position:fixed; inset:0; background:#090d16; z-index:200090; overflow-y:auto; color:#fff; max-width:600px; margin:0 auto; box-shadow:0 0 60px rgba(0,0,0,0.95); scroll-behavior:smooth;";
+
+        const renderFeedCards = () => {
+            const ownerName = (ownerUserObj && (ownerUserObj.name || ownerUserObj.username)) || "Member";
+            const ownerUname = (ownerUserObj && ownerUserObj.username) || "member";
+
+            const cardsHtml = postsArray
+                .map((p, idx) => {
+                    const img = p.image || p.videoUrl || "";
+                    const isVid =
+                        p.mediaType === "video" ||
+                        String(img).startsWith("data:video/") ||
+                        String(img).startsWith("NX_VIDEO_STREAM:") ||
+                        String(img).match(/\.(mp4|webm|mov)(\?|$)/i);
+
+                    const av =
+                        (ownerUserObj && ownerUserObj.dp) || p.dp
+                            ? `<img src="${(ownerUserObj && ownerUserObj.dp) || p.dp}" style="width:38px; height:38px; border-radius:50%; object-fit:cover; border:1.5px solid #10b981;" />`
+                            : `<div style="width:38px; height:38px; border-radius:50%; background:#10b981; color:#020617; font-weight:900; display:flex; align-items:center; justify-content:center;">${ownerName[0].toUpperCase()}</div>`;
+
+                    let mediaHtml = "";
+                    if (img) {
+                        if (isVid) {
+                            mediaHtml = `<video data-stream-ref="${
+                                String(img).startsWith("NX_VIDEO_STREAM:") ? img : ""
+                            }" src="${
+                                String(img).startsWith("NX_VIDEO_STREAM:") ? "" : img
+                            }" controls playsinline style="width:100%; max-height:460px; background:#000; display:block; border-top:1px solid #1e293b; border-bottom:1px solid #1e293b;"></video>`;
+                        } else {
+                            mediaHtml = `<img src="${img}" style="width:100%; max-height:520px; object-fit:cover; display:block; border-top:1px solid #1e293b; border-bottom:1px solid #1e293b;" />`;
+                        }
+                    }
+
+                    const timeLabel = window.formatRealNexusLastSeen(p.createdAt, false) || "Recent";
+
+                    return `
+                        <article id="nx-feed-post-card-${idx}" style="background:#0f172a; border:1px solid #1e293b; border-radius:20px; margin:12px 12px 18px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
+                            <!-- Post Top Header with Systematic '⋮' 3-Dot Button -->
+                            <div style="padding:12px 14px; display:flex; align-items:center; justify-content:space-between;">
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    ${av}
+                                    <div>
+                                        <div style="font-size:14px; font-weight:900; color:#f8fafc; display:flex; align-items:center; gap:5px;">
+                                            <span>${p.author || ownerName}</span>
+                                            <span style="background:#10b981; color:#020617; font-size:9.5px; font-weight:900; padding:1px 5px; border-radius:99px;">✓</span>
+                                            ${
+                                                p.pinned
+                                                    ? `<span style="background:rgba(245,158,11,0.18); border:1px solid #fbbf24; color:#fbbf24; font-size:9.5px; padding:1px 6px; border-radius:99px;">📌 PINNED</span>`
+                                                    : ""
+                                            }
+                                        </div>
+                                        <div style="font-size:11px; color:#94a3b8;">@${p.username || ownerUname} • ${timeLabel}</div>
+                                    </div>
+                                </div>
+                                <button type="button" class="nx-feed-card-3dot" data-fidx="${idx}" style="width:34px; height:34px; border-radius:50%; background:#1e293b; border:1px solid #334155; color:#f8fafc; font-size:17px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+                                    ⋮
+                                </button>
+                            </div>
+
+                            ${
+                                p.content || p.text
+                                    ? `<div style="padding:4px 15px 12px; font-size:13.5px; color:#f1f5f9; line-height:1.5; white-space:pre-line;">${
+                                          p.content || p.text
+                                      }</div>`
+                                    : ""
+                            }
+
+                            ${mediaHtml}
+
+                            <!-- Interactive Bottom Action Bar -->
+                            <div style="padding:11px 14px; display:flex; align-items:center; justify-content:space-between; background:#090d16;">
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    <button type="button" class="nx-feed-like-btn" data-fidx="${idx}" style="padding:6px 13px; border-radius:999px; background:#1e293b; border:1px solid #334155; color:#f43f5e; font-size:12.5px; font-weight:900; cursor:pointer;">
+                                        ❤️ <span>${p.likes || 1}</span>
+                                    </button>
+                                    <span style="padding:6px 12px; border-radius:999px; background:#1e293b; border:1px solid #334155; color:#94a3b8; font-size:12px; font-weight:800;">
+                                        👁️ ${(p.views || (p.likes || 1) * 2)}
+                                    </span>
+                                </div>
+                                <button type="button" class="nx-feed-3dot-txt" data-fidx="${idx}" style="padding:6px 13px; border-radius:999px; background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.35); color:#38bdf8; font-size:11.5px; font-weight:800; cursor:pointer;">
+                                    Options ⋮
+                                </button>
+                            </div>
+                        </article>
+                    `;
+                })
+                .join("");
+
+            modal.innerHTML = `
+                <div style="position:sticky; top:0; z-index:20; background:rgba(11,17,32,0.96); border-bottom:1px solid #1e293b; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; backdrop-filter:blur(8px);">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <button type="button" id="nx-close-scrollable-feed" style="background:none; border:none; color:#f8fafc; font-size:21px; font-weight:900; cursor:pointer;">←</button>
+                        <div>
+                            <div style="font-size:15.5px; font-weight:900; color:#f8fafc;">Posts (${postsArray.length})</div>
+                            <div style="font-size:11px; color:#34d399; font-weight:700;">@${ownerUname} • Scroll down for all posts</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="padding-bottom:60px;">
+                    ${cardsHtml}
+                </div>
+            `;
+
+            modal.querySelector("#nx-close-scrollable-feed").onclick = () => modal.remove();
+
+            // Load any chunked video streams inside feed
+            modal.querySelectorAll("video[data-stream-ref]").forEach((v) => {
+                const ref = v.getAttribute("data-stream-ref");
+                if (ref) loadVideoChunksForFeed(ref, v);
+            });
+
+            // Bind '⋮' 3-Dot Menu on every post card
+            modal.querySelectorAll(".nx-feed-card-3dot, .nx-feed-3dot-txt").forEach((btn) => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const p = postsArray[Number(btn.getAttribute("data-fidx"))];
+                    if (p) openSystematicPostThreeDotSheet(p, renderFeedCards);
+                };
+            });
+
+            // Bind Like button
+            modal.querySelectorAll(".nx-feed-like-btn").forEach((btn) => {
+                btn.onclick = async () => {
+                    const p = postsArray[Number(btn.getAttribute("data-fidx"))];
+                    if (!p) return;
+                    p.likes = Number(p.likes || 0) + 1;
+                    btn.querySelector("span").textContent = String(p.likes);
+                    if (window.Nexus && Nexus.db && p.id) {
+                        await Nexus.db.collection("nexus_real_posts").doc(p.id).set({ likes: p.likes }, { merge: true }).catch(() => {});
+                    }
+                };
+            });
+        };
+
+        renderFeedCards();
+        document.body.appendChild(modal);
+
+        // Automatically scroll directly to the post the user tapped!
+        setTimeout(() => {
+            const targetCard = document.getElementById(`nx-feed-post-card-${startIdx}`);
+            if (targetCard) {
+                targetCard.scrollIntoView({ behavior: "instant", block: "start" });
+            }
+        }, 40);
+    };
+
+    // =========================================================================
+    // 4. 🔍 LONG-PRESS AVATAR HD ZOOM & FULL PUBLIC PROFILE VIEWER
     // =========================================================================
     function findUserObjectByAnyIdentifier(identifier) {
         if (!identifier || !window.Nexus || !Array.isArray(Nexus.users)) return null;
@@ -474,7 +842,6 @@
         );
     }
 
-    // Opens Instagram-Style Long-Press Avatar Zoom Card
     window.openAvatarLongPressZoomModal = function (userObj) {
         if (!userObj || !userObj.username) return;
         document.getElementById("nx-avatar-zoom-overlay")?.remove();
@@ -498,7 +865,7 @@
         const overlay = document.createElement("div");
         overlay.id = "nx-avatar-zoom-overlay";
         overlay.style.cssText =
-            "position:fixed; inset:0; background:rgba(2,6,23,0.9); z-index:200095; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; backdrop-filter:blur(10px); animation:fadeIn 0.15s ease;";
+            "position:fixed; inset:0; background:rgba(2,6,23,0.9); z-index:200095; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; backdrop-filter:blur(10px);";
 
         overlay.innerHTML = `
             ${
@@ -558,7 +925,6 @@
         };
     };
 
-    // Opens Complete Instagram Public Profile Modal for ANY User
     window.openPublicUserProfileModal = function (targetUsername) {
         const userObj =
             typeof targetUsername === "object"
@@ -606,14 +972,14 @@
         const gridHtml = userPosts.length
             ? `<div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:3px; margin-top:12px;">
                    ${userPosts
-                       .map((p) => {
+                       .map((p, idx) => {
                            const img = p.image || p.videoUrl || "";
-                           if (img && !img.startsWith("NX_VIDEO_STREAM:")) {
-                               return `<div style="aspect-ratio:1/1; background:#090d16; overflow:hidden; position:relative; cursor:pointer;" onclick="window.open('${img}')">
+                           if (img && !String(img).startsWith("NX_VIDEO_STREAM:")) {
+                               return `<div class="nx-pub-grid-item" data-pidx="${idx}" style="aspect-ratio:1/1; background:#090d16; overflow:hidden; position:relative; cursor:pointer;">
                                            <img src="${img}" style="width:100%; height:100%; object-fit:cover; display:block;" />
                                        </div>`;
                            }
-                           return `<div style="aspect-ratio:1/1; background:#0f172a; border:1px solid #1e293b; padding:8px; display:flex; align-items:center; justify-content:center; text-align:center; font-size:10.5px; color:#cbd5e1; overflow:hidden;">
+                           return `<div class="nx-pub-grid-item" data-pidx="${idx}" style="aspect-ratio:1/1; background:#0f172a; border:1px solid #1e293b; padding:8px; display:flex; align-items:center; justify-content:center; text-align:center; font-size:10.5px; color:#cbd5e1; cursor:pointer; overflow:hidden;">
                                        ${(p.content || p.text || "Post").slice(0, 55)}
                                    </div>`;
                        })
@@ -627,7 +993,6 @@
             "position:fixed; inset:0; background:#090d16; z-index:200075; overflow-y:auto; color:#fff; max-width:600px; margin:0 auto; box-shadow:0 0 50px rgba(0,0,0,0.95);";
 
         modal.innerHTML = `
-            <!-- Top Instagram Profile Bar -->
             <div style="position:sticky; top:0; background:rgba(11,17,32,0.96); border-bottom:1px solid #1e293b; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; z-index:10;">
                 <div style="display:flex; align-items:center; gap:12px;">
                     <button type="button" id="nx-close-pub-profile" style="background:none; border:none; color:#f8fafc; font-size:20px; font-weight:900; cursor:pointer;">←</button>
@@ -670,7 +1035,6 @@
                     ${songBannerHtml}
                 </div>
 
-                <!-- Follow & Message Buttons -->
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px;">
                     <button type="button" id="nx-pub-follow-toggle" style="padding:10px; border-radius:11px; background:${
                         isFollowing ? "#1e293b" : "#10b981"
@@ -685,7 +1049,7 @@
                 </div>
 
                 <div style="border-top:1px solid #1e293b; margin-top:16px; padding-top:10px; text-align:center; font-size:12px; font-weight:800; color:#38bdf8;">
-                    ⊞ POSTS (${userPosts.length})
+                    ⊞ POSTS (${userPosts.length}) • Tap any post to scroll feed
                 </div>
                 ${gridHtml}
             </div>
@@ -711,6 +1075,14 @@
         modal.querySelector("#nx-pub-following-btn").onclick = () => {
             openFollowersFollowingModal("Following", userObj.followingList || []);
         };
+
+        // Clicking any post in public profile opens the full scrollable post feed!
+        modal.querySelectorAll(".nx-pub-grid-item").forEach((cell) => {
+            cell.onclick = () => {
+                const idx = Number(cell.getAttribute("data-pidx") || 0);
+                window.openScrollableProfilePostsFeed(userPosts, idx, userObj);
+            };
+        });
 
         modal.querySelector("#nx-pub-follow-toggle").onclick = async function () {
             if (!isUserVerified()) {
@@ -769,7 +1141,6 @@
         };
     };
 
-    // Global Long-Press Listener on ANY User Avatar / Story Circle / Post Author DP!
     function bindGlobalAvatarLongPress() {
         const startHold = (e) => {
             const target = e.target.closest("img, div, span");
@@ -777,7 +1148,6 @@
             const rect = target.getBoundingClientRect();
             if (rect.width < 26 || rect.width > 120) return;
 
-            // Find closest story card, post header, or chat header
             const container = target.closest("[data-username], article, .nx-story-item, div");
             if (!container) return;
 
@@ -804,7 +1174,7 @@
     bindGlobalAvatarLongPress();
 
     // =========================================================================
-    // 4. INTERACTIVE FOLLOWERS / FOLLOWING MODAL & POST VIEWER / EDITOR
+    // 5. FOLLOWERS / FOLLOWING MODAL & EDIT PROFILE MODAL
     // =========================================================================
     function openFollowersFollowingModal(title, usernameList) {
         document.getElementById("nx-follow-list-modal")?.remove();
@@ -861,74 +1231,6 @@
         });
     }
 
-    function openOwnPostDetailAndEditModal(postObj) {
-        if (!postObj) return;
-        document.getElementById("nx-own-post-modal")?.remove();
-
-        const modal = document.createElement("div");
-        modal.id = "nx-own-post-modal";
-        modal.style.cssText =
-            "position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:200085; display:flex; align-items:center; justify-content:center; padding:16px;";
-
-        const mediaHtml = postObj.image
-            ? postObj.mediaType === "video" || String(postObj.image).startsWith("data:video/")
-                ? `<video src="${postObj.image}" controls playsinline style="width:100%; max-height:280px; border-radius:12px; background:#000; margin-bottom:10px;"></video>`
-                : `<img src="${postObj.image}" style="width:100%; max-height:280px; object-fit:cover; border-radius:12px; margin-bottom:10px;" />`
-            : "";
-
-        modal.innerHTML = `
-            <div style="background:#0f172a; border:1.5px solid #334155; border-radius:22px; width:100%; max-width:410px; padding:18px; color:#fff; box-shadow:0 20px 50px rgba(0,0,0,0.95);">
-                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-                    <span style="font-size:14px; font-weight:900; color:#34d399;">✏️ Manage Your Post</span>
-                    <button type="button" id="nx-close-p-edit" style="width:28px; height:28px; border-radius:50%; background:#1e293b; border:none; color:#fff; font-weight:900; cursor:pointer;">✕</button>
-                </div>
-                ${mediaHtml}
-                <textarea id="nx-edit-post-txt" rows="3" style="width:100%; padding:10px 12px; border-radius:12px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; outline:none; resize:none;">${
-                    postObj.content || postObj.text || ""
-                }</textarea>
-                <div style="display:flex; gap:8px; margin-top:12px;">
-                    <button type="button" id="nx-save-post-edit" style="flex:1; padding:11px; border-radius:12px; background:#10b981; color:#020617; font-weight:900; font-size:12.5px; border:none; cursor:pointer;">
-                        💾 Save Changes
-                    </button>
-                    <button type="button" id="nx-delete-post-btn" style="padding:11px 14px; border-radius:12px; background:#e11d48; color:#fff; font-weight:900; font-size:12.5px; border:none; cursor:pointer;">
-                        🗑️ Delete
-                    </button>
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-        modal.querySelector("#nx-close-p-edit").onclick = () => modal.remove();
-
-        modal.querySelector("#nx-save-post-edit").onclick = async () => {
-            const newTxt = (modal.querySelector("#nx-edit-post-txt").value || "").trim();
-            postObj.content = newTxt;
-            postObj.text = newTxt;
-            if (window.Nexus && Nexus.db && postObj.id) {
-                await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ content: newTxt, text: newTxt }, { merge: true }).catch(() => {});
-            }
-            modal.remove();
-            renderMyInstagramProfileTab();
-            if (window.Nexus && Nexus.toast) Nexus.toast("✅ Post Updated!");
-        };
-
-        modal.querySelector("#nx-delete-post-btn").onclick = async () => {
-            if (!confirm("🗑️ Delete this post permanently?")) return;
-            if (window.Nexus && Nexus.db && postObj.id) {
-                await Nexus.db.collection("nexus_real_posts").doc(postObj.id).delete().catch(() => {});
-            }
-            if (window.Nexus && Array.isArray(Nexus.posts)) {
-                Nexus.posts = Nexus.posts.filter((p) => p.id !== postObj.id);
-            }
-            modal.remove();
-            renderMyInstagramProfileTab();
-            if (window.Nexus && Nexus.toast) Nexus.toast("🗑️ Post Deleted!");
-        };
-    }
-
-    // =========================================================================
-    // 5. EDIT PROFILE MODAL (NAME, BIO, CATEGORY, WEBSITE LINK, MOOD NOTE, DP)
-    // =========================================================================
     function openEditInstagramProfileModal() {
         const me = getActiveUser();
         if (!me) return;
@@ -1020,20 +1322,24 @@
     function renderMyInstagramProfileTab() {
         const container = document.getElementById("tab-profile");
         if (!container) return;
-
-        // If user is not verified/logged in, let the Auth Verification Hub render cleanly
         if (!isUserVerified()) return;
 
         const me = (window.Nexus && Nexus.getCurrentUser && Nexus.getCurrentUser()) || getActiveUser();
         if (!me || !me.username) return;
 
         const myKey = me.username.toLowerCase().trim();
-        const allMyPosts = ((window.Nexus && Nexus.posts) || []).filter((p) => {
-            if (!p) return false;
-            const pU = (p.username || "").toLowerCase().trim();
-            const pA = (p.author || "").toLowerCase().trim();
-            return pU === myKey || pA === (me.name || "").toLowerCase().trim();
-        });
+        const allMyPosts = ((window.Nexus && Nexus.posts) || [])
+            .filter((p) => {
+                if (!p) return false;
+                const pU = (p.username || "").toLowerCase().trim();
+                const pA = (p.author || "").toLowerCase().trim();
+                return pU === myKey || pA === (me.name || "").toLowerCase().trim();
+            })
+            .sort((a, b) => {
+                if (a.pinned && !b.pinned) return -1;
+                if (!a.pinned && b.pinned) return 1;
+                return Number(b.createdAt || 0) - Number(a.createdAt || 0);
+            });
 
         const myVideoPosts = allMyPosts.filter(
             (p) =>
@@ -1043,16 +1349,22 @@
                 String(p.image || "").match(/\.(mp4|webm|mov)(\?|$)/i)
         );
 
-        let savedPosts = [];
+        let vaultPosts = [];
         try {
-            savedPosts = JSON.parse(localStorage.getItem("nx_saved_posts") || "[]");
+            const saved = JSON.parse(localStorage.getItem("nx_saved_posts") || "[]");
+            const pinnedOwn = allMyPosts.filter((p) => p.pinned);
+            const map = new Map();
+            [...pinnedOwn, ...saved].forEach((p) => {
+                if (p && (p.id || p.createdAt)) map.set(p.id || p.createdAt, p);
+            });
+            vaultPosts = Array.from(map.values());
         } catch (e) {}
 
         const activeList =
             currentProfileTabMode === "videos"
                 ? myVideoPosts
-                : currentProfileTabMode === "saved"
-                ? savedPosts
+                : currentProfileTabMode === "vault"
+                ? vaultPosts
                 : allMyPosts;
 
         const dpHtml = me.dp
@@ -1094,16 +1406,26 @@
                                String(img).startsWith("data:video/") ||
                                String(img).startsWith("NX_VIDEO_STREAM:");
 
+                           const pinBadge = p.pinned
+                               ? `<span style="position:absolute; top:5px; left:5px; background:rgba(2,6,23,0.8); color:#fbbf24; font-size:10px; padding:2px 5px; border-radius:6px; z-index:3;">📌</span>`
+                               : "";
+
+                           const dotsBadge = `<button type="button" class="nx-grid-cell-3dot" data-gidx="${idx}" style="position:absolute; top:4px; right:4px; width:24px; height:24px; border-radius:50%; background:rgba(2,6,23,0.78); border:1px solid rgba(255,255,255,0.2); color:#fff; font-size:13px; font-weight:900; display:flex; align-items:center; justify-content:center; z-index:4; cursor:pointer;">⋮</button>`;
+
                            if (img && !String(img).startsWith("NX_VIDEO_STREAM:")) {
                                return `<div class="nx-my-grid-item" data-post-idx="${idx}" style="aspect-ratio:1/1; background:#090d16; overflow:hidden; position:relative; cursor:pointer;">
+                                           ${pinBadge}
+                                           ${dotsBadge}
                                            ${
                                                isVid
-                                                   ? `<video src="${img}" muted playsinline style="width:100%; height:100%; object-fit:cover; display:block;"></video><span style="position:absolute; top:6px; right:6px; font-size:12px;">🎬</span>`
+                                                   ? `<video src="${img}" muted playsinline style="width:100%; height:100%; object-fit:cover; display:block;"></video><span style="position:absolute; bottom:5px; right:5px; font-size:12px;">🎬</span>`
                                                    : `<img src="${img}" style="width:100%; height:100%; object-fit:cover; display:block;" />`
                                            }
                                        </div>`;
                            }
-                           return `<div class="nx-my-grid-item" data-post-idx="${idx}" style="aspect-ratio:1/1; background:linear-gradient(145deg,#0f172a,#1e293b); border:1px solid #1e293b; padding:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; font-size:11px; color:#e2e8f0; cursor:pointer; overflow:hidden;">
+                           return `<div class="nx-my-grid-item" data-post-idx="${idx}" style="aspect-ratio:1/1; background:linear-gradient(145deg,#0f172a,#1e293b); border:1px solid #1e293b; padding:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; font-size:11px; color:#e2e8f0; cursor:pointer; overflow:hidden; position:relative;">
+                                       ${pinBadge}
+                                       ${dotsBadge}
                                        ${isVid ? `<div style="font-size:20px; margin-bottom:4px;">🎬</div>` : ""}
                                        <div>${(p.content || p.text || "Post").slice(0, 50)}</div>
                                    </div>`;
@@ -1112,9 +1434,9 @@
                </div>`
             : `<div style="text-align:center; padding:40px 16px; color:#64748b;">
                    <div style="font-size:28px; margin-bottom:6px;">${
-                       currentProfileTabMode === "videos" ? "🎬" : currentProfileTabMode === "saved" ? "🔖" : "📷"
+                       currentProfileTabMode === "videos" ? "🎬" : currentProfileTabMode === "vault" ? "⚡" : "📷"
                    }</div>
-                   <div style="font-size:13.5px; font-weight:800; color:#cbd5e1;">No ${currentProfileTabMode} yet</div>
+                   <div style="font-size:13.5px; font-weight:800; color:#cbd5e1;">No ${currentProfileTabMode} posts yet</div>
                </div>`;
 
         container.innerHTML = `
@@ -1126,7 +1448,7 @@
                         <span style="background:#10b981; color:#020617; font-size:10px; font-weight:900; padding:1px 6px; border-radius:999px;">✓</span>
                         <span style="color:#94a3b8; font-size:13px;">▾</span>
                     </div>
-                    <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
                         <button type="button" id="nx-prof-new-post" title="Create Post" style="padding:6px 11px; border-radius:10px; background:#1e293b; border:1px solid #334155; color:#f8fafc; font-size:12px; font-weight:800; cursor:pointer;">＋ Post</button>
                         <button type="button" id="nx-prof-open-settings" title="Settings" style="padding:6px 11px; border-radius:10px; background:#1e293b; border:1px solid #334155; color:#38bdf8; font-size:13px; font-weight:900; cursor:pointer;">☰</button>
                     </div>
@@ -1145,7 +1467,7 @@
                         </div>
 
                         <div style="flex:1; display:grid; grid-template-columns:repeat(3, 1fr); text-align:center;">
-                            <div>
+                            <div id="nx-my-posts-scroll-trigger" style="cursor:pointer;">
                                 <div style="font-size:18px; font-weight:900; color:#f8fafc;">${allMyPosts.length}</div>
                                 <div style="font-size:11.5px; color:#94a3b8;">posts</div>
                             </div>
@@ -1188,22 +1510,22 @@
                     </div>
                 </div>
 
-                <!-- 5. 3-Tab Instagram Grid Selector (Posts | Videos | Saved) -->
+                <!-- 5. 3-Tab Official Nexus Grid Selector (⊞ Posts | 🎬 Reels | ⚡ Nexus Vault) -->
                 <div style="display:grid; grid-template-columns:repeat(3, 1fr); border-top:1px solid #1e293b; border-bottom:1px solid #1e293b; margin-top:8px;">
-                    <button type="button" data-ptab="posts" style="padding:11px; background:none; border:none; border-bottom:2.5px solid ${
-                        currentProfileTabMode === "posts" ? "#f8fafc" : "transparent"
-                    }; color:${currentProfileTabMode === "posts" ? "#f8fafc" : "#64748b"}; font-weight:900; font-size:12.5px; cursor:pointer;">
-                        ⊞ Posts
+                    <button type="button" data-ptab="posts" style="padding:11px 4px; background:none; border:none; border-bottom:2.5px solid ${
+                        currentProfileTabMode === "posts" ? "#10b981" : "transparent"
+                    }; color:${currentProfileTabMode === "posts" ? "#f8fafc" : "#64748b"}; font-weight:900; font-size:12px; cursor:pointer;">
+                        ⊞ Posts (${allMyPosts.length})
                     </button>
-                    <button type="button" data-ptab="videos" style="padding:11px; background:none; border:none; border-bottom:2.5px solid ${
-                        currentProfileTabMode === "videos" ? "#f8fafc" : "transparent"
-                    }; color:${currentProfileTabMode === "videos" ? "#f8fafc" : "#64748b"}; font-weight:900; font-size:12.5px; cursor:pointer;">
-                        🎬 Videos
+                    <button type="button" data-ptab="videos" style="padding:11px 4px; background:none; border:none; border-bottom:2.5px solid ${
+                        currentProfileTabMode === "videos" ? "#10b981" : "transparent"
+                    }; color:${currentProfileTabMode === "videos" ? "#f8fafc" : "#64748b"}; font-weight:900; font-size:12px; cursor:pointer;">
+                        🎬 Reels (${myVideoPosts.length})
                     </button>
-                    <button type="button" data-ptab="saved" style="padding:11px; background:none; border:none; border-bottom:2.5px solid ${
-                        currentProfileTabMode === "saved" ? "#f8fafc" : "transparent"
-                    }; color:${currentProfileTabMode === "saved" ? "#f8fafc" : "#64748b"}; font-weight:900; font-size:12.5px; cursor:pointer;">
-                        🔖 Saved
+                    <button type="button" data-ptab="vault" style="padding:11px 4px; background:none; border:none; border-bottom:2.5px solid ${
+                        currentProfileTabMode === "vault" ? "#38bdf8" : "transparent"
+                    }; color:${currentProfileTabMode === "vault" ? "#38bdf8" : "#64748b"}; font-weight:900; font-size:12px; cursor:pointer;">
+                        ⚡ Nexus Vault (${vaultPosts.length})
                     </button>
                 </div>
 
@@ -1212,7 +1534,6 @@
             </div>
         `;
 
-        // Bind Top & Action Controls
         container.querySelector("#nx-prof-switch-trigger").onclick = () => {
             if (window.openAdvancedGoogleAuthModal) window.openAdvancedGoogleAuthModal("signin");
         };
@@ -1238,7 +1559,6 @@
         const changeMySongBtn = container.querySelector("#nx-my-song-change");
         if (changeMySongBtn) changeMySongBtn.onclick = window.openProfileSongPickerModal;
 
-        // Upload new DP handler
         const dpInp = container.querySelector("#nx-upload-new-dp");
         if (dpInp) {
             dpInp.onchange = (e) => {
@@ -1257,6 +1577,9 @@
             };
         }
 
+        container.querySelector("#nx-my-posts-scroll-trigger").onclick = () => {
+            if (allMyPosts.length) window.openScrollableProfilePostsFeed(allMyPosts, 0, me);
+        };
         container.querySelector("#nx-my-followers-trigger").onclick = () => {
             openFollowersFollowingModal("Followers", me.followersList || []);
         };
@@ -1286,15 +1609,24 @@
             };
         });
 
+        // Bind direct 3-dot button on each grid cell
+        container.querySelectorAll(".nx-grid-cell-3dot").forEach((dotsBtn) => {
+            dotsBtn.onclick = (e) => {
+                e.stopPropagation();
+                const p = activeList[Number(dotsBtn.getAttribute("data-gidx"))];
+                if (p) openSystematicPostThreeDotSheet(p, renderMyInstagramProfileTab);
+            };
+        });
+
+        // Tapping ANY post in the grid opens the Full Vertical Scrollable Post Feed at that exact post!
         container.querySelectorAll(".nx-my-grid-item").forEach((cell) => {
             cell.onclick = () => {
-                const p = activeList[Number(cell.getAttribute("data-post-idx"))];
-                if (p) openOwnPostDetailAndEditModal(p);
+                const idx = Number(cell.getAttribute("data-post-idx") || 0);
+                window.openScrollableProfilePostsFeed(activeList, idx, me);
             };
         });
     }
 
-    // Hook into Nexus Profile Tab & User Listeners
     if (window.Nexus && Nexus.listeners) {
         Nexus.listeners.onUsers.push(() => {
             const pTab = document.getElementById("tab-profile");
@@ -1310,7 +1642,6 @@
         });
     }
 
-    // Expose `Nexus.openUserProfile` so clicking any user in Home Feed or Search opens their Public Profile!
     if (window.Nexus) {
         Nexus.openUserProfile = window.openPublicUserProfileModal;
     }
