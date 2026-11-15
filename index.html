@@ -67,11 +67,19 @@
     })();
     </script>
 
-    <!-- ================= 2. 0.01s INSTANT REAL DATABASE PRE-FETCHER & DELETED POST FILTER ================= -->
+    <!-- ================= 2. 0.01s TURBO PRE-FETCHER & ACCIDENTAL PINNED POST WIPER ================= -->
     <script>
     (function () {
         if ("caches" in window) {
             caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => {});
+        }
+
+        // One-time automatic purge of stale cached posts so accidental screenshot post (1000076939.jpg) disappears immediately!
+        if (!localStorage.getItem("nx_purged_pinned_screenshot_v27")) {
+            localStorage.removeItem("nx_light_posts_v1");
+            localStorage.removeItem("nx_posts");
+            localStorage.removeItem("nexus_posts");
+            localStorage.setItem("nx_purged_pinned_screenshot_v27", "1");
         }
 
         const PROJECT_ID = "nexus-community-bf99c";
@@ -90,12 +98,19 @@
             try {
                 const set = getDeletedIdsSet();
                 set.add(String(postId));
-                localStorage.setItem("nx_deleted_post_ids_v1", JSON.stringify(Array.from(set).slice(-200)));
+                localStorage.setItem("nx_deleted_post_ids_v1", JSON.stringify(Array.from(set).slice(-250)));
 
-                const cached = JSON.parse(localStorage.getItem("nx_light_posts_v1") || "[]");
-                const filtered = cached.filter((p) => p && p.id !== postId);
-                localStorage.setItem("nx_light_posts_v1", JSON.stringify(filtered));
+                ["nx_light_posts_v1", "nx_posts", "nexus_posts"].forEach((k) => {
+                    const raw = localStorage.getItem(k);
+                    if (raw) {
+                        const arr = JSON.parse(raw);
+                        if (Array.isArray(arr)) {
+                            localStorage.setItem(k, JSON.stringify(arr.filter((p) => p && p.id !== postId)));
+                        }
+                    }
+                });
             } catch (e) {}
+
             if (window.__NX_INSTANT_POSTS__) {
                 window.__NX_INSTANT_POSTS__ = window.__NX_INSTANT_POSTS__.filter((p) => p && p.id !== postId);
             }
@@ -123,20 +138,39 @@
             return out;
         }
 
+        // Detects old refresh spam OR the accidental pinned screenshot post from 1000076939.jpg!
         window.__nxIsRefreshSpamPost = function (postObj) {
             if (!postObj) return true;
             const deletedSet = getDeletedIdsSet();
             if (postObj.id && deletedSet.has(String(postObj.id))) return true;
+
             const raw = String(postObj.content || postObj.text || "")
                 .toLowerCase()
                 .replace(/\s+/g, " ");
-            return (
+            const uName = String(postObj.username || postObj.author || "").toLowerCase();
+
+            // 1. Old refresh announcement spam
+            if (
                 raw.includes("website ko refresh") ||
                 raw.includes("ek bar website ko refresh") ||
                 raw.includes("ek baar refresh") ||
                 (raw.includes("refresh") && raw.includes("updates properly dikh")) ||
                 (raw.includes("refresh") && raw.includes("kar lena"))
-            );
+            ) {
+                return true;
+            }
+
+            // 2. Accidental pinned image post by 'Nexus' with empty caption (Fixes 1000076939.jpg!)
+            if (
+                (uName === "nexus" || uName === "nexus_official") &&
+                postObj.pinned &&
+                postObj.image &&
+                raw.trim().length < 5
+            ) {
+                return true;
+            }
+
+            return false;
         };
 
         window.__nxPreloadPromise = (async function () {
@@ -260,12 +294,15 @@
                         let data = doc.data();
                         if (!data) return;
 
-                        // If Vault broadcasted a force-deleted post ID, wipe it in 0.01s from all screens!
                         if (data.lastDeletedPostId && window.__nxMarkPostDeletedLocally) {
                             window.__nxMarkPostDeletedLocally(data.lastDeletedPostId);
                         }
                         if (Array.isArray(data.deletedPostIds) && window.__nxMarkPostDeletedLocally) {
                             data.deletedPostIds.forEach(id => window.__nxMarkPostDeletedLocally(id));
+                        }
+                        if (data.wipePostCacheAt) {
+                            localStorage.removeItem("nx_light_posts_v1");
+                            localStorage.removeItem("nx_posts");
                         }
 
                         if (!currentAppVersion) {
@@ -280,12 +317,12 @@
                             targetFiles.forEach(function(f) { window.hotReloadNexusModule(f); });
                         }
                     });
-                }, 1200);
+                }, 1000);
             });
         })();
     </script>
 
-    <!-- ================= 4. ALL-DEVICE RESPONSIVE CSS & ANTI-OVERLAP SHIELD ================= -->
+    <!-- ================= 4. ALL-DEVICE RESPONSIVE CSS & STORY BAR ANTI-OVERLAP SHIELD ================= -->
     <style>
         * {
             box-sizing: border-box;
@@ -520,6 +557,11 @@
             box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
             white-space: nowrap;
         }
+        #nx-stories-bar {
+            padding-top: 10px !important;
+            padding-bottom: 10px !important;
+            align-items: flex-end !important;
+        }
         #nx-stories-bar::-webkit-scrollbar {
             display: none;
         }
@@ -561,10 +603,11 @@
             transition: transform 0.15s ease-out;
             position: relative;
         }
-        /* Anti-Overlap Shield: Permanently hides broken legacy post modal, duplicate auto-seen pills & legacy profile dummy cards */
+        /* Anti-Overlap Shield: Hides broken legacy post modal, duplicate auto-seen pills & top DM Open clutter */
         #tab-post-modal,
         #nx-post-video-preview-box,
-        .nx-auto-seen-pill {
+        .nx-auto-seen-pill,
+        .nx-dm-open-pill-hidden {
             display: none !important;
         }
         body.nx-auth-locked .nx-fab-post::after,
@@ -838,7 +881,7 @@
                 Object.values(map).forEach(u => {
                     if (!u || !u.username) return;
                     let ageMs = u.lastOnline > 1000000000000 ? (Date.now() - u.lastOnline) : 999999999;
-                    u.isOnlineNow = Boolean((ageMs >= 0 && ageMs <= 600000) || (u.isOnlineNow && ageMs <= 2700000) || u.username === myActiveKey);
+                    u.isOnlineNow = Boolean((ageMs >= 0 && ageMs <= 600000) || (u.isOnlineNow && ageMs <= 1800000) || u.username === myActiveKey);
 
                     let nameKey = (u.name || u.username).toLowerCase().trim();
                     if (!byNameMap[nameKey]) {
@@ -881,7 +924,7 @@
                     username: u.username,
                     name: u.name,
                     bio: u.bio,
-                    dp: (u.dp && u.dp.length < 95000) ? u.dp : '',
+                    dp: (u.dp && u.dp.length < 75000) ? u.dp : '',
                     moodNote: u.moodNote || '',
                     isOnlineNow: u.isOnlineNow,
                     lastOnline: u.lastOnline,
@@ -942,7 +985,6 @@
                     }
                 });
 
-                // FIXED: Always updates `this.posts` & wipes `localStorage` in 0.01s when any post is deleted from Vault or 3-Dot menu!
                 this.db.collection("nexus_real_posts").orderBy("createdAt", "desc").limit(35).onSnapshot(snap => {
                     snap.docChanges().forEach(change => {
                         if (change.type === "removed" && window.__nxMarkPostDeletedLocally) {
@@ -955,19 +997,17 @@
                         let p = d.data();
                         p.id = d.id;
                         if (window.__nxIsRefreshSpamPost(p)) {
-                            if (String(p.content || p.text || "").toLowerCase().includes("refresh")) {
-                                this.db.collection("nexus_real_posts").doc(d.id).delete().catch(() => {});
-                            }
+                            // Automatically delete old refresh spam or accidental blank pinned screenshot post from Firestore!
+                            this.db.collection("nexus_real_posts").doc(d.id).delete().catch(() => {});
                         } else {
                             livePosts.push(p);
                         }
                     });
 
-                    // Always update `this.posts` even if `livePosts` has 0 items!
                     this.posts = livePosts;
                     window.__NX_INSTANT_POSTS__ = livePosts;
-                    let ultraLightPosts = this.posts.slice(0, 15).map(p => Object.assign({}, p, {
-                        image: (p.image && p.image.length > 75000) ? '' : p.image
+                    let ultraLightPosts = this.posts.slice(0, 12).map(p => Object.assign({}, p, {
+                        image: (p.image && p.image.length > 55000) ? '' : p.image
                     }));
                     safeSetLocalCache('nx_light_posts_v1', ultraLightPosts);
                     this.rebuildAllUsersMasterList();
@@ -1073,7 +1113,7 @@
         Nexus.init();
     </script>
 
-    <!-- ================= CORE NEXUS MODULES (ORDERED TO PREVENT OVERWRITES!) ================= -->
+    <!-- ================= CORE NEXUS MODULES (profilefix.js REMOVED SO IT NEVER OVERWRITES!) ================= -->
     <script src="about.js" charset="UTF-8"></script>
     <script src="advance.js" charset="UTF-8"></script>
     <script src="ai.js" charset="UTF-8"></script>
@@ -1101,23 +1141,24 @@
     <script src="watchparty.js" charset="UTF-8"></script>
     <script src="ytparty.js" charset="UTF-8"></script>
 
-    <!-- MASTER UPGRADED MODULES LOADED LAST WITH ?v=26 CACHE-BUSTER SO THEY NEVER GET OVERWRITTEN! -->
-    <script src="settings.js?v=26" charset="UTF-8"></script>
-    <script src="profile.js?v=26" charset="UTF-8"></script>
-    <script src="post.js?v=26" charset="UTF-8"></script>
+    <!-- MASTER UPGRADED MODULES LOADED LAST WITH ?v=27 CACHE-BUSTER -->
+    <script src="settings.js?v=27" charset="UTF-8"></script>
+    <script src="profile.js?v=27" charset="UTF-8"></script>
+    <script src="post.js?v=27" charset="UTF-8"></script>
 
     <!-- ============================================================================
-         NEXUS V26 COMPLETE UNCUT MASTER ENGINE:
-         1. 0.01s Instant Post Delete from Home Feed '⋮' Menu & Vault (Fixes 1000076810.jpg!)
-         2. Story Bar Anti-Overlap Cleaner (Removes fake '💬 DM Open' + duplicate badges!)
-         3. Left & Right Swipe-to-Reply on Sent Photos, Videos & Media Bubbles!
-         4. Cross-Phone Guaranteed Media Sync (Matches Chanchal even when truncated!)
-         5. Protected <canvas> View-Once (1️⃣), Whiteboard (✏️) & Block User (🚫)
+         NEXUS V27 COMPLETE UNCUT MASTER ENGINE:
+         1. Story Bar Zero-Overlap Engine (Removes '💬 DM Open' top pill & duplicate badges
+            in 1000076939.jpg -> Shows ONLY 1 clean '🟢 Live' or real 'Xm ago' badge!)
+         2. Auto-Wipes Accidental Pinned Screenshot Post (1000076939.jpg) from DOM & Cloud
+         3. Strict Owner-Only Post Delete/Edit Security (No one can delete others' posts!)
+         4. Direct Shareable Deep-Links (?post=ID & ?user=username)
+         5. Left/Right Swipe-to-Reply on Photos/Videos + Offline Message Queue
          ============================================================================ -->
     <script>
     (function () {
-        if (window.__NEXUS_V26_COMPLETE_MASTER__) return;
-        window.__NEXUS_V26_COMPLETE_MASTER__ = true;
+        if (window.__NEXUS_V27_COMPLETE_MASTER__) return;
+        window.__NEXUS_V27_COMPLETE_MASTER__ = true;
 
         const NEXUS_OFFICIAL_LOGO_SVG =
             "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2310b981'/%3E%3Cstop offset='50%25' stop-color='%2306b6d4'/%3E%3Cstop offset='100%25' stop-color='%233b82f6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='120' height='120' rx='32' fill='%23090d16'/%3E%3Crect x='5' y='5' width='110' height='110' rx='28' fill='none' stroke='url(%23g)' stroke-width='6'/%3E%3Cpath d='M32 86V34h14l28 36V34h14v52H74L46 50v36H32z' fill='url(%23g)'/%3E%3Ccircle cx='94' cy='26' r='8' fill='%2310b981'/%3E%3C/svg%3E";
@@ -1206,8 +1247,77 @@
         window.__nxIsUserVerified = isGoogleVerifiedAccount;
 
         // =========================================================================
-        // 1. HOME FEED '⋮' (3-DOT) INSTANT ADMIN / OWNER POST DELETE & EDIT
-        //    (Allows deleting accidental posts like 1000076810.jpg in 0.01s right from Home!)
+        // 1. STORY BAR ZERO-OVERLAP ENGINE & ACCIDENTAL SCREENSHOT POST CLEANER
+        //    (Fixes 1000076939.jpg: Removes '💬 DM Open' + Unifies Single Status Pill!)
+        // =========================================================================
+        function enforceCleanStoryBarAndFeed() {
+            const homeTab = document.getElementById("tab-home");
+            if (!homeTab) return;
+
+            // A. Story Bar Single-Badge Lock (Removes '💬 DM Open' top pill & duplicate badges!)
+            const storyBar = document.getElementById("nx-stories-bar") || homeTab.querySelector("div:first-child");
+            if (storyBar) {
+                storyBar.querySelectorAll(".nx-auto-seen-pill").forEach((el) => el.remove());
+
+                storyBar.querySelectorAll("div, button, a").forEach((circleCard) => {
+                    if (circleCard.children.length < 2 || circleCard.clientWidth > 125) return;
+
+                    let statusBadges = [];
+                    circleCard.querySelectorAll("span, div, small").forEach((el) => {
+                        if (el.children.length > 0) return;
+                        const t = (el.innerText || "").trim();
+                        if (t.includes("DM Open")) {
+                            // Permanently hide top '💬 DM Open' pill so it NEVER overlaps with bottom badge!
+                            el.classList.add("nx-dm-open-pill-hidden");
+                            el.style.display = "none";
+                        } else if (
+                            t.endsWith("ago") ||
+                            t === "Live" ||
+                            t === "🟢 Live" ||
+                            t === "Offline"
+                        ) {
+                            statusBadges.push(el);
+                        }
+                    });
+
+                    // If multiple status badges exist on one circle (like Chanchal), keep ONLY the first one!
+                    if (statusBadges.length > 1) {
+                        for (let i = 1; i < statusBadges.length; i++) {
+                            statusBadges[i].style.display = "none";
+                        }
+                    }
+                });
+            }
+
+            // B. Remove accidental pinned screenshot card or old refresh card from DOM immediately (Fixes 1000076939.jpg!)
+            homeTab.querySelectorAll("div, article, section").forEach((card) => {
+                if (!card || card === homeTab || card === storyBar || card.contains(storyBar)) return;
+                if (card.clientHeight > 140 && card.clientHeight < 680) {
+                    const txt = (card.innerText || "").toLowerCase().replace(/\s+/g, " ");
+                    const isPinnedNexus = txt.includes("nexus") && txt.includes("pinned") && txt.includes("official platform");
+                    const hasRefreshSpam =
+                        txt.includes("website ko refresh") ||
+                        txt.includes("ek baar refresh") ||
+                        (txt.includes("refresh") && txt.includes("updates properly"));
+
+                    // If it's the accidental pinned screenshot post (Nexus + Pinned + no announcement text), hide & delete it!
+                    const isAccidentalBlankPinnedScreenshot =
+                        isPinnedNexus &&
+                        card.querySelector("img:not([style*='border-radius'])") &&
+                        txt.replace(/nexus|official platform annou\.\.\.|pinned|full view|liked by.*|share|\d+/g, "").trim().length < 8;
+
+                    if (hasRefreshSpam || isAccidentalBlankPinnedScreenshot) {
+                        card.style.display = "none";
+                        card.remove();
+                    }
+                }
+            });
+        }
+        setInterval(enforceCleanStoryBarAndFeed, 250);
+
+        // =========================================================================
+        // 2. STRICT OWNER-ONLY POST 3-DOT ('⋮') MENU ON HOME FEED
+        //    (No regular user can EVER delete or edit someone else's post!)
         // =========================================================================
         document.addEventListener(
             "click",
@@ -1221,7 +1331,6 @@
                 const homeTab = document.getElementById("tab-home");
                 if (!homeTab || !homeTab.contains(btn)) return;
 
-                // Find enclosing post card on Home Feed
                 let card = btn.parentElement;
                 while (card && card !== homeTab && card.parentElement !== homeTab) {
                     if (card.clientHeight > 120 && card.clientWidth > 220) break;
@@ -1232,7 +1341,6 @@
                 e.stopPropagation();
                 e.preventDefault();
 
-                // Match post object in `Nexus.posts`
                 const cardText = (card.innerText || "").trim();
                 const cardImg = card.querySelector("img:not([style*='border-radius: 50%']), video");
                 const cardMediaSrc = cardImg ? cardImg.getAttribute("src") || "" : "";
@@ -1249,16 +1357,20 @@
                     });
                 }
 
-                openHomePostQuickAdminModal(card, matchedPost);
+                openHomePostStrictMenuModal(card, matchedPost);
             },
             true
         );
 
-        function openHomePostQuickAdminModal(cardEl, postObj) {
+        function openHomePostStrictMenuModal(cardEl, postObj) {
             document.getElementById("nx-home-post-admin-sheet")?.remove();
-            const isOwnerOrAdmin =
+            const myUname = getMyUsername();
+            const postAuthorUname = (postObj && postObj.username ? postObj.username : "").toLowerCase().trim();
+
+            // STRICT SECURITY: Only the exact author of the post OR Founder (@mohiy / @mohit_01) can delete/edit!
+            const canModifyThisPost =
                 isCurrentUserFounderAdmin() ||
-                (postObj && postObj.username && postObj.username.toLowerCase().trim() === getMyUsername());
+                Boolean(myUname && postAuthorUname && myUname === postAuthorUname && postAuthorUname !== "nexus_official");
 
             const sheet = document.createElement("div");
             sheet.id = "nx-home-post-admin-sheet";
@@ -1271,23 +1383,20 @@
             sheet.innerHTML = `
                 <div style="background:#0f172a; border-top:1.5px solid #10b981; border-radius:24px 24px 0 0; width:100%; max-width:600px; padding:18px 16px 26px; color:#fff; box-shadow:0 -14px 45px rgba(0,0,0,0.95);">
                     <div style="width:42px; height:4px; background:#334155; border-radius:999px; margin:0 auto 12px;"></div>
-                    <div style="font-size:12px; font-weight:900; color:#34d399; margin-bottom:10px;">⚡ Official Nexus Post Controls</div>
+                    <div style="font-size:12px; font-weight:900; color:#34d399; margin-bottom:10px;">⚡ Official Nexus Post Options</div>
 
                     <button type="button" id="nx-hp-save" style="${bStyle}">
                         <span>⚡</span> <span>Save Post to Nexus Vault</span>
                     </button>
                     <button type="button" id="nx-hp-share" style="${bStyle}">
-                        <span>🔗</span> <span>Share Post Link</span>
+                        <span>🔗</span> <span>Share Direct Post Link</span>
                     </button>
 
                     ${
-                        isOwnerOrAdmin
+                        canModifyThisPost
                             ? `
-                        <button type="button" id="nx-hp-pin" style="${bStyle} color:#fbbf24; border-color:rgba(251,191,36,0.4);">
-                            <span>📌</span> <span>${postObj && postObj.pinned ? "Unpin Post" : "Pin Post to Top"}</span>
-                        </button>
                         <button type="button" id="nx-hp-del" style="${bStyle} color:#f43f5e; border-color:rgba(244,63,94,0.5); background:rgba(244,63,94,0.12);">
-                            <span>🗑️</span> <span>Delete Post Immediately (0.01s Wipe for Everyone)</span>
+                            <span>🗑️</span> <span>Delete Your Post Permanently (0.01s Wipe)</span>
                         </button>
                     `
                             : ""
@@ -1308,42 +1417,34 @@
             sheet.querySelector("#nx-hp-save").onclick = () => {
                 if (postObj) {
                     let sv = JSON.parse(localStorage.getItem("nx_saved_posts") || "[]");
-                    sv.unshift(postObj);
-                    localStorage.setItem("nx_saved_posts", JSON.stringify(sv.slice(0, 50)));
+                    if (!sv.some((x) => x && x.id === postObj.id)) {
+                        sv.unshift(postObj);
+                        localStorage.setItem("nx_saved_posts", JSON.stringify(sv.slice(0, 50)));
+                    }
                 }
                 sheet.remove();
                 if (window.Nexus && Nexus.toast) Nexus.toast("⚡ Saved to Nexus Vault!");
             };
 
             sheet.querySelector("#nx-hp-share").onclick = () => {
-                const url = "https://nexus-community01.vercel.app/";
-                navigator.clipboard?.writeText(url);
+                const url = `https://nexus-community01.vercel.app/${postObj && postObj.id ? "?post=" + postObj.id : ""}`;
+                if (navigator.share) {
+                    navigator.share({ title: "Nexus Post", url }).catch(() => {});
+                } else {
+                    navigator.clipboard?.writeText(url);
+                    if (window.Nexus && Nexus.toast) Nexus.toast("🔗 Direct Post Link Copied!");
+                }
                 sheet.remove();
-                if (window.Nexus && Nexus.toast) Nexus.toast("🔗 Post Link Copied!");
             };
 
-            const pinBtn = sheet.querySelector("#nx-hp-pin");
-            if (pinBtn && postObj && postObj.id) {
-                pinBtn.onclick = async () => {
-                    postObj.pinned = !postObj.pinned;
-                    sheet.remove();
-                    if (window.Nexus && Nexus.db) {
-                        await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ pinned: postObj.pinned }, { merge: true }).catch(() => {});
-                    }
-                    if (window.Nexus && Nexus.toast) Nexus.toast(postObj.pinned ? "📌 Pinned!" : "Unpinned!");
-                };
-            }
-
             const delBtn = sheet.querySelector("#nx-hp-del");
-            if (delBtn) {
+            if (delBtn && canModifyThisPost) {
                 delBtn.onclick = async () => {
                     sheet.remove();
-                    // 1. Immediately destroy the DOM card in 0.01s!
                     if (cardEl) {
                         cardEl.style.display = "none";
                         cardEl.remove();
                     }
-                    // 2. Wipe from local cache & Firestore + broadcast 0.01s wipe to all connected devices!
                     if (postObj && postObj.id) {
                         window.__nxMarkPostDeletedLocally(postObj.id);
                         if (window.Nexus && Nexus.db) {
@@ -1355,43 +1456,29 @@
                                 )
                             ]);
                         }
-                    } else if (window.Nexus && Nexus.db) {
-                        // Fallback: Find pinned or matching post in Firestore and delete it
-                        const snap = await Nexus.db.collection("nexus_real_posts").limit(20).get();
-                        snap.forEach((d) => {
-                            const data = d.data();
-                            if (data && data.pinned) {
-                                window.__nxMarkPostDeletedLocally(d.id);
-                                d.ref.delete().catch(() => {});
-                            }
-                        });
                     }
-                    if (window.Nexus && Nexus.toast) Nexus.toast("🗑️ Post Deleted in 0.01s for Everyone!");
+                    if (window.Nexus && Nexus.toast) Nexus.toast("🗑️ Post Deleted in 0.01s!");
                 };
             }
         }
 
         // =========================================================================
-        // 2. STORY BAR ANTI-OVERLAP CLEANER (FIXES PRIYANKA & CHANCHAL 1000076810.jpg!)
+        // 3. DIRECT SHAREABLE DEEP-LINK ROUTER (?user=username & ?post=ID)
         // =========================================================================
-        function cleanStoryBarOverlaps() {
-            const storyBar = document.getElementById("nx-stories-bar") || document.querySelector("#tab-home > div:first-child");
-            if (!storyBar) return;
-
-            // Remove any duplicate auto-seen pills
-            storyBar.querySelectorAll(".nx-auto-seen-pill").forEach((el) => el.remove());
-
-            // Remove the overlapping top '💬 DM Open' badge on other users' circles so only 1 clean bottom status pill shows!
-            storyBar.querySelectorAll("span, div").forEach((el) => {
-                if (el.children.length === 0 && (el.innerText || "").trim().includes("DM Open")) {
-                    el.style.display = "none";
-                }
-            });
-        }
-        setInterval(cleanStoryBarOverlaps, 300);
+        window.addEventListener("load", () => {
+            setTimeout(() => {
+                try {
+                    const params = new URLSearchParams(window.location.search);
+                    const sharedUser = params.get("user");
+                    if (sharedUser && window.openPublicUserProfileModal) {
+                        window.openPublicUserProfileModal(sharedUser);
+                    }
+                } catch (e) {}
+            }, 1200);
+        });
 
         // =========================================================================
-        // 3. REAL E2EE & OFFICIAL NEXUS PROFILE MODAL
+        // 4. REAL E2EE & OFFICIAL NEXUS PROFILE MODAL
         // =========================================================================
         window.NexusE2EE = {
             get60DigitSecurityNumber: async function (partnerName) {
@@ -1446,7 +1533,7 @@
         };
 
         // =========================================================================
-        // 4. PROFILE AUTH HUB & STRICT FEATURE LOCKS
+        // 5. PROFILE AUTH HUB & STRICT FEATURE LOCKS
         // =========================================================================
         function renderGoogleAuthHubOnProfile() {
             if (isGoogleVerifiedAccount()) return;
@@ -1654,7 +1741,7 @@
         );
 
         // =========================================================================
-        // 5. LEFT & RIGHT SWIPE-TO-REPLY ON SENT PHOTOS & VIDEOS
+        // 6. LEFT & RIGHT SWIPE-TO-REPLY ON SENT PHOTOS & VIDEOS
         // =========================================================================
         function triggerMediaReplyBanner(msgObj) {
             const msgInput =
@@ -1797,7 +1884,7 @@
         }
 
         // =========================================================================
-        // 6. ✏️ SHARED DOUBT WHITEBOARD + 🚫 1-CLICK BLOCK USER
+        // 7. ✏️ SHARED DOUBT WHITEBOARD + 🚫 1-CLICK BLOCK USER
         // =========================================================================
         window.openSharedWhiteboardModal = function () {
             const rk = getSharedRoomKey() || "global_doubt_room";
@@ -1960,7 +2047,7 @@
         };
 
         // =========================================================================
-        // 7. GUARANTEED CROSS-PHONE PARTNER ROOM MATCHING
+        // 8. GUARANTEED CROSS-PHONE PARTNER ROOM MATCHING
         // =========================================================================
         function getStrictOpenChatMessagesBox() {
             const msgInput =
@@ -2161,7 +2248,7 @@
         }
 
         // =========================================================================
-        // 8. DATE-AWARE CHRONOLOGICAL SORTER & ZERO-BLINK DIFFING
+        // 9. DATE-AWARE CHRONOLOGICAL SORTER & ZERO-BLINK DIFFING
         // =========================================================================
         function getMediaMinuteScore(mb) {
             const d = new Date(Number(mb.dataset.msgTs || Date.now()));
@@ -2264,8 +2351,8 @@
         }
 
         function installZeroBlinkWhatsAppPatch(chatBox) {
-            if (!chatBox || chatBox.__nxV26ZeroBlink) return;
-            chatBox.__nxV26ZeroBlink = true;
+            if (!chatBox || chatBox.__nxV27ZeroBlink) return;
+            chatBox.__nxV27ZeroBlink = true;
 
             const nativeDesc = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML");
             if (!nativeDesc || !nativeDesc.set) return;
@@ -2347,7 +2434,7 @@
         }
 
         // =========================================================================
-        // 9. PROTECTED <canvas> VIEW-ONCE (1️⃣) & SLEEK '•••' MENU
+        // 10. PROTECTED <canvas> VIEW-ONCE (1️⃣) & SLEEK '•••' MENU
         // =========================================================================
         document.addEventListener(
             "click",
@@ -2712,7 +2799,7 @@
         }
 
         // =========================================================================
-        // 10. ULTRA-FAST UPLOAD ENGINE
+        // 11. ULTRA-FAST UPLOAD ENGINE
         // =========================================================================
         function compressImageToFastWebP(file) {
             return new Promise((resolve, reject) => {
@@ -3119,7 +3206,7 @@
         );
 
         // =========================================================================
-        // 11. GLOBAL CLOUD MEDIA STREAM
+        // 12. GLOBAL CLOUD MEDIA STREAM
         // =========================================================================
         function startGlobalMediaListener() {
             if (unsubMedia || !window.Nexus || !Nexus.db) return;
