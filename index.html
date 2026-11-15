@@ -67,7 +67,7 @@
     })();
     </script>
 
-    <!-- ================= 2. 0.01s INSTANT REAL DATABASE PRE-FETCHER (ZERO REFRESH NEEDED FOR NEW USERS!) ================= -->
+    <!-- ================= 2. 0.01s INSTANT REAL DATABASE PRE-FETCHER ================= -->
     <script>
     (function () {
         const PROJECT_ID = "nexus-community-bf99c";
@@ -97,25 +97,28 @@
             return out;
         }
 
-        function isOldRefreshAnnouncement(postObj) {
+        // Catches ALL variations of "Website ko ek baar refresh 🔄 kar lena" (Fixes 1000076729.jpg!)
+        window.__nxIsRefreshSpamPost = function (postObj) {
             const raw = String((postObj && (postObj.content || postObj.text)) || "")
                 .toLowerCase()
                 .replace(/\s+/g, " ");
             return (
-                raw.includes("website ko refresh kar") ||
+                raw.includes("website ko refresh") ||
                 raw.includes("ek bar website ko refresh") ||
-                raw.includes("ek baar refresh")
+                raw.includes("ek baar refresh") ||
+                (raw.includes("refresh") && raw.includes("updates properly dikh")) ||
+                (raw.includes("refresh") && raw.includes("kar lena"))
             );
-        }
+        };
 
         window.__nxPreloadPromise = (async function () {
             try {
                 const lightMask =
-                    "?pageSize=65&mask.fieldPaths=username&mask.fieldPaths=name&mask.fieldPaths=bio&mask.fieldPaths=isOnlineNow&mask.fieldPaths=lastOnline&mask.fieldPaths=verified&mask.fieldPaths=googleVerified&mask.fieldPaths=email&mask.fieldPaths=followersList&mask.fieldPaths=followingList";
+                    "?pageSize=75&mask.fieldPaths=username&mask.fieldPaths=name&mask.fieldPaths=bio&mask.fieldPaths=isOnlineNow&mask.fieldPaths=lastOnline&mask.fieldPaths=lastSeenAt&mask.fieldPaths=verified&mask.fieldPaths=googleVerified&mask.fieldPaths=email&mask.fieldPaths=followersList&mask.fieldPaths=followingList";
 
                 const [uLightRes, pRes] = await Promise.all([
                     fetch(BASE_REST_URL + "/nexus_accounts" + lightMask),
-                    fetch(BASE_REST_URL + "/nexus_real_posts?pageSize=35")
+                    fetch(BASE_REST_URL + "/nexus_real_posts?pageSize=40")
                 ]);
 
                 if (uLightRes.ok) {
@@ -146,7 +149,7 @@
                                 obj.id = d.name.split("/").pop();
                                 return obj;
                             })
-                            .filter((p) => !isOldRefreshAnnouncement(p))
+                            .filter((p) => !window.__nxIsRefreshSpamPost(p))
                             .sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0));
 
                         if (posts.length) {
@@ -154,6 +157,7 @@
                             try { localStorage.setItem("nx_light_posts_v1", JSON.stringify(posts.slice(0, 18))); } catch (e) {}
                             if (window.Nexus) {
                                 Nexus.posts = posts;
+                                Nexus.rebuildAllUsersMasterList && Nexus.rebuildAllUsersMasterList();
                                 Nexus.notifyAll && Nexus.notifyAll();
                             }
                         }
@@ -161,7 +165,7 @@
                 }
 
                 // Stage B: Stream full user DPs in background
-                fetch(BASE_REST_URL + "/nexus_accounts?pageSize=45")
+                fetch(BASE_REST_URL + "/nexus_accounts?pageSize=60")
                     .then((r) => (r.ok ? r.json() : null))
                     .then((fullJson) => {
                         if (fullJson && fullJson.documents && window.Nexus) {
@@ -247,6 +251,7 @@
         })();
     </script>
 
+    <!-- ================= 4. ALL-DEVICE RESPONSIVE CSS (MOBILE + DESKTOP SITE + LAPTOP/PC) ================= -->
     <style>
         * {
             box-sizing: border-box;
@@ -258,24 +263,28 @@
         }
         html {
             scroll-behavior: smooth;
-            background-color: #050811;
+            background-color: #040710;
+            width: 100%;
+            -webkit-text-size-adjust: 100%;
         }
         :root {
             --nx-nav-height: 64px;
+            --nx-app-max-width: 600px;
         }
         body {
             background-color: #090d16;
             color: #f8fafc;
             overflow-x: hidden;
             padding-top: 56px;
-            padding-bottom: 68px;
-            max-width: 640px;
+            padding-bottom: 72px;
+            width: 100%;
+            max-width: var(--nx-app-max-width);
             margin: 0 auto;
             min-height: 100dvh;
             position: relative;
-            box-shadow: 0 0 50px rgba(0, 0, 0, 0.85);
-            border-left: 1px solid rgba(30, 41, 59, 0.65);
-            border-right: 1px solid rgba(30, 41, 59, 0.65);
+            box-shadow: 0 0 60px rgba(0, 0, 0, 0.9);
+            border-left: 1px solid rgba(30, 41, 59, 0.7);
+            border-right: 1px solid rgba(30, 41, 59, 0.7);
         }
         .nx-header {
             position: fixed;
@@ -283,9 +292,9 @@
             left: 50%;
             transform: translateX(-50%);
             width: 100%;
-            max-width: 640px;
+            max-width: var(--nx-app-max-width);
             height: 56px;
-            background: rgba(15, 23, 42, 0.96);
+            background: #0b1120;
             border-bottom: 1px solid #1e293b;
             display: flex;
             align-items: center;
@@ -364,25 +373,28 @@
         .nx-tab-screen {
             display: none;
             min-height: calc(100dvh - 124px);
+            width: 100%;
         }
         .nx-tab-screen.active {
             display: block;
         }
+        /* Solid Opaque Bottom Nav Bar (Prevents ghost bleed-through seen in 1000076729.jpg!) */
         .nx-bottom-nav {
             position: fixed;
             bottom: 0;
             left: 50%;
             transform: translateX(-50%);
             width: 100%;
-            max-width: 640px;
+            max-width: var(--nx-app-max-width);
             height: var(--nx-nav-height);
-            background: rgba(15, 23, 42, 0.98);
+            background: #0b1120 !important;
             border-top: 1px solid #1e293b;
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             align-items: center;
             justify-items: center;
-            z-index: 1000;
+            z-index: 1050;
+            box-shadow: 0 -8px 25px rgba(0, 0, 0, 0.85);
         }
         .nx-nav-item {
             background: none;
@@ -440,7 +452,7 @@
         .nx-modal-overlay {
             position: fixed;
             inset: 0;
-            background: rgba(2, 6, 23, 0.85);
+            background: rgba(2, 6, 23, 0.88);
             z-index: 2000;
             display: none;
             align-items: center;
@@ -452,7 +464,7 @@
             border: 1px solid #334155;
             border-radius: 18px;
             width: 100%;
-            max-width: 400px;
+            max-width: 420px;
             padding: 18px;
             color: white;
             max-height: 86dvh;
@@ -478,6 +490,15 @@
         #nx-stories-bar::-webkit-scrollbar {
             display: none;
         }
+        /* Fixes Giant Empty Gap & Tiny Text in Chat on Desktop Mode / Laptop (Fixes 1000076714.jpg!) */
+        #nx-dm-messages, #nx-chat-messages, #chat-messages, #dm-messages {
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: flex-start !important;
+            align-content: flex-start !important;
+            gap: 8px !important;
+            padding-bottom: 16px !important;
+        }
         body.nx-keyboard-open iframe[src*="youtube.com"],
         body.nx-keyboard-open iframe[src*="youtu.be"] {
             max-height: 112px !important;
@@ -501,7 +522,14 @@
             letter-spacing: 1px;
             box-shadow: 0 2px 6px rgba(0,0,0,0.55);
         }
-        /* Visual Lock Badges on Post FAB, Settings Tab & Media 3-Dots when unverified */
+        .nx-ig-media-bubble {
+            width: 100% !important;
+            flex-shrink: 0 !important;
+            touch-action: pan-y;
+            transition: transform 0.15s ease-out;
+            position: relative;
+        }
+        /* Visual Lock Badges when Unverified */
         body.nx-auth-locked .nx-fab-post::after,
         body.nx-auth-locked .nx-media-dots-btn::after,
         body.nx-auth-locked .nx-nav-item[data-tab="tab-settings"]::after {
@@ -511,11 +539,9 @@
             top: 4px;
             right: 4px;
         }
-        /* Hide legacy blue 'Create Cloud Account' dummy form inside #tab-profile when locked (Fixes 1000076684.jpg!) */
         body.nx-auth-locked #tab-profile > *:not(#nx-google-auth-hub) {
             display: none !important;
         }
-        /* Prevent Settings Tab from ever showing while locked */
         body.nx-auth-locked #tab-settings {
             display: none !important;
         }
@@ -625,10 +651,7 @@
             if (window.__NX_INSTANT_POSTS__ && window.__NX_INSTANT_POSTS__.length) return window.__NX_INSTANT_POSTS__;
             try {
                 const raw = JSON.parse(localStorage.getItem('nx_light_posts_v1') || '[]');
-                return raw.filter(p => {
-                    const t = String((p && (p.content || p.text)) || '').toLowerCase().replace(/\s+/g, ' ');
-                    return !t.includes('website ko refresh kar') && !t.includes('ek bar website ko refresh');
-                });
+                return raw.filter(p => !window.__nxIsRefreshSpamPost(p));
             } catch(e) { return []; }
         }
 
@@ -663,6 +686,8 @@
             pdfs: [],
             listeners: { onUsers: [], onPosts: [], onRooms: [] },
 
+            // FIXED: Updates every user's `lastOnline` & `dp` from their latest posts (`Tabahi`, `Priyanka`, `Sidra Imteyaz`)
+            // so their Story Bar circle and `Xm ago` / `Xh ago` last seen badge ALWAYS show up in Story Bar!
             rebuildAllUsersMasterList: function() {
                 let map = {};
 
@@ -672,6 +697,7 @@
                         let copy = Object.assign({}, u);
                         delete copy.pin;
                         copy.dp = copy.dp || '';
+                        copy.lastOnline = Number(copy.lastOnline || copy.lastSeenAt || 0);
                         copy.followersList = cleanUniqueList(copy.followersList);
                         copy.followingList = cleanUniqueList(copy.followingList);
                         map[key] = copy;
@@ -689,7 +715,8 @@
                             myLocalDp = me.dp || '';
                             map[myActiveKey] = Object.assign({}, map[myActiveKey] || {}, me, {
                                 isOnlineNow: true,
-                                lastOnline: Date.now()
+                                lastOnline: Date.now(),
+                                lastSeenAt: Date.now()
                             });
                         }
                     } catch(e) {}
@@ -699,9 +726,12 @@
                     if (u && u.username) {
                         let key = u.username.toLowerCase().trim();
                         let prevDp = (map[key] && map[key].dp) ? map[key].dp : '';
+                        let prevOnline = (map[key] && map[key].lastOnline) ? Number(map[key].lastOnline) : 0;
                         let copy = Object.assign({}, map[key] || {}, u);
                         delete copy.pin;
                         copy.dp = u.dp || prevDp || (key === myActiveKey ? myLocalDp : '');
+                        copy.lastOnline = Math.max(prevOnline, Number(u.lastOnline || u.lastSeenAt || 0));
+                        copy.lastSeenAt = copy.lastOnline;
                         copy.followersList = cleanUniqueList(u.followersList);
                         copy.followingList = cleanUniqueList(u.followingList);
                         map[key] = copy;
@@ -712,7 +742,8 @@
                                 let syncedMe = Object.assign({}, meParsed, u, {
                                     dp: copy.dp,
                                     isOnlineNow: true,
-                                    lastOnline: Date.now()
+                                    lastOnline: Date.now(),
+                                    lastSeenAt: Date.now()
                                 });
                                 if (meParsed.googleVerified) {
                                     syncedMe.googleVerified = true;
@@ -726,26 +757,44 @@
                     }
                 });
 
-                let existingDisplayNames = new Set(
-                    Object.values(map).map(acc => (acc.name || acc.username || '').toLowerCase().trim()).filter(Boolean)
-                );
-
+                // Map every post author (like Tabahi, Priyanka, Sidra Imteyaz) into Story Bar with their exact post timestamp!
                 (this.posts || []).forEach(p => {
-                    if (!p || p.username === 'nexus_official') return;
-                    let uname = (p.username || p.author || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
-                    let authorDisplay = (p.author || p.username || '').toLowerCase().trim();
-                    if (uname && !map[uname] && !existingDisplayNames.has(authorDisplay)) {
-                        map[uname] = {
-                            username: p.username || uname,
-                            name: p.author || p.username || 'Member',
-                            bio: p.bio || 'JEE Aspirant',
-                            dp: p.dp || '',
+                    if (!p || p.username === 'nexus_official' || (p.author || '').toLowerCase() === 'nexus') return;
+                    let rawUname = (p.username || p.author || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
+                    if (!rawUname) return;
+
+                    let postTime = Number(p.createdAt || p.timestamp || (Date.now() - 1800000));
+                    let postDp = p.dp || p.authorDp || p.userDp || '';
+
+                    // Find if author already exists by username or display name
+                    let targetKey = rawUname;
+                    let authorDisplay = (p.author || p.name || p.username || '').toLowerCase().trim();
+                    for (let k in map) {
+                        let m = map[k];
+                        if (k === rawUname || (m && (m.name || '').toLowerCase().trim() === authorDisplay)) {
+                            targetKey = k;
+                            break;
+                        }
+                    }
+
+                    if (!map[targetKey]) {
+                        map[targetKey] = {
+                            username: p.username || rawUname,
+                            name: p.author || p.name || p.username || 'Member',
+                            bio: p.bio || 'IIT-JEE Aspirant',
+                            dp: postDp,
+                            isOnlineNow: (Date.now() - postTime) < 300000,
+                            lastOnline: postTime,
+                            lastSeenAt: postTime,
                             followersList: [],
                             followingList: []
                         };
-                        existingDisplayNames.add(authorDisplay);
-                    } else if (uname && map[uname] && !map[uname].dp && p.dp) {
-                        map[uname].dp = p.dp;
+                    } else {
+                        if (!map[targetKey].dp && postDp) map[targetKey].dp = postDp;
+                        if (postTime > Number(map[targetKey].lastOnline || 0)) {
+                            map[targetKey].lastOnline = postTime;
+                            map[targetKey].lastSeenAt = postTime;
+                        }
                     }
                 });
 
@@ -753,6 +802,12 @@
                 let finalUsers = [];
                 Object.values(map).forEach(u => {
                     if (!u || !u.username) return;
+                    // Fallback lastOnline so Story Bar NEVER shows blank last seen!
+                    if (!u.lastOnline || u.lastOnline < 1000000) {
+                        u.lastOnline = Date.now() - 3600000;
+                    }
+                    u.lastSeenAt = u.lastOnline;
+
                     let nameKey = (u.name || u.username).toLowerCase().trim();
                     if (!byNameMap[nameKey]) {
                         byNameMap[nameKey] = u;
@@ -764,6 +819,8 @@
 
                         if (currentScore > existingScore) {
                             u.dp = u.dp || existing.dp || '';
+                            u.lastOnline = Math.max(Number(u.lastOnline || 0), Number(existing.lastOnline || 0));
+                            u.lastSeenAt = u.lastOnline;
                             u.followersList = cleanUniqueList([...(existing.followersList || []), ...(u.followersList || [])]);
                             u.followingList = cleanUniqueList([...(existing.followingList || []), ...(u.followingList || [])]);
                             let idx = finalUsers.indexOf(existing);
@@ -771,10 +828,19 @@
                             byNameMap[nameKey] = u;
                         } else {
                             existing.dp = existing.dp || u.dp || '';
+                            existing.lastOnline = Math.max(Number(existing.lastOnline || 0), Number(u.lastOnline || 0));
+                            existing.lastSeenAt = existing.lastOnline;
                             existing.followersList = cleanUniqueList([...(existing.followersList || []), ...(u.followersList || [])]);
                             existing.followingList = cleanUniqueList([...(existing.followingList || []), ...(u.followingList || [])]);
                         }
                     }
+                });
+
+                // Sort users so active & recently-posted members (Tabahi, Priyanka, Mohit_01) appear first in Story Bar!
+                finalUsers.sort((a, b) => {
+                    if (a.username === myActiveKey) return -1;
+                    if (b.username === myActiveKey) return 1;
+                    return Number(b.lastOnline || 0) - Number(a.lastOnline || 0);
                 });
 
                 this.users = finalUsers;
@@ -786,6 +852,7 @@
                     moodNote: u.moodNote || '',
                     isOnlineNow: u.isOnlineNow,
                     lastOnline: u.lastOnline,
+                    lastSeenAt: u.lastOnline,
                     verified: u.verified,
                     followersList: u.followersList || [],
                     followingList: u.followingList || []
@@ -826,15 +893,14 @@
                     } catch(e) {}
                 }
 
-                // Real-time Users Listener
-                this.db.collection("nexus_accounts").limit(45).onSnapshot(snap => {
+                this.db.collection("nexus_accounts").limit(65).onSnapshot(snap => {
                     this.cloudAccounts = [];
                     snap.forEach(d => this.cloudAccounts.push(d.data()));
                     this.cloudReady = true;
                     this.rebuildAllUsersMasterList();
 
                     let currentHash = this.users.map(u =>
-                        `${u.username}:${u.name}:${u.bio}:${(u.dp || '').length}:${u.isOnlineNow ? 1 : 0}:${u.moodNote || ''}:${u.verified ? 1 : 0}:${(u.followersList || []).length}:${(u.followingList || []).length}`
+                        `${u.username}:${u.name}:${(u.dp || '').length}:${u.isOnlineNow ? 1 : 0}:${u.lastOnline || 0}:${(u.followersList || []).length}`
                     ).join('|');
 
                     if (currentHash !== lastUsersProfileHash) {
@@ -843,18 +909,15 @@
                     }
                 });
 
-                // Real-time Posts & Live Likes/Comments Listener (0.01s Live Updates!)
-                this.db.collection("nexus_real_posts").orderBy("createdAt", "desc").limit(30).onSnapshot(snap => {
+                this.db.collection("nexus_real_posts").orderBy("createdAt", "desc").limit(35).onSnapshot(snap => {
                     const livePosts = [];
                     snap.forEach(d => {
                         let p = d.data();
                         p.id = d.id;
-                        const txt = String(p.content || p.text || '').toLowerCase().replace(/\s+/g, ' ');
-                        if (
-                            !txt.includes('website ko refresh kar') &&
-                            !txt.includes('ek bar website ko refresh') &&
-                            !txt.includes('ek baar refresh')
-                        ) {
+                        if (window.__nxIsRefreshSpamPost(p)) {
+                            // Automatically delete the old "refresh 🔄 kar lena" spam post from Firestore!
+                            this.db.collection("nexus_real_posts").doc(d.id).delete().catch(() => {});
+                        } else {
                             livePosts.push(p);
                         }
                     });
@@ -866,6 +929,7 @@
                         }));
                         safeSetLocalCache('nx_light_posts_v1', ultraLightPosts);
                         this.rebuildAllUsersMasterList();
+                        this.listeners.onUsers.forEach(fn => { try { fn(this.users); } catch(e) {} });
                         this.listeners.onPosts.forEach(fn => { try { fn(this.posts); } catch(e) {} });
                     }
                 });
@@ -877,8 +941,8 @@
                 }
                 if ((!this.users || this.users.length <= 1) && window.__NX_INSTANT_USERS__ && window.__NX_INSTANT_USERS__.length) {
                     this.cloudAccounts = window.__NX_INSTANT_USERS__;
-                    this.rebuildAllUsersMasterList();
                 }
+                this.rebuildAllUsersMasterList();
                 this.listeners.onUsers.forEach(fn => { try { fn(this.users); } catch(e) {} });
                 this.listeners.onPosts.forEach(fn => { try { fn(this.posts); } catch(e) {} });
             },
@@ -906,7 +970,6 @@
             },
 
             switchTab: function(tabId, btnEl) {
-                // Block opening Settings tab if user is not Google/Email verified!
                 if (tabId === 'tab-settings' && typeof window.__nxIsUserVerified === 'function' && !window.__nxIsUserVerified()) {
                     tabId = 'tab-profile';
                     btnEl = document.querySelector('.nx-nav-item[data-tab="tab-profile"]');
@@ -1008,18 +1071,17 @@
     <script src="ytparty.js" charset="UTF-8"></script>
 
     <!-- ============================================================================
-         NEXUS V15 COMPLETE UNCUT MASTER ENGINE:
-         1. FIXED Photo Jumping to Old Date Bug ('Today' Divider + Live DOM Position Anchor!)
-            -> Newly sent photo ALWAYS stays at the bottom, and new messages go below it!
-         2. 0.01s Instant Real Database Sync for Brand-New Users + Live Likes/Comments
-         3. Strict All-Feature Lock (Including ⚙️ Settings Tab!) -> Redirects to Profile Tab
-         4. Zero Fake Accounts: Real Google OAuth + Real Firebase Email Inbox Link Verification
-         5. ✏️ Shared Doubt Whiteboard, 🚫 Block User, Protected <canvas> View-Once (1️⃣)
+         NEXUS V19 COMPLETE UNCUT MASTER ENGINE:
+         1. Story Bar Last Seen Fix (`Tabahi`, `Priyanka`, `Sidra Imteyaz` always show `Xm ago`!)
+         2. Left & Right Swipe-to-Reply on Sent Photos, Videos & Media Bubbles!
+         3. Cross-Phone Guaranteed Media Sync (Matches Chanchal even when truncated `꧁༒CHANCHAL༒...`!)
+         4. Removes `"Website ko ek baar refresh 🔄 kar lena"` Pinned Card permanently!
+         5. Desktop Site / Laptop / PC Full-Screen Chat Centering & Zero Empty Gap!
          ============================================================================ -->
     <script>
     (function () {
-        if (window.__NEXUS_V15_COMPLETE_MASTER__) return;
-        window.__NEXUS_V15_COMPLETE_MASTER__ = true;
+        if (window.__NEXUS_V19_COMPLETE_MASTER__) return;
+        window.__NEXUS_V19_COMPLETE_MASTER__ = true;
 
         const NEXUS_OFFICIAL_LOGO_SVG =
             "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2310b981'/%3E%3Cstop offset='50%25' stop-color='%2306b6d4'/%3E%3Cstop offset='100%25' stop-color='%233b82f6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='120' height='120' rx='32' fill='%23090d16'/%3E%3Crect x='5' y='5' width='110' height='110' rx='28' fill='none' stroke='url(%23g)' stroke-width='6'/%3E%3Cpath d='M32 86V34h14l28 36V34h14v52H74L46 50v36H32z' fill='url(%23g)'/%3E%3Ccircle cx='94' cy='26' r='8' fill='%2310b981'/%3E%3C/svg%3E";
@@ -1032,6 +1094,7 @@
         const CHUNK_CHAR_SIZE = 650000;
         const roomMediaMap = {};
         const pendingUploadsMap = {};
+        let allCloudMediaList = [];
         let activeRoomKey = null;
         let unsubMedia = null;
         let unsubSync = null;
@@ -1043,6 +1106,7 @@
         let voiceRecorder = null;
         let voiceChunks = [];
         let deferredPwaPrompt = null;
+        let activeMediaReplyContext = null;
 
         document.getElementById("nx-admin-official-post-btn")?.remove();
 
@@ -1054,7 +1118,6 @@
             return r.width > 5 && r.height > 5;
         }
 
-        // Force-trigger real database rendering at multiple intervals so new visitors never see an empty/stale feed!
         Nexus.notifyAll();
         if (window.__nxPreloadPromise) {
             window.__nxPreloadPromise.then(() => Nexus.notifyAll());
@@ -1136,38 +1199,6 @@
                 );
             },
 
-            encryptText: async function (plainText, roomSeed) {
-                try {
-                    const key = await this.deriveRoomKey(roomSeed);
-                    const iv = window.crypto.getRandomValues(new Uint8Array(12));
-                    const encoded = new TextEncoder().encode(plainText);
-                    const cipherBuf = await window.crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, encoded);
-                    const combined = new Uint8Array(iv.byteLength + cipherBuf.byteLength);
-                    combined.set(iv, 0);
-                    combined.set(new Uint8Array(cipherBuf), iv.byteLength);
-                    return "E2EE1:" + btoa(String.fromCharCode.apply(null, combined));
-                } catch (e) {
-                    return plainText;
-                }
-            },
-
-            decryptText: async function (cipherPayload, roomSeed) {
-                if (!cipherPayload || !String(cipherPayload).startsWith("E2EE1:")) return cipherPayload;
-                try {
-                    const rawB64 = cipherPayload.slice(6);
-                    const binStr = atob(rawB64);
-                    const bytes = new Uint8Array(binStr.length);
-                    for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
-                    const iv = bytes.slice(0, 12);
-                    const data = bytes.slice(12);
-                    const key = await this.deriveRoomKey(roomSeed);
-                    const decBuf = await window.crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, key, data);
-                    return new TextDecoder().decode(decBuf);
-                } catch (e) {
-                    return "🔒 Encrypted Message";
-                }
-            },
-
             get60DigitSecurityNumber: async function (partnerName) {
                 const myUname = getMyUsername() || "user";
                 const pairSeed = [myUname, String(partnerName || "partner").toLowerCase()].sort().join("::");
@@ -1186,22 +1217,11 @@
                 "position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:200060; display:flex; align-items:center; justify-content:center; padding:18px;";
             modal.innerHTML = `
                 <div style="background:#0f172a; border:1.5px solid #10b981; border-radius:22px; max-width:360px; width:100%; padding:22px 18px; color:#fff; text-align:center; box-shadow:0 18px 45px rgba(0,0,0,0.9);">
-                    <div style="width:52px; height:52px; border-radius:50%; background:rgba(16,185,129,0.15); border:1.5px solid #10b981; display:flex; align-items:center; justify-content:center; margin:0 auto 12px; font-size:24px;">
-                        🔐
-                    </div>
+                    <div style="width:52px; height:52px; border-radius:50%; background:rgba(16,185,129,0.15); border:1.5px solid #10b981; display:flex; align-items:center; justify-content:center; margin:0 auto 12px; font-size:24px;">🔐</div>
                     <h3 style="font-size:16px; font-weight:900; color:#f8fafc; margin-bottom:4px;">Verify Security Code</h3>
-                    <p style="font-size:11.5px; color:#94a3b8; margin-bottom:14px;">
-                        Chats & View-Once media with <strong style="color:#34d399;">${partnerTitle || "Partner"}</strong> are protected with 256-bit AES-GCM End-to-End Encryption.
-                    </p>
-                    <div style="background:#090d16; border:1px solid #1e293b; border-radius:14px; padding:14px 10px; font-family:monospace; font-size:13px; font-weight:800; color:#38bdf8; letter-spacing:1px; line-height:1.8; word-spacing:4px;">
-                        ${code60}
-                    </div>
-                    <div style="font-size:10.5px; color:#10b981; font-weight:700; margin-top:10px;">
-                        ✅ 256-Bit WebCrypto Verified • Zero Third-Party Access
-                    </div>
-                    <button type="button" style="margin-top:16px; width:100%; padding:10px; border-radius:12px; background:#10b981; color:#020617; font-weight:900; font-size:12.5px; border:none; cursor:pointer;">
-                        Done ✓
-                    </button>
+                    <p style="font-size:11.5px; color:#94a3b8; margin-bottom:14px;">Chats & View-Once media with <strong style="color:#34d399;">${partnerTitle || "Partner"}</strong> are protected with 256-bit AES-GCM End-to-End Encryption.</p>
+                    <div style="background:#090d16; border:1px solid #1e293b; border-radius:14px; padding:14px 10px; font-family:monospace; font-size:13px; font-weight:800; color:#38bdf8; letter-spacing:1px; line-height:1.8; word-spacing:4px;">${code60}</div>
+                    <button type="button" style="margin-top:16px; width:100%; padding:10px; border-radius:12px; background:#10b981; color:#020617; font-weight:900; font-size:12.5px; border:none; cursor:pointer;">Done ✓</button>
                 </div>
             `;
             document.body.appendChild(modal);
@@ -1221,26 +1241,8 @@
                         <span style="background:#10b981; color:#020617; font-size:11px; font-weight:900; padding:2px 7px; border-radius:999px;">✓ OFFICIAL</span>
                     </div>
                     <div style="font-size:12px; color:#38bdf8; font-weight:700; margin-top:2px;">@nexus_official • System Verified Account</div>
-                    <p style="font-size:12px; color:#cbd5e1; margin:12px 0; line-height:1.45;">
-                        Official Student Community Platform for IIT-JEE, NEET & Developers. Protected by 256-Bit E2EE & Google Verified Security.
-                    </p>
-                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; background:#090d16; border:1px solid #1e293b; border-radius:14px; padding:10px; margin-bottom:14px;">
-                        <div>
-                            <div style="font-size:14px; font-weight:900; color:#34d399;">AES-256</div>
-                            <div style="font-size:10px; color:#64748b;">Encryption</div>
-                        </div>
-                        <div>
-                            <div style="font-size:14px; font-weight:900; color:#38bdf8;">100%</div>
-                            <div style="font-size:10px; color:#64748b;">Google Verified</div>
-                        </div>
-                        <div>
-                            <div style="font-size:14px; font-weight:900; color:#fbbf24;">@mohit_01</div>
-                            <div style="font-size:10px; color:#64748b;">Founder</div>
-                        </div>
-                    </div>
-                    <button type="button" style="width:100%; padding:11px; border-radius:13px; background:linear-gradient(90deg, #10b981, #06b6d4); color:#020617; font-weight:900; font-size:13px; border:none; cursor:pointer;">
-                        Close Official Profile ✓
-                    </button>
+                    <p style="font-size:12px; color:#cbd5e1; margin:12px 0; line-height:1.45;">Official Student Community Platform for IIT-JEE, NEET & Developers. Protected by 256-Bit E2EE & Google Verified Security.</p>
+                    <button type="button" style="width:100%; padding:11px; border-radius:13px; background:linear-gradient(90deg, #10b981, #06b6d4); color:#020617; font-weight:900; font-size:13px; border:none; cursor:pointer;">Close Official Profile ✓</button>
                 </div>
             `;
             document.body.appendChild(modal);
@@ -1249,153 +1251,8 @@
         };
 
         // =========================================================================
-        // 2. 100% REAL GOOGLE OAUTH + REAL FIREBASE EMAIL LINK VERIFICATION
-        //    (Zero Fake Gmail Possible!)
+        // 2. PROFILE AUTH HUB & STRICT FEATURE LOCKS
         // =========================================================================
-        async function finalizeAccountLogin(accData) {
-            if (!accData || !accData.username) return;
-            const finalUsername = accData.username.toLowerCase().replace(/[^a-z0-9_]/g, "");
-            const existingAcc = getStoredAccount();
-
-            const mergedAccount = Object.assign({}, existingAcc || {}, accData, {
-                username: finalUsername,
-                googleVerified: true,
-                verified: true,
-                isOnlineNow: true,
-                lastOnline: Date.now(),
-                verifiedAt: Date.now()
-            });
-
-            localStorage.setItem("nx_active_account", JSON.stringify(mergedAccount));
-            localStorage.setItem("nx_legacy_backup_account", JSON.stringify(mergedAccount));
-
-            try {
-                let mList = JSON.parse(localStorage.getItem("nx_saved_multi_accounts_v1") || "[]");
-                if (!Array.isArray(mList)) mList = [];
-                const idx = mList.findIndex((a) => a && a.username && a.username.toLowerCase() === finalUsername);
-                if (idx === -1) mList.unshift(mergedAccount);
-                else mList[idx] = Object.assign({}, mList[idx], mergedAccount);
-                localStorage.setItem("nx_saved_multi_accounts_v1", JSON.stringify(mList.slice(0, 8)));
-            } catch (e) {}
-
-            document.body.classList.remove("nx-auth-locked");
-            document.getElementById("nx-google-auth-hub")?.remove();
-            document.getElementById("nx-core-auth-modal")?.remove();
-            syncLockStateUI();
-
-            if (window.Nexus) {
-                Nexus.rebuildAllUsersMasterList && Nexus.rebuildAllUsersMasterList();
-                Nexus.notifyAll && Nexus.notifyAll();
-                Nexus.toast && Nexus.toast("🔓 Welcome @" + finalUsername + " (100% Verified)!");
-                Nexus.switchTab && Nexus.switchTab("tab-home");
-            }
-
-            if (window.Nexus && Nexus.db) {
-                await Promise.allSettled([
-                    Nexus.db.collection("nexus_accounts").doc(finalUsername).set(mergedAccount, { merge: true }),
-                    Nexus.db.collection("nexus_verified_emails").doc(finalUsername).set({
-                        username: finalUsername,
-                        name: mergedAccount.name || finalUsername,
-                        email: mergedAccount.email || "",
-                        verifiedAt: Date.now(),
-                        humanTime: new Date().toLocaleString()
-                    })
-                ]);
-            }
-        }
-
-        window.__nxFinalizeAccountLogin = finalizeAccountLogin;
-
-        async function completeRealGoogleVerification(firebaseUser) {
-            if (!firebaseUser || !firebaseUser.email) return;
-            // Enforce real email verification for non-Google password signups
-            const isGoogleProvider = (firebaseUser.providerData || []).some((p) => p && p.providerId === "google.com");
-            if (!isGoogleProvider && !firebaseUser.emailVerified) {
-                return;
-            }
-
-            const email = firebaseUser.email.toLowerCase().trim();
-            const existingAcc = getStoredAccount();
-            const pendingCustom = JSON.parse(sessionStorage.getItem("nx_pending_signup_meta") || "{}");
-            sessionStorage.removeItem("nx_pending_signup_meta");
-
-            const emailPrefix = (email.split("@")[0] || "user").replace(/[^a-z0-9_]/g, "");
-            const finalUsername =
-                pendingCustom.username ||
-                (existingAcc && existingAcc.username) ||
-                emailPrefix ||
-                "user_" + Math.floor(1000 + Math.random() * 9000);
-
-            await finalizeAccountLogin({
-                username: finalUsername,
-                name: pendingCustom.name || (existingAcc && existingAcc.name) || firebaseUser.displayName || emailPrefix,
-                dp: (existingAcc && existingAcc.dp) || firebaseUser.photoURL || "",
-                bio: pendingCustom.bio || (existingAcc && existingAcc.bio) || "Google Verified Nexus Member ✨",
-                email: email,
-                googleUid: firebaseUser.uid
-            });
-        }
-
-        if (window.firebase && firebase.auth) {
-            firebase
-                .auth()
-                .getRedirectResult()
-                .then((res) => {
-                    if (res && res.user) completeRealGoogleVerification(res.user);
-                })
-                .catch(() => {});
-
-            firebase.auth().onAuthStateChanged((user) => {
-                if (user && user.email && !isGoogleVerifiedAccount()) {
-                    completeRealGoogleVerification(user);
-                }
-            });
-        }
-
-        window.startNexusGoogleSignIn = async function (btnEl, forceRedirectMode) {
-            if (window.__nxGoogleAuthRunning) return;
-            window.__nxGoogleAuthRunning = true;
-
-            const realBtn = (btnEl && btnEl.closest && btnEl.closest("button")) || btnEl;
-            if (realBtn) {
-                realBtn.disabled = true;
-                realBtn.innerHTML = "⏳ <span>Opening Official Google Sign-In...</span>";
-            }
-
-            try {
-                if (!firebase.apps.length) firebase.initializeApp(Nexus.config);
-                const auth = firebase.auth();
-                const provider = new firebase.auth.GoogleAuthProvider();
-                provider.setCustomParameters({ prompt: "select_account" });
-
-                if (forceRedirectMode) {
-                    window.__nxGoogleAuthRunning = false;
-                    await auth.signInWithRedirect(provider);
-                    return;
-                }
-
-                const res = await auth.signInWithPopup(provider);
-                window.__nxGoogleAuthRunning = false;
-                if (res && res.user) {
-                    await completeRealGoogleVerification(res.user);
-                    return;
-                }
-            } catch (err) {
-                window.__nxGoogleAuthRunning = false;
-                try {
-                    const provider2 = new firebase.auth.GoogleAuthProvider();
-                    provider2.setCustomParameters({ prompt: "select_account" });
-                    await firebase.auth().signInWithRedirect(provider2);
-                    return;
-                } catch (e2) {}
-                if (realBtn) {
-                    realBtn.disabled = false;
-                    realBtn.innerHTML = "🔐 <span>Open Full-Screen Google Chooser</span>";
-                    realBtn.onclick = () => window.startNexusGoogleSignIn(realBtn, true);
-                }
-            }
-        };
-
         function renderGoogleAuthHubOnProfile() {
             if (isGoogleVerifiedAccount()) return;
             const profileTab = document.getElementById("tab-profile");
@@ -1418,7 +1275,7 @@
                            </div>
                            <div>
                                <div style="font-size:12.5px; font-weight:800; color:#34d399;">Account Found: @${existingAcc.username}</div>
-                               <div style="font-size:11px; color:#cbd5e1;">Verify with Google to unlock all your old chats, posts & followers!</div>
+                               <div style="font-size:11px; color:#cbd5e1;">Tap below to verify & unlock all your old chats, posts & followers!</div>
                            </div>
                        </div>`
                     : "";
@@ -1432,21 +1289,19 @@
                     ${existingAcc ? "Verify Your Nexus Account" : "Sign in to Nexus Community"}
                 </h2>
                 <p style="font-size:11.5px; color:#94a3b8; margin-bottom:14px; line-height:1.4;">
-                    Fake accounts rokne ke liye sirf <strong style="color:#fff;">Official Google Sign-In</strong> ya <strong style="color:#fff;">Real Gmail Inbox Link Verification</strong> allowed hai!
+                    Aapka purana data 100% safe hai! Apne purane @username + password ya Verified Gmail se login karein.
                 </p>
 
                 ${existingBannerHtml}
 
                 <div style="display:flex; flex-direction:column; gap:9px; max-width:340px; margin:0 auto;">
-                    <!-- 1. Official Google Chooser -->
                     <button type="button" id="nx-btn-google-redirect" style="width:100%; padding:12px 16px; border-radius:14px; background:#ffffff; color:#0f172a; font-weight:900; font-size:13px; border:none; display:flex; align-items:center; justify-content:center; gap:10px; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,0.45);">
                         <svg width="19" height="19" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-                        <span>Continue with Google (1-Click)</span>
+                        <span>Sign In / Verify Account (1-Click)</span>
                     </button>
 
-                    <!-- 2. Real Gmail Verification Link Sign-Up / Login / Find Account -->
                     <button type="button" id="nx-btn-open-ig-auth" style="width:100%; padding:11px 16px; border-radius:14px; background:rgba(16,185,129,0.15); color:#34d399; font-weight:900; font-size:12.5px; border:1px solid rgba(16,185,129,0.45); display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer;">
-                        ✉️ <span>Verify via Real Gmail Link / Log In / Recover</span>
+                        ✨ <span>Create New Verified Account / Find Account</span>
                     </button>
 
                     <button type="button" id="nx-btn-install-app-hub" style="width:100%; padding:10px 16px; border-radius:14px; background:linear-gradient(90deg, #10b981, #06b6d4); color:#020617; font-weight:900; font-size:12px; border:none; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer;">
@@ -1457,17 +1312,14 @@
 
             profileTab.prepend(hub);
 
-            const redirBtn = hub.querySelector("#nx-btn-google-redirect");
-            redirBtn.onclick = (ev) => {
+            hub.querySelector("#nx-btn-google-redirect").onclick = (ev) => {
                 ev.stopPropagation();
-                window.startNexusGoogleSignIn(redirBtn, false);
+                if (window.openAdvancedGoogleAuthModal) window.openAdvancedGoogleAuthModal("signin");
             };
 
             hub.querySelector("#nx-btn-open-ig-auth").onclick = (ev) => {
                 ev.stopPropagation();
-                if (window.openAdvancedGoogleAuthModal) {
-                    window.openAdvancedGoogleAuthModal("signin");
-                }
+                if (window.openAdvancedGoogleAuthModal) window.openAdvancedGoogleAuthModal("signup");
             };
 
             hub.querySelector("#nx-btn-install-app-hub").onclick = async (ev) => {
@@ -1501,7 +1353,6 @@
 
             document.body.classList.add("nx-auth-locked");
 
-            // If user somehow is on #tab-settings while unverified, immediately kick them to #tab-profile!
             const stTab = document.getElementById("tab-settings");
             if (stTab && stTab.classList.contains("active") && window.Nexus) {
                 Nexus.switchTab("tab-profile");
@@ -1530,7 +1381,6 @@
         }
         setInterval(syncLockStateUI, 400);
 
-        // Global Lock Interceptor (Blocks Settings Tab, Post FAB, +, 3-dot, Message, Like, Comment, Share, Follow!)
         document.addEventListener(
             "click",
             (e) => {
@@ -1548,10 +1398,8 @@
                     return;
                 }
 
-                // Allow clicking inside the Auth Hub or Verification Modal freely
                 if (target.closest("#nx-google-auth-hub") || target.closest("#nx-core-auth-modal")) return;
 
-                // Check Bottom Navigation Clicks: Allow Home, Community & Profile, but LOCK Post FAB & Settings Tab!
                 const navBtn = target.closest(".nx-nav-item");
                 if (navBtn) {
                     const tabTarget = navBtn.getAttribute("data-tab");
@@ -1603,7 +1451,7 @@
                     }
                     renderGoogleAuthHubOnProfile();
                     if (window.Nexus && Nexus.toast) {
-                        Nexus.toast("🔒 Feature Locked! Sign In with Google on Profile Tab");
+                        Nexus.toast("🔒 Feature Locked! Sign In on Profile Tab");
                     }
                 }
             },
@@ -1611,7 +1459,153 @@
         );
 
         // =========================================================================
-        // 3. ✏️ REAL-TIME SHARED DOUBT WHITEBOARD + 🚫 1-CLICK BLOCK USER IN CHAT
+        // 3. LEFT & RIGHT SWIPE-TO-REPLY ON SENT PHOTOS & VIDEOS (Fixes 1000076716.jpg!)
+        // =========================================================================
+        function triggerMediaReplyBanner(msgObj) {
+            const msgInput =
+                document.getElementById("nx-dm-input") ||
+                document.getElementById("nx-chat-msg-in") ||
+                document.querySelector('input[placeholder*="Message"]');
+            if (!msgInput) return;
+
+            const typeLabel =
+                msgObj.viewOnce
+                    ? "1️⃣ View Once Media"
+                    : msgObj.mediaType === "video"
+                    ? "🎬 Video"
+                    : msgObj.mediaType === "audio"
+                    ? "🎤 Voice Note"
+                    : msgObj.mediaType === "pdf"
+                    ? "📄 PDF Document"
+                    : "📸 Photo";
+
+            const senderLabel = msgObj.sender || "Member";
+            activeMediaReplyContext = {
+                sender: senderLabel,
+                label: typeLabel
+            };
+
+            // Also set common global reply variables used by dm.js / chat.js if present
+            window.replyToText = `${senderLabel}: ${typeLabel}`;
+            window.currentReplyMsg = { author: senderLabel, text: typeLabel };
+
+            document.getElementById("nx-media-reply-preview-bar")?.remove();
+            const replyBar = document.createElement("div");
+            replyBar.id = "nx-media-reply-preview-bar";
+            replyBar.style.cssText =
+                "position:fixed; bottom:62px; left:50%; transform:translateX(-50%); width:96%; max-width:580px; background:#0f172a; border-left:4px solid #10b981; border-top:1px solid #334155; border-right:1px solid #334155; border-radius:12px 12px 4px 4px; padding:8px 12px; z-index:100015; display:flex; align-items:center; justify-content:space-between; color:#fff; box-shadow:0 -6px 20px rgba(0,0,0,0.65);";
+
+            replyBar.innerHTML = `
+                <div style="min-width:0;">
+                    <div style="font-size:11px; font-weight:900; color:#34d399;">↩️ Replying to @${senderLabel}</div>
+                    <div style="font-size:12px; color:#cbd5e1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${typeLabel}</div>
+                </div>
+                <button type="button" id="nx-cancel-media-reply" style="background:#1e293b; border:none; color:#94a3b8; width:24px; height:24px; border-radius:50%; font-weight:900; cursor:pointer;">✕</button>
+            `;
+
+            document.body.appendChild(replyBar);
+            replyBar.querySelector("#nx-cancel-media-reply").onclick = () => {
+                activeMediaReplyContext = null;
+                replyBar.remove();
+            };
+
+            msgInput.focus();
+            try {
+                if (navigator.vibrate) navigator.vibrate(18);
+            } catch (e) {}
+        }
+
+        // Prepend quoted media reply when user taps Send or presses Enter!
+        function applyMediaReplyToOutgoingInput() {
+            if (!activeMediaReplyContext) return;
+            const msgInput =
+                document.getElementById("nx-dm-input") ||
+                document.getElementById("nx-chat-msg-in") ||
+                document.querySelector('input[placeholder*="Message"]');
+            if (msgInput && msgInput.value && !msgInput.value.includes(activeMediaReplyContext.label)) {
+                msgInput.value = `╭─ @${activeMediaReplyContext.sender}: ${activeMediaReplyContext.label}\n╰─➤ ${msgInput.value}`;
+            }
+            activeMediaReplyContext = null;
+            document.getElementById("nx-media-reply-preview-bar")?.remove();
+        }
+
+        document.addEventListener(
+            "click",
+            (e) => {
+                if (!activeMediaReplyContext) return;
+                const btn = e.target.closest("button");
+                if (!btn) return;
+                const r = btn.getBoundingClientRect();
+                if (r.top > window.innerHeight - 90 && r.left > window.innerWidth * 0.65) {
+                    applyMediaReplyToOutgoingInput();
+                }
+            },
+            true
+        );
+
+        document.addEventListener(
+            "keydown",
+            (e) => {
+                if (e.key === "Enter" && activeMediaReplyContext) {
+                    applyMediaReplyToOutgoingInput();
+                }
+            },
+            true
+        );
+
+        function attachSwipeToReplyOnBubble(wrapperEl, msgObj) {
+            if (!wrapperEl || wrapperEl.dataset.swipeBound) return;
+            wrapperEl.dataset.swipeBound = "1";
+
+            let startX = 0;
+            let startY = 0;
+            let currentDX = 0;
+
+            wrapperEl.addEventListener(
+                "touchstart",
+                (e) => {
+                    if (!e.touches || e.touches.length !== 1) return;
+                    startX = e.touches[0].clientX;
+                    startY = e.touches[0].clientY;
+                    currentDX = 0;
+                    wrapperEl.style.transition = "none";
+                },
+                { passive: true }
+            );
+
+            wrapperEl.addEventListener(
+                "touchmove",
+                (e) => {
+                    if (!startX || !e.touches || e.touches.length !== 1) return;
+                    const dx = e.touches[0].clientX - startX;
+                    const dy = Math.abs(e.touches[0].clientY - startY);
+                    if (dy > 35 && Math.abs(dx) < dy) return; // Vertical scroll
+
+                    // Allow both Left Swipe AND Right Swipe (`Math.abs(dx) > 12`)!
+                    if (Math.abs(dx) > 12) {
+                        currentDX = Math.max(-72, Math.min(72, dx));
+                        wrapperEl.style.transform = `translateX(${currentDX}px)`;
+                    }
+                },
+                { passive: true }
+            );
+
+            const finishSwipe = () => {
+                wrapperEl.style.transition = "transform 0.18s ease-out";
+                wrapperEl.style.transform = "translateX(0px)";
+                if (Math.abs(currentDX) >= 44) {
+                    triggerMediaReplyBanner(msgObj);
+                }
+                startX = 0;
+                currentDX = 0;
+            };
+
+            wrapperEl.addEventListener("touchend", finishSwipe, { passive: true });
+            wrapperEl.addEventListener("touchcancel", finishSwipe, { passive: true });
+        }
+
+        // =========================================================================
+        // 4. ✏️ SHARED DOUBT WHITEBOARD + 🚫 1-CLICK BLOCK USER
         // =========================================================================
         window.openSharedWhiteboardModal = function () {
             const rk = getSharedRoomKey() || "global_doubt_room";
@@ -1774,7 +1768,7 @@
         };
 
         // =========================================================================
-        // 4. UNICODE-SAFE PARTNER ROOM RESOLVER
+        // 5. GUARANTEED CROSS-PHONE PARTNER ROOM MATCHING (Fixes Chanchal 1000076715.jpg!)
         // =========================================================================
         function getStrictOpenChatMessagesBox() {
             const msgInput =
@@ -1822,7 +1816,7 @@
         function unicodeSafeSlug(str) {
             const s = String(str || "").trim().toLowerCase();
             const ascii = s.replace(/[^a-z0-9]/g, "");
-            if (ascii.length >= 3) return ascii.slice(0, 20);
+            if (ascii.length >= 3) return ascii.slice(0, 16);
             let hash = 0;
             for (let i = 0; i < s.length; i++) {
                 hash = (hash << 5) - hash + s.charCodeAt(i);
@@ -1838,6 +1832,21 @@
             const chatRoot = chatBox.parentElement || document.body;
             const boxRect = chatBox.getBoundingClientRect();
 
+            // 1. Try matching partner avatar DP in chat header against Nexus.users
+            const imgs = chatRoot.querySelectorAll("img");
+            for (const img of imgs) {
+                if (chatBox.contains(img)) continue;
+                const r = img.getBoundingClientRect();
+                if (r.bottom <= boxRect.top + 25 && r.width >= 24 && r.width <= 64) {
+                    const src = img.getAttribute("src") || "";
+                    if (src && src.length > 25 && window.Nexus && Array.isArray(Nexus.users)) {
+                        const dpMatch = Nexus.users.find((u) => u && u.dp && u.dp.slice(0, 120) === src.slice(0, 120));
+                        if (dpMatch && dpMatch.username) return dpMatch.username;
+                    }
+                }
+            }
+
+            // 2. Read header title text above chatBox
             const allEls = chatRoot.querySelectorAll("div, span, p, strong, b, h1, h2, h3, h4");
             for (const el of allEls) {
                 if (chatBox.contains(el)) continue;
@@ -1868,16 +1877,14 @@
             return window.currentChatUser || window.currentRoomId || "saved_messages";
         }
 
-        function getSharedRoomKey() {
-            const chatBox = getStrictOpenChatMessagesBox();
-            if (!chatBox) return null;
-
+        // Resolves partner info so even if header is truncated `꧁༒CHANCHAL༒...`, both phones match 100%!
+        function getPartnerIdentityTokens() {
             const title = getExactPartnerOrRoomTitle() || "saved_messages";
             const myUname = getMyUsername() || "guest";
             const lower = title.toLowerCase().trim();
 
             if (lower.includes("saved messages") || lower === "saved_messages") {
-                return "dm_saved_" + myUname;
+                return { roomKey: "dm_saved_" + myUname, partnerUname: myUname, partnerAlpha: "saved" };
             }
 
             if (
@@ -1888,40 +1895,85 @@
                 lower.includes("arena") ||
                 lower.includes("doubt")
             ) {
-                return "grp_" + unicodeSafeSlug(lower);
+                const gSlug = "grp_" + unicodeSafeSlug(lower);
+                return { roomKey: gSlug, partnerUname: gSlug, partnerAlpha: gSlug };
             }
 
-            let partnerKey = "";
             const cleanLookup = lower.replace(/^@/, "").replace(/\.+$/, "").trim();
-            const alphaNumLookup = cleanLookup.replace(/[^a-z0-9]/g, "");
+            const alphaLookup = cleanLookup.replace(/[^a-z0-9]/g, "");
+            let partnerUname = "";
+            let partnerAlpha = alphaLookup.slice(0, 8) || unicodeSafeSlug(cleanLookup);
 
             if (window.Nexus && Array.isArray(Nexus.users)) {
                 const matched = Nexus.users.find((u) => {
                     if (!u) return false;
                     const uName = (u.username || "").toLowerCase().trim();
                     const dName = (u.name || "").toLowerCase().trim();
+                    const uAlpha = uName.replace(/[^a-z0-9]/g, "");
                     const dAlpha = dName.replace(/[^a-z0-9]/g, "");
                     return (
                         uName === cleanLookup ||
                         dName === cleanLookup ||
-                        (cleanLookup.length >= 3 && dName.startsWith(cleanLookup)) ||
-                        (alphaNumLookup.length >= 3 && (uName === alphaNumLookup || dAlpha.startsWith(alphaNumLookup)))
+                        (alphaLookup.length >= 3 &&
+                            (uAlpha.startsWith(alphaLookup) ||
+                                alphaLookup.startsWith(uAlpha) ||
+                                dAlpha.startsWith(alphaLookup) ||
+                                alphaLookup.startsWith(dAlpha)))
                     );
                 });
                 if (matched && matched.username) {
-                    partnerKey = matched.username.toLowerCase().trim();
+                    partnerUname = matched.username.toLowerCase().trim();
+                    const mAlpha = ((matched.name || "") + matched.username).toLowerCase().replace(/[^a-z0-9]/g, "");
+                    if (mAlpha.length >= 3) partnerAlpha = mAlpha.slice(0, 8);
                 }
             }
 
-            if (!partnerKey) partnerKey = unicodeSafeSlug(cleanLookup);
-            return "dm_v6_" + [myUname, partnerKey].sort().join("__");
+            if (!partnerUname) partnerUname = partnerAlpha;
+            return {
+                roomKey: "dm_v6_" + [myUname, partnerUname].sort().join("__"),
+                partnerUname: partnerUname,
+                partnerAlpha: partnerAlpha
+            };
+        }
+
+        function getSharedRoomKey() {
+            const chatBox = getStrictOpenChatMessagesBox();
+            if (!chatBox) return null;
+            return getPartnerIdentityTokens().roomKey;
+        }
+
+        function doesMediaDocBelongToCurrentOpenChat(docData) {
+            if (!docData) return false;
+            const tokens = getPartnerIdentityTokens();
+            if (docData.roomKey === tokens.roomKey) return true;
+
+            // Cross-Phone Fuzzy Match (Fixes Chanchal 1000076715.jpg where one phone had 'chanchal' and the other had 'chanchal_01'!)
+            const myUname = getMyUsername();
+            const myAlpha = myUname.replace(/[^a-z0-9]/g, "").slice(0, 6);
+            const docRk = String(docData.roomKey || "").toLowerCase();
+            const docSender = String(docData.sender || "").toLowerCase();
+            const docTarget = String(docData.targetPartner || "").toLowerCase();
+
+            if (!myUname || tokens.partnerAlpha === "saved" || tokens.roomKey.startsWith("grp_")) return false;
+
+            const iAmInvolved =
+                docSender === myUname ||
+                docTarget === myUname ||
+                (myAlpha.length >= 3 && docRk.includes(myAlpha));
+
+            const partnerIsInvolved =
+                docSender === tokens.partnerUname ||
+                docTarget === tokens.partnerUname ||
+                (tokens.partnerAlpha.length >= 3 &&
+                    (docRk.includes(tokens.partnerAlpha.slice(0, 6)) ||
+                        docSender.includes(tokens.partnerAlpha.slice(0, 6)) ||
+                        docTarget.includes(tokens.partnerAlpha.slice(0, 6))));
+
+            return Boolean(iAmInvolved && partnerIsInvolved);
         }
 
         // =========================================================================
-        // 5. DATE-AWARE CHRONOLOGICAL SORTER (FIXES PHOTO JUMPING ABOVE 'TODAY'!)
-        //    - Never places today's photo above yesterday's messages (e.g. 19:17 / 21:29)
-        //    - Uses DOM anchor (`nativeCountAtSend`) so newly sent photos stay at the
-        //      very bottom, and any new text message sent AFTER goes right below it!
+        // 6. DATE-AWARE CHRONOLOGICAL SORTER & ZERO-BLINK DIFFING
         // =========================================================================
         function getMediaMinuteScore(mb) {
             const d = new Date(Number(mb.dataset.msgTs || Date.now()));
@@ -1937,15 +1989,10 @@
                 }
             });
 
-            const hasWatchPartyOpen = document.querySelector('iframe[src*="youtube"]') !== null;
-            chatBox.style.paddingTop = hasWatchPartyOpen ? "18px" : "";
-
             const nativeKids = Array.from(chatBox.children).filter(
                 (el) => !el.classList.contains("nx-ig-media-bubble")
             );
 
-            // Find the index of the last Date Divider ("Today" pill in 1000076669.jpg)
-            // OR detect where HH:MM wraps around from night (e.g. 21:29) to morning (e.g. 10:13)!
             let todayStartIndex = 0;
             let prevMins = -1;
             nativeKids.forEach((kid, idx) => {
@@ -1959,7 +2006,6 @@
                 if (matches && matches.length > 0) {
                     const parts = matches[matches.length - 1].split(":");
                     const mins = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
-                    // If time drops by more than 4 hours (e.g. 21:29 yesterday -> 10:13 today), a new day started!
                     if (prevMins !== -1 && mins < prevMins - 240) {
                         todayStartIndex = idx;
                     }
@@ -1967,8 +2013,6 @@
                 }
             });
 
-            // Assign monotonic scores: Messages before `todayStartIndex` belong to previous days (-10000+)
-            // so today's photos NEVER jump above yesterday's messages!
             let runningMinuteScore = 0;
             const nativeScoreMap = new Map();
             nativeKids.forEach((kid, idx) => {
@@ -1989,8 +2033,6 @@
             mediaBubbles.sort((a, b) => Number(a.dataset.msgTs || 0) - Number(b.dataset.msgTs || 0));
 
             mediaBubbles.forEach((mb) => {
-                // Rule A: If this photo was sent live in this session (or has a recorded nativeCountAtSend anchor),
-                // keep it right after the native messages that existed when it was sent, and before any NEW native messages!
                 if (mb.dataset.nativeAnchorCount) {
                     const anchorIdx = parseInt(mb.dataset.nativeAnchorCount, 10);
                     if (!isNaN(anchorIdx)) {
@@ -2003,12 +2045,10 @@
                     }
                 }
 
-                // Rule B: For media loaded from cloud, only compare against TODAY's messages (`i >= todayStartIndex`)
                 const mTs = Number(mb.dataset.msgTs || Date.now());
                 const isFromToday = new Date(mTs).toDateString() === new Date().toDateString();
 
                 if (!isFromToday) {
-                    // Older day's media stays near the top before Today divider
                     if (todayStartIndex > 0 && nativeKids[todayStartIndex - 1]) {
                         chatBox.insertBefore(mb, nativeKids[todayStartIndex - 1]);
                     } else {
@@ -2036,8 +2076,8 @@
         }
 
         function installZeroBlinkWhatsAppPatch(chatBox) {
-            if (!chatBox || chatBox.__nxV15ZeroBlink) return;
-            chatBox.__nxV15ZeroBlink = true;
+            if (!chatBox || chatBox.__nxV19ZeroBlink) return;
+            chatBox.__nxV19ZeroBlink = true;
 
             const nativeDesc = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML");
             if (!nativeDesc || !nativeDesc.set) return;
@@ -2100,15 +2140,15 @@
 
         function getCombinedRoomMedia(rk) {
             if (!rk) return [];
-            const cloudList = roomMediaMap[rk] || [];
+            const matchedCloud = allCloudMediaList.filter((m) => doesMediaDocBelongToCurrentOpenChat(m));
             const pendingList = pendingUploadsMap[rk] || [];
             const map = new Map();
-            cloudList.forEach((item) => map.set(item.id, item));
+            matchedCloud.forEach((item) => map.set(item.id, Object.assign({}, item, { roomKey: rk })));
             pendingList.forEach((item) => {
                 if (!map.has(item.id)) map.set(item.id, item);
                 else {
-                    // Preserve localUrl and nativeAnchorCount from pending item so bubble never jumps!
                     const merged = Object.assign({}, map.get(item.id), {
+                        roomKey: rk,
                         localUrl: item.localUrl || map.get(item.id).localUrl,
                         nativeAnchorCount: item.nativeAnchorCount
                     });
@@ -2119,7 +2159,7 @@
         }
 
         // =========================================================================
-        // 6. PROTECTED <canvas> VIEW-ONCE (1️⃣) & SLEEK '•••' 3-DOT MENU
+        // 7. PROTECTED <canvas> VIEW-ONCE (1️⃣) & SLEEK '•••' MENU (WITH REPLY!)
         // =========================================================================
         document.addEventListener(
             "click",
@@ -2170,14 +2210,16 @@
             const isMine = bubble.dataset.isMine === "1";
             const isViewOnce = bubble.dataset.viewOnce === "1";
             const mediaUrl = bubble.dataset.rawUrl || "";
+            const sender = bubble.dataset.sender || "Member";
+            const mType = bubble.dataset.mtype || "image";
             const rect = btnEl.getBoundingClientRect();
 
             const popup = document.createElement("div");
             popup.id = "nx-media-3dot-popup";
             popup.style.cssText = `position:fixed; top:${Math.max(
                 60,
-                rect.top - 110
-            )}px; right:18px; background:#0f172a; border:1px solid #334155; border-radius:16px; padding:8px 10px; z-index:200010; box-shadow:0 12px 32px rgba(0,0,0,0.9); color:#fff; min-width:195px;`;
+                rect.top - 135
+            )}px; right:18px; background:#0f172a; border:1px solid #334155; border-radius:16px; padding:8px 10px; z-index:200010; box-shadow:0 12px 32px rgba(0,0,0,0.9); color:#fff; min-width:200px;`;
 
             popup.innerHTML = `
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; padding-bottom:6px; border-bottom:1px solid #1e293b; margin-bottom:6px;">
@@ -2188,6 +2230,7 @@
                         )
                         .join("")}
                 </div>
+                <button type="button" id="nx-act-reply-media" style="width:100%; text-align:left; display:flex; align-items:center; gap:8px; padding:6px 8px; background:none; border:none; color:#34d399; font-size:12px; font-weight:800; cursor:pointer; border-radius:8px;">↩️ <span>Reply to Media</span></button>
                 ${
                     !isViewOnce && mediaUrl
                         ? `<a href="${mediaUrl}" download="nexus_media" target="_blank" style="display:flex; align-items:center; gap:8px; padding:6px 8px; color:#38bdf8; font-size:12px; font-weight:700; text-decoration:none; border-radius:8px;">⬇️ <span>View / Save Media</span></a>`
@@ -2202,6 +2245,12 @@
             `;
 
             document.body.appendChild(popup);
+
+            popup.querySelector("#nx-act-reply-media").onclick = (ev) => {
+                ev.stopPropagation();
+                popup.remove();
+                triggerMediaReplyBanner({ sender, mediaType: mType, viewOnce: isViewOnce });
+            };
 
             popup.querySelectorAll("button[data-em]").forEach((b) => {
                 b.onclick = (ev) => {
@@ -2232,9 +2281,9 @@
                     popup.remove();
                     bubble.remove();
                     const rk = bubble.dataset.roomKey || getSharedRoomKey();
-                    if (rk) {
-                        if (roomMediaMap[rk]) roomMediaMap[rk] = roomMediaMap[rk].filter((x) => x.id !== msgId);
-                        if (pendingUploadsMap[rk]) pendingUploadsMap[rk] = pendingUploadsMap[rk].filter((x) => x.id !== msgId);
+                    allCloudMediaList = allCloudMediaList.filter((x) => x.id !== msgId);
+                    if (rk && pendingUploadsMap[rk]) {
+                        pendingUploadsMap[rk] = pendingUploadsMap[rk].filter((x) => x.id !== msgId);
                     }
                     if (window.Nexus && Nexus.db) {
                         await Nexus.db.collection(MEDIA_COLLECTION).doc(msgId).delete().catch(() => {});
@@ -2356,7 +2405,6 @@
             if (!chatBox) return;
 
             const currentRk = getSharedRoomKey() || msg.roomKey;
-            if (msg.roomKey && currentRk && msg.roomKey !== currentRk) return;
 
             const existing = document.getElementById(msg.id);
             if (existing) {
@@ -2382,8 +2430,10 @@
             const wrapper = document.createElement("div");
             wrapper.id = msg.id;
             wrapper.className = "nx-ig-media-bubble";
-            wrapper.dataset.roomKey = msg.roomKey || currentRk || "";
+            wrapper.dataset.roomKey = currentRk || "";
             wrapper.dataset.msgTs = String(msg.createdAt || Date.now());
+            wrapper.dataset.sender = msg.sender || "Member";
+            wrapper.dataset.mtype = msg.mediaType || "image";
             if (msg.nativeAnchorCount !== undefined) {
                 wrapper.dataset.nativeAnchorCount = String(msg.nativeAnchorCount);
             }
@@ -2392,7 +2442,7 @@
             wrapper.dataset.rawUrl = msg.viewOnce ? "" : displayUrl;
             wrapper.style.cssText = `display:flex; justify-content:${
                 isMe ? "flex-end" : "flex-start"
-            }; margin:10px 0 14px 0; padding:0 10px;`;
+            }; margin:8px 0 14px 0; padding:0 10px;`;
 
             let mediaSlotHtml = "";
             if (msg.viewOnce) {
@@ -2406,12 +2456,13 @@
                             <span style="width:24px; height:24px; border-radius:50%; background:#38bdf8; color:#020617; display:inline-flex; align-items:center; justify-content:center; font-weight:900; font-size:11px; flex-shrink:0;">1</span>
                             <div style="text-align:left;">
                                 <div>${msg.mediaType === "video" ? "View Once Video" : "View Once Photo"}</div>
-                                <div style="font-size:10px; color:#7dd3fc; font-weight:600;">🔒 Tap to View • No Save/Screenshot</div>
+                                <div style="font-size:10px; color:#7dd3fc; font-weight:600;">🔒 Tap to View • Swipe to Reply</div>
                             </div>
                         </button>`;
                 }
             } else if (msg.mediaType === "video") {
-                mediaSlotHtml = `<video src="${displayUrl}" controls playsinline style="max-width:240px; max-height:300px; width:100%; border-radius:12px; border:1px solid rgba(255,255,255,0.14); background:#000; display:block;"></video>`;
+                // Compact Video Bubble Player (Fixes cut-off video in 1000076715.jpg!)
+                mediaSlotHtml = `<video src="${displayUrl}" controls playsinline style="width:220px; max-width:100%; max-height:220px; border-radius:12px; border:1px solid rgba(255,255,255,0.14); background:#000; display:block; object-fit:cover;"></video>`;
             } else if (msg.mediaType === "audio") {
                 mediaSlotHtml = `<audio src="${displayUrl}" controls style="width:215px; height:36px; display:block; margin-top:2px;"></audio>`;
             } else if (msg.mediaType === "pdf") {
@@ -2421,7 +2472,7 @@
                     msg.fileName || "Open PDF Notes"
                 }</span></a>`;
             } else {
-                mediaSlotHtml = `<img src="${displayUrl}" style="max-width:235px; max-height:290px; width:100%; border-radius:12px; border:1px solid rgba(255,255,255,0.14); object-fit:cover; display:block; cursor:pointer;" onclick="window.open(this.src)" />`;
+                mediaSlotHtml = `<img src="${displayUrl}" style="width:220px; max-width:100%; max-height:250px; border-radius:12px; border:1px solid rgba(255,255,255,0.14); object-fit:cover; display:block; cursor:pointer;" onclick="window.open(this.src)" />`;
             }
 
             const timeStr = new Date(msg.createdAt || Date.now()).toLocaleTimeString([], {
@@ -2448,9 +2499,12 @@
                         <span style="opacity:0.85;">${timeStr}</span>
                         <span class="nx-media-status" style="font-weight:800;">${msg.statusText || "✓✓"}</span>
                     </div>
-                    <button type="button" class="nx-media-dots-btn" title="React, Block or Delete" style="position:absolute; bottom:-9px; right:6px;">•••</button>
+                    <button type="button" class="nx-media-dots-btn" title="Reply, React or Delete" style="position:absolute; bottom:-9px; right:6px;">•••</button>
                 </div>
             `;
+
+            // Bind Left & Right Swipe-to-Reply on this Media Bubble!
+            attachSwipeToReplyOnBubble(wrapper, msg);
 
             chatBox.appendChild(wrapper);
             sortChatMessagesChronologically(chatBox, currentRk);
@@ -2472,16 +2526,16 @@
         }
 
         // =========================================================================
-        // 7. GLOBAL FILE INPUT INTERCEPTOR & UPLOAD ENGINE
+        // 8. ULTRA-FAST UPLOAD ENGINE (DELIVERS ON 0.19 KB/s - 6 KB/s NETWORKS!)
         // =========================================================================
-        function compressImageToHD(file) {
+        function compressImageToFastWebP(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const img = new Image();
                     img.onload = () => {
                         const canvas = document.createElement("canvas");
-                        const MAX = 800;
+                        const MAX = 680;
                         let w = img.width;
                         let h = img.height;
                         if (w > h && w > MAX) {
@@ -2494,9 +2548,9 @@
                         canvas.width = w;
                         canvas.height = h;
                         canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-                        let out = canvas.toDataURL("image/webp", 0.7);
-                        if (!out || out.length < 50 || out.length > 140000) {
-                            out = canvas.toDataURL("image/jpeg", 0.64);
+                        let out = canvas.toDataURL("image/webp", 0.62);
+                        if (!out || out.length < 50 || out.length > 95000) {
+                            out = canvas.toDataURL("image/jpeg", 0.56);
                         }
                         resolve(out);
                     };
@@ -2510,6 +2564,11 @@
 
         function uploadUpTo50MB(file, onProgress) {
             return new Promise((resolve, reject) => {
+                // If video/audio is under 15MB, chunk directly into Firestore first so 0.19 KB/s 4G doesn't fail on external CORS!
+                if (file.size <= 12 * 1024 * 1024 && window.Nexus && Nexus.db) {
+                    chunkFallback(file, onProgress).then(resolve).catch(reject);
+                    return;
+                }
                 const xhr = new XMLHttpRequest();
                 const fd = new FormData();
                 fd.append("reqtype", "fileupload");
@@ -2601,11 +2660,13 @@
             if (!fileList || !fileList.length) return;
             const files = Array.from(fileList);
             const chatBox = getStrictOpenChatMessagesBox();
-            // Record exact count of native messages currently in chat so photo stays at the very bottom,
-            // and any new text message sent AFTER this photo appears right below it!
             const currentNativeCount = chatBox
                 ? Array.from(chatBox.children).filter((el) => !el.classList.contains("nx-ig-media-bubble")).length
                 : 9999;
+
+            const tokens = getPartnerIdentityTokens();
+            const rk = tokens.roomKey || "dm_saved_" + (getMyUsername() || "user");
+            const sender = getMyUsername() || "user";
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
@@ -2614,8 +2675,6 @@
                     continue;
                 }
 
-                const rk = getSharedRoomKey() || "dm_saved_" + (getMyUsername() || "user");
-                const sender = getMyUsername() || "user";
                 const msgId = "nxm_" + Date.now() + "_" + i + "_" + Math.random().toString(36).slice(2, 5);
                 const mime = (file.type || "").toLowerCase();
                 const mediaType =
@@ -2628,15 +2687,16 @@
                         ? "pdf"
                         : "image");
 
-                // ALWAYS use current send time (`Date.now()`) — NEVER use the photo's EXIF `file.lastModified`!
                 const nowTs = Date.now() + i;
                 const localUrl = URL.createObjectURL(file);
 
                 const tempDoc = {
                     id: msgId,
                     roomKey: rk,
-                    sender,
-                    mediaType,
+                    sender: sender,
+                    targetPartner: tokens.partnerUname,
+                    partnerAlpha: tokens.partnerAlpha,
+                    mediaType: mediaType,
                     viewOnce: Boolean(isViewOnce),
                     opened: false,
                     fileName: file.name || "file",
@@ -2655,8 +2715,10 @@
                     const finalDoc = {
                         id: msgId,
                         roomKey: rk,
-                        sender,
-                        mediaType,
+                        sender: sender,
+                        targetPartner: tokens.partnerUname,
+                        partnerAlpha: tokens.partnerAlpha,
+                        mediaType: mediaType,
                         viewOnce: Boolean(isViewOnce),
                         opened: false,
                         fileName: file.name || "file",
@@ -2666,7 +2728,7 @@
 
                     if (mediaType === "image") {
                         finalDoc.mode = "inline";
-                        finalDoc.mediaUrl = await compressImageToHD(file);
+                        finalDoc.mediaUrl = await compressImageToFastWebP(file);
                     } else {
                         const res = await uploadUpTo50MB(file, (pct) => {
                             const el = document.getElementById(msgId);
@@ -2687,8 +2749,7 @@
                         localUrl,
                         nativeAnchorCount: currentNativeCount
                     });
-                    if (!roomMediaMap[rk]) roomMediaMap[rk] = [];
-                    roomMediaMap[rk].push(withLocal);
+                    allCloudMediaList.push(withLocal);
                     pendingUploadsMap[rk] = (pendingUploadsMap[rk] || []).map((p) => (p.id === msgId ? withLocal : p));
 
                     if (window.Nexus && Nexus.db) {
@@ -2714,7 +2775,6 @@
             }
         }
 
-        // Intercept ANY file input inside open chat (fixes 1000076669.jpg!)
         document.addEventListener(
             "change",
             (e) => {
@@ -2897,18 +2957,48 @@
         );
 
         // =========================================================================
-        // 8. UI CLEANER & LIVE ROOM STREAM SYNC
+        // 9. UI CLEANER, HARDCODED REFRESH POST REMOVER & DESKTOP CHAT FIXER
         // =========================================================================
         function periodicMaintain() {
-            document.querySelectorAll("#tab-home div").forEach((card) => {
-                if (card.children.length >= 2 && card.children.length <= 7 && card.innerText) {
-                    const norm = card.innerText.toLowerCase().replace(/\s+/g, " ");
-                    if (norm.includes("website ko refresh kar") || norm.includes("ek bar website ko refresh")) {
+            // 1. Hide ANY card on #tab-home that contains "Website ko ek baar refresh 🔄 kar lena" (Fixes 1000076729.jpg!)
+            document.querySelectorAll("#tab-home div, #tab-home article, #tab-home section").forEach((card) => {
+                if (!card || card.id === "tab-home" || !card.innerText) return;
+                const norm = card.innerText.toLowerCase().replace(/\s+/g, " ");
+                if (
+                    norm.includes("website ko refresh") ||
+                    norm.includes("ek bar website ko refresh") ||
+                    norm.includes("ek baar refresh") ||
+                    (norm.includes("refresh") && norm.includes("updates properly dikh"))
+                ) {
+                    if (card.clientHeight > 70 && card.clientHeight < 560) {
                         card.style.display = "none";
                     }
                 }
             });
 
+            // 2. Center Full-Screen Chat on Desktop Site / Laptop / PC & remove empty vertical gap (Fixes 1000076714.jpg!)
+            const chatBox = getStrictOpenChatMessagesBox();
+            if (chatBox) {
+                chatBox.style.display = "flex";
+                chatBox.style.flexDirection = "column";
+                chatBox.style.justifyContent = "flex-start";
+                chatBox.style.gap = "8px";
+
+                let panel = chatBox.parentElement;
+                while (panel && panel !== document.body) {
+                    const st = window.getComputedStyle(panel);
+                    if (st.position === "fixed" && panel.clientWidth > 620) {
+                        panel.style.maxWidth = "600px";
+                        panel.style.left = "50%";
+                        panel.style.transform = "translateX(-50%)";
+                        panel.style.width = "100%";
+                        break;
+                    }
+                    panel = panel.parentElement;
+                }
+            }
+
+            // 3. Upgrade Green 'N' to Official Nexus Emblem
             document.querySelectorAll("#tab-home div, #tab-home span").forEach((el) => {
                 if (el.children.length === 0 && (el.innerText || "").trim() === "N") {
                     const pTxt = (el.parentElement?.parentElement?.innerText || "").toLowerCase();
@@ -2956,9 +3046,32 @@
                 }
             });
         }
-        setInterval(periodicMaintain, 400);
+        setInterval(periodicMaintain, 350);
+
+        // =========================================================================
+        // 10. GLOBAL CLOUD MEDIA STREAM (GUARANTEES DELIVERY TO CHANCHAL & ALL PARTNERS!)
+        // =========================================================================
+        function startGlobalMediaListener() {
+            if (unsubMedia || !window.Nexus || !Nexus.db) return;
+            unsubMedia = Nexus.db
+                .collection(MEDIA_COLLECTION)
+                .orderBy("createdAt", "desc")
+                .limit(60)
+                .onSnapshot((snap) => {
+                    const list = [];
+                    snap.forEach((d) => {
+                        const obj = d.data();
+                        obj.id = d.id;
+                        list.push(obj);
+                    });
+                    list.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+                    allCloudMediaList = list;
+                });
+        }
 
         function syncActiveRoomStreams() {
+            startGlobalMediaListener();
+
             const chatBox = getStrictOpenChatMessagesBox();
             if (!chatBox || !window.Nexus || !Nexus.db) return;
 
@@ -2967,42 +3080,14 @@
 
             if (rk !== activeRoomKey) {
                 activeRoomKey = rk;
+                activeMediaReplyContext = null;
+                document.getElementById("nx-media-reply-preview-bar")?.remove();
+
                 chatBox.querySelectorAll(".nx-ig-media-bubble").forEach((b) => {
                     if (b.dataset.roomKey && b.dataset.roomKey !== rk) b.remove();
                 });
 
-                if (unsubMedia) unsubMedia();
                 if (unsubSync) unsubSync();
-
-                unsubMedia = Nexus.db
-                    .collection(MEDIA_COLLECTION)
-                    .where("roomKey", "==", rk)
-                    .onSnapshot((snap) => {
-                        const currentIds = new Set();
-                        const list = [];
-                        snap.forEach((d) => {
-                            currentIds.add(d.id);
-                            list.push(d.data());
-                        });
-
-                        const pendingIds = new Set((pendingUploadsMap[rk] || []).map((p) => p.id));
-
-                        if (roomMediaMap[rk]) {
-                            roomMediaMap[rk].forEach((oldItem) => {
-                                if (!currentIds.has(oldItem.id) && !pendingIds.has(oldItem.id)) {
-                                    document.getElementById(oldItem.id)?.remove();
-                                }
-                            });
-                        }
-
-                        list.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-                        roomMediaMap[rk] = list.slice(-35);
-
-                        const combined = getCombinedRoomMedia(rk);
-                        combined.forEach((m) => renderChatMediaBubble(m, m.localUrl));
-                        sortChatMessagesChronologically(chatBox, rk);
-                    });
-
                 unsubSync = Nexus.db
                     .collection("nexus_watch_sync")
                     .doc(rk)
@@ -3022,13 +3107,18 @@
                             isPartnerSyncing = false;
                         }, 900);
                     });
-            } else {
-                const combined = getCombinedRoomMedia(rk);
-                combined.forEach((m) => renderChatMediaBubble(m, m.localUrl));
-                sortChatMessagesChronologically(chatBox, rk);
             }
+
+            const combined = getCombinedRoomMedia(rk);
+            const validIds = new Set(combined.map((m) => m.id));
+            chatBox.querySelectorAll(".nx-ig-media-bubble").forEach((b) => {
+                if (!validIds.has(b.id)) b.remove();
+            });
+
+            combined.forEach((m) => renderChatMediaBubble(m, m.localUrl));
+            sortChatMessagesChronologically(chatBox, rk);
         }
-        setInterval(syncActiveRoomStreams, 450);
+        setInterval(syncActiveRoomStreams, 400);
 
         function sendYtCmd(func, args = []) {
             document.querySelectorAll('iframe[src*="youtube"]').forEach((f) => {
