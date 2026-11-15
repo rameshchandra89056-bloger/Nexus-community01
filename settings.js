@@ -1245,3 +1245,23 @@
     });
     setInterval(hookSettingsTabRendering, 400);
 })();
+// Optional Bridge: Shows Instagram-Style Log In / Sign Up Switcher directly inside #tab-profile when locked!
+setInterval(function () {
+    const hub = document.getElementById("nx-google-auth-hub");
+    if (hub && !hub.querySelector("#nx-direct-ig-signup-btn") && window.openAdvancedGoogleAuthModal) {
+        const btnWrap = hub.querySelector("div[style*='flex-direction:column']");
+        if (btnWrap) {
+            const switchBtn = document.createElement("button");
+            switchBtn.type = "button";
+            switchBtn.id = "nx-direct-ig-signup-btn";
+            switchBtn.style.cssText =
+                "width:100%; padding:11px 16px; border-radius:14px; background:rgba(16,185,129,0.14); color:#34d399; font-weight:900; font-size:12.5px; border:1px solid rgba(16,185,129,0.45); cursor:pointer;";
+            switchBtn.innerHTML = "✨ New User? Sign Up with Custom @Username";
+            switchBtn.onclick = function (e) {
+                e.stopPropagation();
+                window.openAdvancedGoogleAuthModal("signup");
+            };
+            btnWrap.appendChild(switchBtn);
+        }
+    }
+}, 500);
