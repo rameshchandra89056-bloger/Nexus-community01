@@ -1,20 +1,20 @@
 /* ============================================================================
-   NEXUS OFFICIAL PROFILE.JS (V26 MASTER - ZERO BLANK HOME, ZERO GAP BIO & GROUP CHAT HUB)
-   1. Fixes Blank Home Screen Bug (1000076944.jpg):
-      - Protects '#tab-home' feed container from accidental deletion and automatically
-        restores/renders all real community posts if Home Feed ever goes empty!
-   2. Fixes Empty Gap Under '4 posts | 12 followers | 1 following' (1000076946.jpg):
-      - Fills the right-side space under stats with Official Nexus Role Badge, Live
-        Status Pill, Profile Reach & Interactive Bio Card!
-   3. Fixes Story Bar '1h ago' & Overlap (1000076944.jpg / 1000076946.jpg):
-      - Removes '💬 DM Open' overlap on Profile & Story Bar, and replaces hardcoded
-        '1h ago' with 100% real Firestore timestamps!
-   4. Complete All-Group-Chats Hub & Live Group Messenger (Global, IIT-JEE, NEET, Coding
-      + Create Group, Pinned Notice, Live Group Polls, Media & Swipe-to-Reply!)
+   NEXUS OFFICIAL PROFILE.JS (V27 FINAL MASTER - 100% REAL BIO, REAL TIME & ZERO FILTER BUG)
+   1. Fixes "🔍 Filtering posts... [Clear ✕]" Blank Home Bug (1000076947.jpg / 76948.jpg):
+      - Auto-clears any active post filter on #tab-home so all posts ALWAYS stay visible!
+      - Capture-phase click on Story Bar opens Public Profile directly without triggering
+        home.js post filtering!
+   2. Fixes Ayush '20m ago' Jumping to Fake '🟢 Live' (1000076947.jpg vs 76948.jpg / 76950.jpg):
+      - Strict 90-second real online check! Never turns a '20m ago' user into fake '🟢 Live'.
+   3. Fixes Bio Editing & Removes Forced Bio Text (1000076948.jpg / 76950.jpg):
+      - Shows 100% exact user bio (no forced replacement!)
+      - Updating Bio/Name in 'Edit profile' updates `nexus_accounts`, `Nexus.users`, AND
+        all of your existing posts in `nexus_real_posts` simultaneously!
+   4. Fixes Chanchal ('꧁༒CHA...') Hardcoded '1h ago' in Story Bar via Unicode-Safe Matcher!
    ============================================================================ */
 (function () {
-    if (window.__NEXUS_INSTAGRAM_PROFILE_V26__) return;
-    window.__NEXUS_INSTAGRAM_PROFILE_V26__ = true;
+    if (window.__NEXUS_INSTAGRAM_PROFILE_V27__) return;
+    window.__NEXUS_INSTAGRAM_PROFILE_V27__ = true;
 
     let currentProfileTabMode = "posts"; // 'posts' | 'videos' | 'vault'
     let currentPublicTabMode = "grid"; // 'grid' | 'feed' | 'videos'
@@ -26,9 +26,8 @@
     const realLastSeenCache = {};
     const backStackLayers = [];
 
-    // CSS Shield: Locks out Story Bar & Profile DP 'DM Open' overlaps + styles Group Chat & Bio Card
-    const v26MasterStyle = document.createElement("style");
-    v26MasterStyle.textContent = `
+    const v27MasterStyle = document.createElement("style");
+    v27MasterStyle.textContent = `
         .nx-auto-seen-pill, .nx-dm-open-pill-hidden {
             display: none !important;
         }
@@ -56,7 +55,7 @@
             100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0; }
         }
     `;
-    document.head.appendChild(v26MasterStyle);
+    document.head.appendChild(v27MasterStyle);
 
     // =========================================================================
     // 1. SINGLE-STEP HARDWARE BACK BUTTON ROUTER
@@ -194,52 +193,29 @@
     }
 
     // =========================================================================
-    // 2. HOME FEED GUARDIAN & AUTO-RESTORER (FIXES BLANK HOME SCREEN 1000076944.jpg!)
-    //    If #tab-home ever loses its posts container, immediately restores all real posts!
+    // 2. AUTO-CLEAR "🔍 Filtering posts... [Clear ✕]" & PREVENT BLANK HOME SCREEN
+    //    (Fixes 1000076944.jpg, 1000076947.jpg & 1000076948.jpg!)
     // =========================================================================
-    function ensureHomeFeedNeverBlank() {
+    function guardHomeFeedFromFilterBlankness() {
         const homeTab = document.getElementById("tab-home");
-        if (!homeTab || !window.Nexus || !Array.isArray(Nexus.posts)) return;
+        if (!homeTab) return;
 
-        // Unhide any post container that might have been hidden by over-broad selectors
-        Array.from(homeTab.children).forEach((child) => {
-            if (child.id !== "nx-stories-bar" && child.style.display === "none" && child.children.length > 1) {
-                child.style.display = "block";
+        // 1. If home.js injected "🔍 Filtering posts... [Clear ✕]", automatically click "Clear ✕"
+        //    so tapping a Story Bar user with 0 posts NEVER blanks out the Home Feed!
+        homeTab.querySelectorAll("button, span, div").forEach((el) => {
+            if (el.children.length === 0) {
+                const txt = (el.innerText || "").trim();
+                if (txt === "Clear ✕" || txt === "Clear X") {
+                    const parentTxt = (el.parentElement && el.parentElement.innerText) || "";
+                    if (parentTxt.includes("Filtering posts")) {
+                        el.click();
+                        if (el.parentElement) el.parentElement.style.display = "none";
+                    }
+                }
             }
         });
-
-        const validPosts = Nexus.posts.filter((p) => {
-            if (!p) return false;
-            const raw = String(p.content || p.text || "").toLowerCase().replace(/\s+/g, " ");
-            if (raw.includes("website ko refresh") || raw.includes("ek baar refresh")) return false;
-            return true;
-        });
-
-        if (!validPosts.length) return;
-
-        // Check if any post cards are currently visible below the Story Bar
-        const visibleArticles = Array.from(homeTab.querySelectorAll("article, .nx-restored-feed-card")).filter(
-            (el) => el.offsetParent !== null && el.clientHeight > 60
-        );
-        const homeHeight = homeTab.scrollHeight;
-
-        // If #tab-home only has the Story Bar (height < 260px and 0 visible post cards), render all real posts immediately!
-        if (visibleArticles.length === 0 && homeHeight < 300) {
-            let fallbackContainer = document.getElementById("nx-home-fallback-feed");
-            if (!fallbackContainer) {
-                fallbackContainer = document.createElement("div");
-                fallbackContainer.id = "nx-home-fallback-feed";
-                fallbackContainer.style.cssText = "padding:4px 0 40px; width:100%;";
-                homeTab.appendChild(fallbackContainer);
-            }
-            fallbackContainer.innerHTML = buildScrollablePostCardsHtml(validPosts, null);
-            bindRealPostCardEvents(fallbackContainer, validPosts, () => {
-                fallbackContainer.innerHTML = buildScrollablePostCardsHtml(validPosts, null);
-                bindRealPostCardEvents(fallbackContainer, validPosts, null);
-            });
-        }
     }
-    setInterval(ensureHomeFeedNeverBlank, 450);
+    setInterval(guardHomeFeedFromFilterBlankness, 250);
 
     // =========================================================================
     // 3. FOLLOWERS / FOLLOWING AUTO-CROSS-SYNC ENGINE
@@ -290,7 +266,10 @@
     setInterval(crossSyncAllFollowersAndSongs, 500);
 
     // =========================================================================
-    // 4. STORY BAR REAL TIMESTAMP & ZERO-OVERLAP ENGINE (FIXES '1h ago' IN 1000076944.jpg!)
+    // 4. STRICT REAL TIMESTAMP & STORY BAR ENGINE
+    //    - Fixes Ayush '20m ago' jumping to fake '🟢 Live' (1000076947.jpg vs 76948.jpg!)
+    //    - Fixes Chanchal ('꧁༒CHA...') hardcoded '1h ago'
+    //    - Capture-phase Story Bar click opens Public Profile directly!
     // =========================================================================
     function extractTrueTimestamp(u) {
         if (!u) return 0;
@@ -300,24 +279,21 @@
             u.lastSeenAt,
             u.lastActive,
             u.updatedAt,
+            u.lastOnline,
             u.createdAt,
             u.joinedAt,
             u.timestamp,
             u.verifiedAt
         ];
 
-        // Ignore `lastOnline` if it looks like the old 1-hour fallback (`Date.now() - 3600000`)
-        const lo = Number(u.lastOnline || 0);
-        if (lo > 1000000000000) {
-            const diffMin = Math.round((now - lo) / 60000);
-            if (diffMin < 55 || diffMin > 65 || u.isOnlineNow) {
-                candidates.unshift(lo);
-            }
-        }
-
         for (let i = 0; i < candidates.length; i++) {
             const val = Number(candidates[i] || 0);
             if (val > 1000000000000 && val <= now + 60000) {
+                const diffMin = Math.round((now - val) / 60000);
+                // Ignore the old artificial 1-hour fallback (`Date.now() - 3600000`)
+                if (diffMin >= 58 && diffMin <= 62 && !u.verifiedAt && !u.lastSeen) {
+                    continue;
+                }
                 return val;
             }
         }
@@ -328,6 +304,8 @@
         return 0;
     }
 
+    // STRICT 90-SECOND ONLINE CHECK: A user who was active '20m ago' (like Ayush in 1000076947.jpg)
+    // will NEVER be falsely marked as '🟢 Live'!
     function isUserTrulyOnlineRightNow(u) {
         if (!u) return false;
         const myKey = getMyUsername();
@@ -335,11 +313,9 @@
             return true;
         }
         const ts = extractTrueTimestamp(u);
-        const ageMs = ts > 0 ? Date.now() - ts : 999999999;
-
-        if (ageMs >= 0 && ageMs <= 10 * 60 * 1000) return true;
-        if (u.isOnlineNow === true && ageMs <= 30 * 60 * 1000) return true;
-        return false;
+        if (!ts) return false;
+        const ageMs = Date.now() - ts;
+        return ageMs >= 0 && ageMs <= 90 * 1000; // Strictly active within the last 90 seconds!
     }
 
     window.formatRealNexusLastSeen = function (ts, isOnline) {
@@ -353,8 +329,37 @@
         return Math.floor(diffSec / 86400) + "d ago";
     };
 
+    function findUserObjectByAnyIdentifier(identifier) {
+        if (!identifier || !window.Nexus || !Array.isArray(Nexus.users)) return null;
+        const clean = String(identifier).toLowerCase().replace(/^@/, "").replace(/\.+$/, "").trim();
+        if (!clean) return null;
+
+        // Strip decorative Unicode symbols (like '꧁༒CHA...' -> 'cha') so Chanchal ALWAYS matches!
+        const alphaLookup = clean.replace(/[^a-z0-9]/g, "");
+
+        return (
+            Nexus.users.find((u) => {
+                if (!u) return false;
+                const uN = (u.username || "").toLowerCase().trim();
+                const dN = (u.name || "").toLowerCase().trim();
+                const uAlpha = uN.replace(/[^a-z0-9]/g, "");
+                const dAlpha = dN.replace(/[^a-z0-9]/g, "");
+                return (
+                    uN === clean ||
+                    dN === clean ||
+                    (clean.length >= 3 && (dN.startsWith(clean) || uN.startsWith(clean))) ||
+                    (alphaLookup.length >= 3 &&
+                        (uAlpha.startsWith(alphaLookup) ||
+                            dAlpha.startsWith(alphaLookup) ||
+                            uN.includes(alphaLookup) ||
+                            dAlpha.includes(alphaLookup)))
+                );
+            }) || null
+        );
+    }
+
     function syncUnifiedStoryBarPresence() {
-        // Remove any stray '💬 DM Open' badge anywhere in Story Bar or Profile Tab (Fixes 1000076946.jpg!)
+        // Hide any stray '💬 DM Open' pill anywhere
         document.querySelectorAll("#tab-home span, #tab-home div, #tab-profile span, #tab-profile div").forEach((el) => {
             if (el.children.length === 0 && (el.innerText || "").trim().includes("DM Open")) {
                 el.classList.add("nx-dm-open-pill-hidden");
@@ -376,25 +381,10 @@
             const rawName = lines[lines.length - 1].toLowerCase().replace(/\.+$/, "").trim();
             if (!rawName || rawName.includes("nexus")) return;
 
-            const alphaLookup = rawName.replace(/[^a-z0-9]/g, "");
-            const matched = Nexus.users.find((u) => {
-                if (!u) return false;
-                const uN = (u.username || "").toLowerCase();
-                const dN = (u.name || "").toLowerCase();
-                const dAlpha = dN.replace(/[^a-z0-9]/g, "");
-                return (
-                    uN === rawName ||
-                    dN === rawName ||
-                    (rawName.length >= 3 && (dN.startsWith(rawName) || uN.startsWith(rawName))) ||
-                    (alphaLookup.length >= 3 && (uN.startsWith(alphaLookup) || dAlpha.startsWith(alphaLookup)))
-                );
-            });
-
+            const matched = findUserObjectByAnyIdentifier(rawName);
             if (!matched) return;
 
             const isLive = isUserTrulyOnlineRightNow(matched);
-            matched.isOnlineNow = isLive;
-
             const trueTs = extractTrueTimestamp(matched);
             const realLabel = isLive ? "🟢 Live" : window.formatRealNexusLastSeen(trueTs, false);
 
@@ -402,12 +392,25 @@
             card.querySelectorAll("span, div, small").forEach((badge) => {
                 if (badge.children.length > 0 || badge.classList.contains("nx-dm-open-pill-hidden")) return;
                 const bt = (badge.innerText || "").trim();
-                if (bt.endsWith("ago") || bt === "Live" || bt === "🟢 Live" || bt === "Offline") {
+                if (
+                    bt.endsWith("ago") ||
+                    bt === "Live" ||
+                    bt === "🟢 Live" ||
+                    bt === "Offline" ||
+                    bt === "Active"
+                ) {
                     if (badgeFound) {
                         badge.style.display = "none";
                         return;
                     }
                     badgeFound = true;
+
+                    // If `home.js` already rendered a specific real relative time (like '20m ago' for Ayush in 76947.jpg)
+                    // and `trueTs` is 0, preserve that real time instead of overwriting it!
+                    if (!isLive && !realLabel && bt !== "1h ago" && bt.endsWith("ago")) {
+                        return;
+                    }
+
                     if (isLive) {
                         badge.innerText = "🟢 Live";
                         badge.style.background = "#064e3b";
@@ -417,15 +420,17 @@
                         badge.style.padding = "1px 7px";
                         badge.style.fontWeight = "900";
                         badge.style.display = "inline-block";
-                    } else if (realLabel && realLabel !== "1h ago") {
+                    } else if (realLabel) {
                         badge.innerText = realLabel;
                         badge.style.background = "#0f172a";
                         badge.style.border = "1px solid #38bdf8";
                         badge.style.color = "#e0f2fe";
+                        badge.style.borderRadius = "999px";
+                        badge.style.padding = "1px 7px";
                         badge.style.display = "inline-block";
-                    } else if (bt === "1h ago" && !trueTs) {
-                        // Hide hardcoded '1h ago' from home.js if user has no real 1h timestamp!
-                        badge.innerText = "Verified ✓";
+                    } else if (bt === "1h ago") {
+                        // Replace fake hardcoded '1h ago' on Chanchal/old accounts with clean 'Active' pill
+                        badge.innerText = "Member";
                         badge.style.background = "#0f172a";
                         badge.style.border = "1px solid #334155";
                         badge.style.color = "#94a3b8";
@@ -433,20 +438,25 @@
                 }
             });
 
-            if (!card.dataset.v26ProfileClickBound) {
-                card.dataset.v26ProfileClickBound = "1";
-                card.addEventListener("click", (ev) => {
-                    ev.stopPropagation();
-                    window.openPublicUserProfileModal(matched);
-                });
+            // Capture-Phase Click Handler (`true`): Prevents `home.js` from triggering "🔍 Filtering posts..."!
+            if (!card.dataset.v27CaptureBound) {
+                card.dataset.v27CaptureBound = "1";
+                card.addEventListener(
+                    "click",
+                    (ev) => {
+                        ev.stopPropagation();
+                        ev.preventDefault();
+                        window.openPublicUserProfileModal(matched);
+                    },
+                    true
+                );
             }
         });
     }
-    setInterval(syncUnifiedStoryBarPresence, 350);
+    setInterval(syncUnifiedStoryBarPresence, 300);
 
     // =========================================================================
-    // 5. 💬 ALL GROUP CHATS HUB & LIVE GROUP MESSENGER (#tab-community UPGRADE!)
-    //    - 4 Official Live Groups + Create Custom Group + Pinned Notice + Group Polls
+    // 5. 💬 ALL GROUP CHATS HUB & LIVE GROUP MESSENGER (#tab-community)
     // =========================================================================
     const OFFICIAL_GROUPS = [
         {
@@ -516,10 +526,9 @@
         modal.style.cssText =
             "position:fixed; inset:0; background:#090d16; z-index:200065; display:flex; flex-direction:column; color:#fff; max-width:600px; margin:0 auto; box-shadow:0 0 60px rgba(0,0,0,0.95);";
 
-        const onlineCount = Math.max(4, ((window.Nexus && Nexus.users) || []).filter((u) => isUserTrulyOnlineRightNow(u)).length);
+        const totalMembers = Math.max(12, ((window.Nexus && Nexus.users) || []).length);
 
         modal.innerHTML = `
-            <!-- Top Group Header -->
             <div style="padding:10px 14px; background:#0b1120; border-bottom:1px solid #1e293b; display:flex; align-items:center; justify-content:space-between; z-index:10;">
                 <div style="display:flex; align-items:center; gap:10px; min-width:0;">
                     <button type="button" id="nx-grp-back-btn" style="background:none; border:none; color:#f8fafc; font-size:21px; font-weight:900; cursor:pointer;">←</button>
@@ -533,7 +542,7 @@
                             ${groupObj.name}
                         </div>
                         <div style="font-size:11px; color:#34d399; font-weight:700;">
-                            🟢 ${onlineCount} Online • Live Encrypted Group
+                            👥 ${totalMembers} Members • Live Encrypted Group
                         </div>
                     </div>
                 </div>
@@ -544,7 +553,6 @@
                 </div>
             </div>
 
-            <!-- Pinned Group Announcement Banner -->
             <div id="nx-grp-pinned-bar" style="padding:7px 14px; background:rgba(15,23,42,0.95); border-bottom:1px solid #1e293b; display:flex; align-items:center; justify-content:space-between; font-size:11.5px; color:#fde68a;">
                 <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">📌 <strong>Notice:</strong> ${
                     groupObj.subtitle || "Welcome! Share doubts, notes & ideas respectfully."
@@ -552,18 +560,15 @@
                 <span style="font-size:10px; color:#38bdf8; font-weight:800; margin-left:8px; flex-shrink:0;">LIVE</span>
             </div>
 
-            <!-- Group Messages Scrollable Stream -->
             <div id="nx-chat-messages" style="flex:1; overflow-y:auto; padding:12px 12px 20px; display:flex; flex-direction:column; gap:8px;">
                 <div style="text-align:center; padding:20px; color:#64748b; font-size:12px;">⏳ Loading live group messages...</div>
             </div>
 
-            <!-- Reply Preview Banner -->
             <div id="nx-grp-reply-bar" style="display:none; padding:7px 14px; background:#0f172a; border-top:1px solid #334155; border-left:4px solid #10b981; align-items:center; justify-content:space-between; font-size:11.5px; color:#cbd5e1;">
                 <span id="nx-grp-reply-txt" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></span>
                 <button type="button" id="nx-grp-reply-cancel" style="background:none; border:none; color:#94a3b8; font-weight:900; cursor:pointer;">✕</button>
             </div>
 
-            <!-- Bottom Group Input Bar -->
             <div style="padding:10px 12px 14px; background:#0b1120; border-top:1px solid #1e293b; display:flex; align-items:center; gap:8px;">
                 <button type="button" id="nx-grp-plus-btn" style="width:38px; height:38px; border-radius:50%; background:#1e293b; border:1px solid #10b981; color:#34d399; font-size:20px; font-weight:900; cursor:pointer; flex-shrink:0;">+</button>
                 <input type="text" id="nx-chat-msg-in" placeholder="Message ${groupObj.name.slice(0, 18)}..." style="flex:1; padding:11px 15px; border-radius:999px; background:#0f172a; border:1px solid #334155; color:#fff; font-size:13.5px; outline:none;" />
@@ -585,7 +590,6 @@
             if (window.openSharedWhiteboardModal) window.openSharedWhiteboardModal();
         };
 
-        // Group Quick Poll Creator
         modal.querySelector("#nx-grp-poll-btn").onclick = async () => {
             const q = prompt("📊 Enter Group Poll Question:");
             if (!q || !q.trim()) return;
@@ -640,7 +644,6 @@
             if (e.key === "Enter") sendGroupMessage();
         };
 
-        // Subscribe to real-time group messages in Firestore
         if (window.Nexus && Nexus.db) {
             unsubActiveGroup = Nexus.db
                 .collection("nexus_group_messages")
@@ -737,7 +740,6 @@
         }
     };
 
-    // Injects the Official "All Group Chats & Study Clubs" Section at the top of #tab-community!
     function injectAllGroupChatsSectionInCommunityTab() {
         const commTab = document.getElementById("tab-community");
         if (!commTab || document.getElementById("nx-all-groups-hub")) return;
@@ -824,28 +826,6 @@
     // =========================================================================
     // 6. 🖼️ OFFICIAL NEXUS HD MEDIA LIGHTBOX VIEWER
     // =========================================================================
-    function findUserObjectByAnyIdentifier(identifier) {
-        if (!identifier || !window.Nexus || !Array.isArray(Nexus.users)) return null;
-        const clean = String(identifier).toLowerCase().replace(/^@/, "").replace(/\.+$/, "").trim();
-        if (!clean) return null;
-
-        const alphaLookup = clean.replace(/[^a-z0-9]/g, "");
-        return (
-            Nexus.users.find((u) => {
-                if (!u) return false;
-                const uN = (u.username || "").toLowerCase().trim();
-                const dN = (u.name || "").toLowerCase().trim();
-                const dAlpha = dN.replace(/[^a-z0-9]/g, "");
-                return (
-                    uN === clean ||
-                    dN === clean ||
-                    (clean.length >= 3 && (dN.startsWith(clean) || uN.startsWith(clean))) ||
-                    (alphaLookup.length >= 3 && (uN.startsWith(alphaLookup) || dAlpha.startsWith(alphaLookup)))
-                );
-            }) || null
-        );
-    }
-
     async function recordRealPostView(postObj) {
         const myKey = getMyUsername();
         if (!postObj || !postObj.id || !myKey) return;
@@ -1154,7 +1134,7 @@
                                 </div>
                                 <div style="font-size:11.5px; color:#38bdf8; font-weight:700;">@${uKey}</div>
                                 <div style="font-size:11px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                                    ${song ? "🎵 " + song.title : uObj.bio || "Nexus Verified Member ✨"}
+                                    ${song ? "🎵 " + song.title : uObj.bio || ""}
                                 </div>
                             </div>
                         </div>
@@ -1963,6 +1943,7 @@
                 const pOwnerUname = p.username || (ownerUserObj && ownerUserObj.username) || "member";
                 const uMatch = findUserObjectByAnyIdentifier(pOwnerUname);
                 const dpUrl = (ownerUserObj && ownerUserObj.dp) || (uMatch && uMatch.dp) || p.dp || "";
+                const authorBio = (uMatch && uMatch.bio) || p.bio || "";
 
                 const img = p.image || p.videoUrl || "";
                 const isVid =
@@ -2034,7 +2015,9 @@
                                                 : ""
                                         }
                                     </div>
-                                    <div style="font-size:11px; color:#94a3b8;">@${pOwnerUname} • ${timeLabel}</div>
+                                    <div style="font-size:11px; color:#38bdf8;">${
+                                        authorBio ? authorBio + " • " : "@" + pOwnerUname + " • "
+                                    }${timeLabel}</div>
                                 </div>
                             </div>
                             <button type="button" class="nx-feed-card-3dot" data-fidx="${idx}" style="width:34px; height:34px; border-radius:50%; background:#1e293b; border:1px solid #334155; color:#f8fafc; font-size:17px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center;">
@@ -2256,7 +2239,7 @@
     };
 
     // =========================================================================
-    // 10. COMPLETE FULL-SCREEN PUBLIC PROFILE & AVATAR ZOOM
+    // 10. COMPLETE FULL-SCREEN PUBLIC PROFILE & AVATAR ZOOM (EXACT USER BIO!)
     // =========================================================================
     window.openAvatarLongPressZoomModal = function (userObj) {
         if (!userObj || !userObj.username) return;
@@ -2269,7 +2252,7 @@
 
         const isLive = isUserTrulyOnlineRightNow(userObj);
         const trueTs = extractTrueTimestamp(userObj);
-        const seenText = window.formatRealNexusLastSeen(trueTs, isLive) || "Member";
+        const seenText = window.formatRealNexusLastSeen(trueTs, isLive) || "Verified";
         const song = getNormalizedProfileSong(userObj);
 
         const avatarHtml = userObj.dp
@@ -2294,11 +2277,13 @@
                 ${userObj.name || userObj.username} ✅
             </h3>
             <div style="font-size:13px; color:#34d399; font-weight:700; margin-top:2px;">
-                @${userObj.username} • ${isLive ? "🟢 Online Now" : "Last seen " + seenText}
+                @${userObj.username} • ${isLive ? "🟢 Online Now" : seenText}
             </div>
-            <p style="font-size:12.5px; color:#cbd5e1; max-width:300px; text-align:center; margin-top:6px;">
-                ${userObj.bio || "Nexus Community Member ✨"}
-            </p>
+            ${
+                userObj.bio
+                    ? `<p style="font-size:12.5px; color:#cbd5e1; max-width:300px; text-align:center; margin-top:6px;">${userObj.bio}</p>`
+                    : ""
+            }
             ${
                 song
                     ? `<div style="margin-top:10px; max-width:310px; width:100%;">${buildProfileSongPlayerCardHtml(
@@ -2436,7 +2421,7 @@
                                })
                                .join("")}
                        </div>`
-                    : `<div style="text-align:center; padding:36px 12px; color:#64748b; font-size:13px;">📷 No ${currentPublicTabMode} shared yet.</div>`;
+                    : `<div style="text-align:center; padding:36px 12px; color:#64748b; font-size:13px;">📷 No posts shared yet.</div>`;
             }
 
             modal.innerHTML = `
@@ -2448,7 +2433,7 @@
                                 @${userObj.username} ✅
                             </div>
                             <div style="font-size:11px; color:${isLive ? "#34d399" : "#94a3b8"}; font-weight:700;">
-                                ${isLive ? "🟢 Online Now" : seenText ? "Last seen " + seenText : "Nexus Verified Member"}
+                                ${isLive ? "🟢 Online Now" : seenText ? "Last seen " + seenText : "Verified Member"}
                             </div>
                         </div>
                     </div>
@@ -2484,19 +2469,23 @@
                                 </div>
                             </div>
 
-                            <!-- Right-Side Bio & Official Badge Card (Zero Empty Gap!) -->
+                            <!-- Shows User's Exact Real Bio (No Forced Fake Text!) -->
                             <div style="background:linear-gradient(145deg,#0f172a,#090d16); border:1px solid #1e293b; border-radius:14px; padding:9px 11px;">
-                                <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:4px;">
+                                <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:${
+                                    userObj.bio ? "4px" : "0"
+                                };">
                                     <span style="font-size:10px; font-weight:900; color:#38bdf8; background:rgba(56,189,248,0.14); padding:2px 7px; border-radius:6px;">
-                                        🛡️ Official Nexus Profile
+                                        🛡️ @${userObj.username}
                                     </span>
                                     <span style="font-size:10px; font-weight:800; color:${isLive ? "#34d399" : "#94a3b8"};">
-                                        ${isLive ? "🟢 Active Now" : seenText || "Verified"}
+                                        ${isLive ? "🟢 Online Now" : seenText || "Verified ✓"}
                                     </span>
                                 </div>
-                                <div style="font-size:12px; color:#e2e8f0; line-height:1.4; white-space:pre-line;">${
-                                    userObj.bio || "IIT-JEE / Nexus Verified Member ✨"
-                                }</div>
+                                ${
+                                    userObj.bio
+                                        ? `<div style="font-size:12px; color:#e2e8f0; line-height:1.4; white-space:pre-line;">${userObj.bio}</div>`
+                                        : ""
+                                }
                             </div>
                         </div>
                     </div>
@@ -2717,8 +2706,7 @@
     bindGlobalAvatarLongPress();
 
     // =========================================================================
-    // 11. EDIT PROFILE MODAL & MAIN PROFILE TAB RENDERER (#tab-profile)
-    //     Fixes Empty Gap Under '4 posts | 12 followers | 1 following' (1000076946.jpg!)
+    // 11. EDIT PROFILE MODAL (UPDATES BIO IN ACCOUNT + ALL YOUR EXISTING POSTS!)
     // =========================================================================
     function openEditInstagramProfileModal() {
         const me = getActiveUser();
@@ -2736,7 +2724,7 @@
         modal.innerHTML = `
             <div style="background:#0f172a; border-top:1.5px solid #10b981; border-radius:24px 24px 0 0; width:100%; max-width:600px; max-height:88dvh; overflow-y:auto; padding:18px 16px 28px; color:#fff;">
                 <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid #1e293b;">
-                    <h3 style="font-size:16.5px; font-weight:900; color:#f8fafc;">Edit Official Profile</h3>
+                    <h3 style="font-size:16.5px; font-weight:900; color:#f8fafc;">✏️ Edit Your Profile & Bio</h3>
                     <button type="button" id="nx-close-edit-prof" style="width:30px; height:30px; border-radius:50%; background:#1e293b; border:none; color:#fff; font-weight:900; cursor:pointer;">✕</button>
                 </div>
 
@@ -2746,8 +2734,8 @@
                         <input type="text" id="nx-ep-name" value="${me.name || ""}" style="width:100%; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; outline:none;" />
                     </div>
                     <div>
-                        <label style="font-size:10.5px; font-weight:800; color:#94a3b8; display:block; margin-bottom:3px;">BIO / ABOUT YOU</label>
-                        <textarea id="nx-ep-bio" rows="2" style="width:100%; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; outline:none; resize:none;">${
+                        <label style="font-size:10.5px; font-weight:800; color:#34d399; display:block; margin-bottom:3px;">YOUR CUSTOM BIO (UPDATES ON PROFILE & ALL YOUR POSTS)</label>
+                        <textarea id="nx-ep-bio" rows="3" placeholder="Write your custom bio here..." style="width:100%; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #10b981; color:#fff; font-size:13px; outline:none; resize:none;">${
                             me.bio || ""
                         }</textarea>
                     </div>
@@ -2756,7 +2744,7 @@
                             <label style="font-size:10.5px; font-weight:800; color:#94a3b8; display:block; margin-bottom:3px;">MOOD NOTE (ABOVE DP)</label>
                             <input type="text" id="nx-ep-mood" value="${
                                 me.moodNote || ""
-                            }" placeholder="e.g. Coding Mode ⚡" style="width:100%; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:12.5px; outline:none;" />
+                            }" placeholder="e.g. Studying ⚡" style="width:100%; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:12.5px; outline:none;" />
                         </div>
                         <div>
                             <label style="font-size:10.5px; font-weight:800; color:#94a3b8; display:block; margin-bottom:3px;">WEBSITE / LINK</label>
@@ -2766,7 +2754,7 @@
                         </div>
                     </div>
                     <button type="button" id="nx-save-ep-btn" style="width:100%; padding:13px; border-radius:13px; background:linear-gradient(90deg,#10b981,#06b6d4); color:#020617; font-weight:900; font-size:13.5px; border:none; cursor:pointer; margin-top:6px;">
-                        ✅ Save Profile Changes
+                        ✅ Save Bio & Profile Changes
                     </button>
                 </div>
             </div>
@@ -2775,17 +2763,56 @@
         document.body.appendChild(modal);
         modal.querySelector("#nx-close-edit-prof").onclick = () => modal.remove();
 
-        modal.querySelector("#nx-save-ep-btn").onclick = async () => {
+        modal.querySelector("#nx-save-ep-btn").onclick = async function () {
+            this.disabled = true;
+            this.innerText = "⏳ Saving Bio Everywhere...";
+
+            const myKey = me.username.toLowerCase().trim();
             me.name = (modal.querySelector("#nx-ep-name").value || me.username).trim();
             me.bio = (modal.querySelector("#nx-ep-bio").value || "").trim();
             me.moodNote = (modal.querySelector("#nx-ep-mood").value || "").trim();
             me.website = (modal.querySelector("#nx-ep-link").value || "").trim();
 
             localStorage.setItem("nx_active_account", JSON.stringify(me));
+            localStorage.setItem("nx_legacy_backup_account", JSON.stringify(me));
+
+            // Update inside `Nexus.users`, `Nexus.cloudAccounts` and `Nexus.posts` in memory immediately!
+            if (window.Nexus) {
+                if (Array.isArray(Nexus.users)) {
+                    Nexus.users.forEach((u) => {
+                        if (u && u.username && u.username.toLowerCase() === myKey) {
+                            u.name = me.name;
+                            u.bio = me.bio;
+                            u.moodNote = me.moodNote;
+                            u.website = me.website;
+                        }
+                    });
+                }
+                if (Array.isArray(Nexus.cloudAccounts)) {
+                    Nexus.cloudAccounts.forEach((u) => {
+                        if (u && u.username && u.username.toLowerCase() === myKey) {
+                            u.name = me.name;
+                            u.bio = me.bio;
+                            u.moodNote = me.moodNote;
+                            u.website = me.website;
+                        }
+                    });
+                }
+                if (Array.isArray(Nexus.posts)) {
+                    Nexus.posts.forEach((p) => {
+                        if (p && p.username && p.username.toLowerCase() === myKey) {
+                            p.author = me.name;
+                            p.bio = me.bio;
+                        }
+                    });
+                }
+            }
+
+            // Update Firestore `nexus_accounts` AND all of your posts in `nexus_real_posts` so old 'jee asperient' is replaced everywhere!
             if (window.Nexus && Nexus.db) {
                 await Nexus.db
                     .collection("nexus_accounts")
-                    .doc(me.username.toLowerCase().trim())
+                    .doc(myKey)
                     .set(
                         {
                             name: me.name,
@@ -2797,11 +2824,20 @@
                         { merge: true }
                     )
                     .catch(() => {});
+
+                try {
+                    const myPostsSnap = await Nexus.db.collection("nexus_real_posts").where("username", "==", myKey).get();
+                    const updates = [];
+                    myPostsSnap.forEach((doc) => {
+                        updates.push(doc.ref.set({ author: me.name, bio: me.bio }, { merge: true }));
+                    });
+                    await Promise.allSettled(updates);
+                } catch (e) {}
             }
+
             if (window.Nexus) {
-                Nexus.rebuildAllUsersMasterList && Nexus.rebuildAllUsersMasterList();
                 Nexus.notifyAll && Nexus.notifyAll();
-                Nexus.toast && Nexus.toast("✅ Profile Updated!");
+                Nexus.toast && Nexus.toast("✅ Bio & Profile Updated Everywhere!");
             }
             modal.remove();
             renderMyInstagramProfileTab();
@@ -2863,12 +2899,8 @@
         const mySong = getNormalizedProfileSong(me);
         const totalPostLikes = allMyPosts.reduce((s, p) => s + Math.max((p.likedBy || []).length, Number(p.likes || 0)), 0);
 
-        // Polish raw bio text (e.g. turns 'jee asperient' into a clean professional display)
-        const rawBio = (me.bio || "").trim();
-        const displayBio =
-            !rawBio || rawBio.toLowerCase() === "jee asperient"
-                ? "⚛️ IIT-JEE 2027 Aspirant • Building Official Nexus Community 🚀"
-                : rawBio;
+        // Shows your 100% exact real `me.bio` (Never overrides what you type in Edit Profile!)
+        const exactMyBio = (me.bio || "").trim() || "Tap 'Edit profile' below to write your custom bio ✨";
 
         const dpHtml = me.dp
             ? `<img src="${me.dp}" id="nx-my-dp-img" style="width:88px; height:88px; border-radius:50%; object-fit:cover; border:3px solid #10b981; padding:2px; background:#090d16; cursor:pointer;" />`
@@ -2954,7 +2986,6 @@
 
         container.innerHTML = `
             <div id="nx-ig-profile-root" style="padding-bottom:36px; background:#090d16; min-height:calc(100dvh - 120px);">
-                <!-- Top Header -->
                 <div style="padding:12px 16px; border-bottom:1px solid #1e293b; display:flex; align-items:center; justify-content:space-between; background:#090d16;">
                     <div id="nx-prof-switch-trigger" style="display:flex; align-items:center; gap:6px; cursor:pointer;">
                         <span style="font-size:18px; font-weight:900; color:#f8fafc;">@${me.username}</span>
@@ -2967,10 +2998,8 @@
                     </div>
                 </div>
 
-                <!-- Symmetrical 2-Column Hero Layout (Fills the Empty Green Circle Space in 1000076946.jpg!) -->
                 <div style="padding:16px 16px 10px;">
                     <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:14px;">
-                        <!-- Left Column: Avatar + Mood Note + Name -->
                         <div style="display:flex; flex-direction:column; align-items:center; width:96px; flex-shrink:0;">
                             <div style="position:relative;">
                                 <div id="nx-my-mood-pill" style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:#1e293b; border:1px solid #38bdf8; color:#f8fafc; font-size:9.5px; font-weight:800; padding:2px 8px; border-radius:12px; white-space:nowrap; z-index:5; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,0.6);">
@@ -2986,9 +3015,7 @@
                             <span style="font-size:10px; font-weight:800; color:#34d399; margin-top:2px;">🟢 Online Now</span>
                         </div>
 
-                        <!-- Right Column: Stats Box + Official Nexus Bio & Live Status Card (Fills the Empty Space!) -->
                         <div style="flex:1; display:flex; flex-direction:column; gap:8px; min-width:0;">
-                            <!-- Stats Bar -->
                             <div style="display:grid; grid-template-columns:repeat(3, 1fr); text-align:center; background:#0f172a; border:1px solid #1e293b; border-radius:14px; padding:8px 4px;">
                                 <div id="nx-my-posts-scroll-trigger" style="cursor:pointer;">
                                     <div style="font-size:17px; font-weight:900; color:#f8fafc;">${allMyPosts.length}</div>
@@ -3004,17 +3031,17 @@
                                 </div>
                             </div>
 
-                            <!-- Official Nexus Bio & Role Card (Fills the exact space circled in 1000076946.jpg!) -->
-                            <div style="background:linear-gradient(145deg,#0f172a,#090d16); border:1px solid rgba(16,185,129,0.35); border-radius:14px; padding:9px 11px;">
+                            <!-- Clickable Bio Card (Tap to Edit Your Custom Bio Anytime!) -->
+                            <div id="nx-my-bio-card-trigger" style="background:linear-gradient(145deg,#0f172a,#090d16); border:1px solid rgba(16,185,129,0.35); border-radius:14px; padding:9px 11px; cursor:pointer;" title="Tap to edit bio">
                                 <div style="display:flex; align-items:center; justify-content:space-between; gap:4px; margin-bottom:4px; flex-wrap:wrap;">
                                     <span style="font-size:10px; font-weight:900; color:#020617; background:linear-gradient(90deg,#10b981,#38bdf8); padding:2px 7px; border-radius:6px;">
                                         ${isFounder ? "👑 Founder & Developer" : "🛡️ Nexus Verified"}
                                     </span>
-                                    <span style="font-size:10px; font-weight:800; color:#fbbf24;">
-                                        ❤️ ${totalPostLikes} Likes • 👁️ ${profileVisitors.length} Views
+                                    <span style="font-size:10px; font-weight:800; color:#38bdf8;">
+                                        ✏️ Edit Bio
                                     </span>
                                 </div>
-                                <div style="font-size:12px; color:#e2e8f0; line-height:1.4; white-space:pre-line; word-break:break-word;">${displayBio}</div>
+                                <div style="font-size:12px; color:#e2e8f0; line-height:1.4; white-space:pre-line; word-break:break-word;">${exactMyBio}</div>
                                 ${
                                     me.website
                                         ? `<a href="${me.website}" target="_blank" style="display:inline-block; font-size:11px; color:#38bdf8; font-weight:700; margin-top:3px; text-decoration:none;">🔗 ${me.website}</a>`
@@ -3024,10 +3051,8 @@
                         </div>
                     </div>
 
-                    <!-- Profile Song Player -->
                     <div>${songPlayerHtml}</div>
 
-                    <!-- 3 Action Buttons -->
                     <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:7px; margin-top:12px;">
                         <button type="button" id="nx-btn-edit-profile" style="padding:9px; border-radius:10px; background:#1e293b; border:1px solid #334155; color:#f8fafc; font-weight:800; font-size:12px; cursor:pointer;">
                             Edit profile
@@ -3043,7 +3068,6 @@
                     ${highlightsHtml}
                 </div>
 
-                <!-- 3-Tab Grid Switcher -->
                 <div style="display:grid; grid-template-columns:repeat(3, 1fr); border-top:1px solid #1e293b; border-bottom:1px solid #1e293b; margin-top:6px;">
                     <button type="button" data-ptab="posts" style="padding:11px 4px; background:none; border:none; border-bottom:2.5px solid ${
                         currentProfileTabMode === "posts" ? "#10b981" : "transparent"
@@ -3078,6 +3102,7 @@
 
         container.querySelector("#nx-my-dp-img").onclick = () => window.openAvatarLongPressZoomModal(me);
         container.querySelector("#nx-my-mood-pill").onclick = openEditInstagramProfileModal;
+        container.querySelector("#nx-my-bio-card-trigger").onclick = openEditInstagramProfileModal;
         container.querySelector("#nx-btn-edit-profile").onclick = openEditInstagramProfileModal;
         container.querySelector("#nx-btn-profile-song").onclick = window.openProfileSongPickerModal;
         container.querySelector("#nx-btn-share-profile").onclick = () => window.openProfileQrShareModal(me);
@@ -3168,7 +3193,6 @@
             }
         });
         Nexus.listeners.onPosts.push(() => {
-            ensureHomeFeedNeverBlank();
             const pTab = document.getElementById("tab-profile");
             if (pTab && pTab.classList.contains("active") && isUserVerified()) {
                 renderMyInstagramProfileTab();
