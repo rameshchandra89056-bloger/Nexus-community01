@@ -1,428 +1,706 @@
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Nexus Master Vault — Super Admin & Live Screen Control</title>
-  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
-    body { background: #090d16; color: #f8fafc; min-height: 100dvh; overflow-x: hidden; }
-    #lockScreen { position: fixed; inset: 0; background: #090d16; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
-    .lock-card { background: #0f172a; border: 1.5px solid #10b981; padding: 26px 22px; border-radius: 20px; width: 100%; max-width: 350px; text-align: center; box-shadow: 0 16px 40px rgba(0,0,0,0.75); }
-    .pin-input { width: 100%; padding: 13px; font-size: 22px; text-align: center; letter-spacing: 10px; border-radius: 12px; border: 1px solid #334155; background: #090d16; color: #10b981; font-weight: 900; outline: none; margin: 16px 0; }
-    .btn-primary { width: 100%; padding: 13px; background: linear-gradient(135deg, #10b981, #059669); color: #020617; border: none; border-radius: 12px; font-size: 15px; font-weight: 900; cursor: pointer; }
-    #vaultContent { display: none; padding-bottom: 90px; max-width: 680px; margin: 0 auto; }
-    .vault-header { background: rgba(15, 23, 42, 0.96); backdrop-filter: blur(10px); padding: 13px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; position: sticky; top: 0; z-index: 100; }
-    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 12px; }
-    .stat-box { background: #0f172a; border: 1px solid #1e293b; padding: 10px 6px; border-radius: 12px; text-align: center; }
-    .stat-box h3 { font-size: 18px; color: #10b981; font-weight: 900; }
-    .stat-box span { font-size: 10.5px; color: #94a3b8; font-weight: 600; }
-    .vault-tabs { display: flex; gap: 6px; padding: 0 12px 12px; overflow-x: auto; scrollbar-width: none; }
-    .tab-btn { padding: 10px 12px; background: #0f172a; border: 1px solid #1e293b; color: #94a3b8; border-radius: 12px; font-size: 12px; font-weight: 800; cursor: pointer; white-space: nowrap; }
-    .tab-btn.active { background: #10b981; color: #020617; border-color: #10b981; }
-    .vault-section { display: none; padding: 0 12px; }
-    .vault-section.active { display: block; }
-    .search-bar, .vault-input { width: 100%; padding: 11px 14px; background: #090d16; border: 1px solid #334155; border-radius: 12px; color: #fff; margin-bottom: 10px; outline: none; font-size: 13.5px; }
-    .item-card { background: #0f172a; border: 1px solid #1e293b; border-radius: 14px; padding: 14px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
-    .item-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-    .action-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 4px; }
-    .btn-sm { padding: 7px 11px; border-radius: 8px; border: none; font-size: 11.5px; cursor: pointer; font-weight: 800; }
-    .btn-view { background: #2563eb; color: #fff; }
-    .btn-verify { background: #10b981; color: #020617; }
-    .btn-warn { background: #f59e0b; color: #020617; }
-    .btn-delete { background: rgba(239,68,68,0.18); color: #fca5a5; border: 1px solid rgba(239,68,68,0.4); }
-    .live-screen-preview-box { background: #050811; border: 1.5px solid #38bdf8; border-radius: 12px; padding: 10px; font-family: monospace; font-size: 11.5px; color: #cbd5e1; }
-    #chatSpyModal { position: fixed; inset: 0; background: #090d16; z-index: 9999; display: none; flex-direction: column; }
-    .spy-header { background: #0f172a; padding: 13px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; }
-    .spy-messages { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
-    .spy-msg-bubble { background: #0f172a; border: 1px solid #1e293b; padding: 10px 12px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#090d16">
+    <title>Nexus Official • Founder Master Vault</title>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            background: #050811;
+            color: #f8fafc;
+            max-width: 680px;
+            margin: 0 auto;
+            min-height: 100dvh;
+            padding-bottom: 60px;
+            border-left: 1px solid #1e293b;
+            border-right: 1px solid #1e293b;
+        }
+        .v-header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(15, 23, 42, 0.96);
+            border-bottom: 1px solid #1e293b;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            backdrop-filter: blur(8px);
+        }
+        .v-tabs {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            padding: 10px 12px;
+            background: #090d16;
+            border-bottom: 1px solid #1e293b;
+            position: sticky;
+            top: 56px;
+            z-index: 90;
+        }
+        .v-tab-btn {
+            padding: 9px 4px;
+            border-radius: 11px;
+            border: 1px solid #1e293b;
+            background: #0f172a;
+            color: #94a3b8;
+            font-size: 11.5px;
+            font-weight: 800;
+            cursor: pointer;
+            text-align: center;
+        }
+        .v-tab-btn.active {
+            background: rgba(16, 185, 129, 0.16);
+            color: #34d399;
+            border-color: #10b981;
+        }
+        .v-section {
+            display: none;
+            padding: 14px;
+        }
+        .v-section.active {
+            display: block;
+        }
+        .v-card {
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 18px;
+            padding: 15px;
+            margin-bottom: 12px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.45);
+        }
+        .v-inp, .v-txt, .v-sel {
+            width: 100%;
+            padding: 11px 13px;
+            border-radius: 12px;
+            background: #090d16;
+            border: 1px solid #334155;
+            color: #fff;
+            font-size: 13px;
+            outline: none;
+            margin-top: 5px;
+        }
+        .v-btn {
+            padding: 10px 14px;
+            border-radius: 11px;
+            border: none;
+            font-weight: 900;
+            font-size: 12px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        #v-toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #10b981;
+            color: #020617;
+            font-weight: 900;
+            font-size: 12.5px;
+            padding: 9px 18px;
+            border-radius: 999px;
+            z-index: 99999;
+            display: none;
+            box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
+        }
+    </style>
 </head>
-<body oncontextmenu="return false;">
+<body>
 
-  <div id="lockScreen">
-    <div class="lock-card">
-      <div style="font-size:38px; margin-bottom:6px;">🛡️</div>
-      <h2 style="color:#10b981; font-size:20px;">Nexus Master Vault</h2>
-      <p style="color:#94a3b8; font-size:12.5px; margin-top:4px;">Super Admin Protected • Secret PIN dalein:</p>
-      <input type="password" id="adminPinInput" class="pin-input" placeholder="••••" maxlength="8" onkeydown="if(event.key==='Enter') unlockVault()">
-      <button class="btn-primary" onclick="unlockVault()">Unlock Full Control →</button>
-      <p id="lockError" style="color:#ef4444; font-size:12px; margin-top:10px; display:none;">❌ Access Denied! Invalid Master PIN.</p>
-      <a href="index.html" style="display:inline-block; margin-top:14px; font-size:12px; color:#64748b; text-decoration:none;">← Back to Nexus Home</a>
-    </div>
-  </div>
-
-  <div id="vaultContent">
-    <div class="vault-header">
-      <div style="display:flex; align-items:center; gap:8px;">
-        <span style="font-size:20px;">👑</span>
-        <div>
-          <div style="font-size:15px; font-weight:900; color:#10b981;">Nexus Master Vault ✅</div>
-          <div style="font-size:10.5px; color:#38bdf8;">● Live Screen Mirror &amp; Cloud Control</div>
+    <!-- 1. FOUNDER SECURITY PIN LOCK SCREEN (DEFAULT PIN: 1234) -->
+    <div id="v-pin-lock" style="position:fixed; inset:0; background:#050811; z-index:50000; display:flex; align-items:center; justify-content:center; padding:18px;">
+        <div style="background:linear-gradient(155deg,#0f172a,#090d16); border:1.5px solid #10b981; border-radius:24px; width:100%; max-width:360px; padding:26px 20px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.9);">
+            <div style="width:58px; height:58px; border-radius:16px; background:rgba(16,185,129,0.15); border:1.5px solid #10b981; display:flex; align-items:center; justify-content:center; margin:0 auto 12px; font-size:26px;">🛡️</div>
+            <h2 style="font-size:19px; font-weight:900; color:#f8fafc;">Nexus Founder Vault</h2>
+            <p style="font-size:12px; color:#94a3b8; margin:4px 0 18px;">Enter Founder Security PIN to unlock Master Controls</p>
+            <input type="password" id="v-pin-input" maxlength="8" placeholder="Enter PIN..." style="width:100%; padding:13px; border-radius:14px; background:#090d16; border:1px solid #334155; color:#34d399; font-size:18px; font-weight:900; text-align:center; letter-spacing:6px; outline:none; margin-bottom:14px;" />
+            <button type="button" id="v-pin-submit" style="width:100%; padding:13px; border-radius:14px; background:linear-gradient(90deg,#10b981,#06b6d4); color:#020617; font-weight:900; font-size:14px; border:none; cursor:pointer;">Unlock Master Vault 🔓</button>
         </div>
-      </div>
-      <div style="display:flex; gap:8px;">
-        <a href="index.html" class="btn-sm btn-view" style="text-decoration:none;">🏠 App</a>
-        <button class="btn-sm btn-delete" onclick="lockVault()">Lock 🔒</button>
-      </div>
     </div>
 
-    <div class="stats-grid">
-      <div class="stat-box"><h3 id="statScreens">0</h3><span>Live Screens</span></div>
-      <div class="stat-box"><h3 id="statDms">0</h3><span>1:1 Chats</span></div>
-      <div class="stat-box"><h3 id="statUsers">0</h3><span>Users</span></div>
-      <div class="stat-box"><h3 id="statPosts">0</h3><span>Posts</span></div>
+    <!-- 2. MAIN VAULT HEADER -->
+    <header class="v-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:20px;">👑</span>
+            <div>
+                <div style="font-size:15.5px; font-weight:900; color:#34d399;">Nexus Official Vault</div>
+                <div style="font-size:10.5px; color:#94a3b8;">Founder Control • Official Broadcast & Post Editor</div>
+            </div>
+        </div>
+        <div style="display:flex; gap:8px;">
+            <button type="button" id="v-btn-hotreload" class="v-btn" style="background:#1e293b; border:1px solid #38bdf8; color:#38bdf8;">⚡ Push Update</button>
+            <a href="index.html" class="v-btn" style="background:#10b981; color:#020617; text-decoration:none;">🏠 App</a>
+        </div>
+    </header>
+
+    <!-- 3. VAULT NAVIGATION TABS -->
+    <nav class="v-tabs">
+        <button type="button" class="v-tab-btn active" data-vtab="sec-broadcast">📢 Official Post</button>
+        <button type="button" class="v-tab-btn" data-vtab="sec-posts">✏️ Edit Posts</button>
+        <button type="button" class="v-tab-btn" data-vtab="sec-users">👥 Members</button>
+        <button type="button" class="v-tab-btn" data-vtab="sec-chats">💬 Live Media</button>
+    </nav>
+
+    <!-- TAB 1: OFFICIAL NEXUS PHOTO & 50MB VIDEO BROADCASTER -->
+    <section id="sec-broadcast" class="v-section active">
+        <div class="v-card" style="border-color:#10b981;">
+            <h3 style="font-size:15px; font-weight:900; color:#34d399; margin-bottom:10px;">👑 Send Official Photo / Video Post</h3>
+
+            <label style="font-size:11px; font-weight:800; color:#94a3b8;">PUBLISH AS ACCOUNT</label>
+            <select id="v-post-author-mode" class="v-sel" style="margin-bottom:10px;">
+                <option value="nexus_official">🛡️ Nexus Official ✅ (Official System Emblem)</option>
+                <option value="mohiy">👑 Mohit_01 (@mohiy • Founder Account)</option>
+            </select>
+
+            <label style="font-size:11px; font-weight:800; color:#94a3b8;">POST CAPTION / ANNOUNCEMENT TEXT</label>
+            <textarea id="v-post-caption" rows="4" class="v-txt" placeholder="Write official Nexus announcement, update or study post here..." style="margin-bottom:10px;"></textarea>
+
+            <!-- Photo OR Video Upload Box -->
+            <div style="border:1.5px dashed #10b981; border-radius:14px; padding:14px; text-align:center; background:rgba(16,185,129,0.06); margin-bottom:10px;">
+                <label for="v-post-media-inp" style="cursor:pointer; display:block;">
+                    <div style="font-size:24px; margin-bottom:4px;">📸 🎬</div>
+                    <div style="font-size:13px; font-weight:800; color:#34d399;">Tap to Select Official Photo or Video (Up to 50MB)</div>
+                    <div id="v-upload-status" style="font-size:11px; color:#94a3b8; margin-top:3px;">Supports HD Images & MP4/WebM Videos</div>
+                </label>
+                <input type="file" id="v-post-media-inp" accept="image/*,video/mp4,video/webm,video/*" style="display:none;" />
+                <div id="v-media-preview-box" style="margin-top:10px; display:none;"></div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
+                <label style="display:flex; align-items:center; gap:8px; background:#090d16; padding:10px; border-radius:11px; border:1px solid #1e293b; font-size:12px; font-weight:800; color:#fbbf24; cursor:pointer;">
+                    <input type="checkbox" id="v-post-pinned" checked style="width:17px; height:17px;" />
+                    <span>📌 Pin to Top</span>
+                </label>
+                <div>
+                    <input type="number" id="v-post-likes" value="15" class="v-inp" style="margin-top:0;" placeholder="Initial Likes" title="Initial Likes Count" />
+                </div>
+            </div>
+
+            <button type="button" id="v-btn-publish-official" class="v-btn" style="width:100%; padding:13px; background:linear-gradient(90deg,#10b981,#06b6d4); color:#020617; font-size:13.5px;">
+                🚀 Publish Official Post Now
+            </button>
+        </div>
+    </section>
+
+    <!-- TAB 2: ALL-POSTS LIVE EDITOR (EDIT ANY MEMBER'S OR OWN POST, MEDIA, CAPTION, PIN) -->
+    <section id="sec-posts" class="v-section">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+            <h3 style="font-size:14.5px; font-weight:900; color:#38bdf8;">✏️ All Community Posts (Edit / Replace Media / Pin)</h3>
+            <span id="v-posts-count" style="font-size:11px; font-weight:800; color:#34d399;">0 Posts</span>
+        </div>
+        <div id="v-posts-list"></div>
+    </section>
+
+    <!-- TAB 3: MEMBERS & VERIFICATION MANAGER -->
+    <section id="sec-users" class="v-section">
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <input type="text" id="v-user-search" class="v-inp" placeholder="Search member by @username, name or email..." style="margin-top:0;" />
+        </div>
+        <div id="v-users-list"></div>
+    </section>
+
+    <!-- TAB 4: LIVE CHAT & MEDIA INSPECTOR -->
+    <section id="sec-chats" class="v-section">
+        <h3 style="font-size:14.5px; font-weight:900; color:#fbbf24; margin-bottom:10px;">💬 Recent Chat Media & Rooms</h3>
+        <div id="v-chats-list"></div>
+    </section>
+
+    <!-- MODAL FOR EDITING ANY POST (CAPTION + PHOTO/VIDEO REPLACEMENT + PIN + LIKES) -->
+    <div id="v-edit-post-modal" style="position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:20000; display:none; align-items:center; justify-content:center; padding:16px;">
+        <div class="v-card" style="width:100%; max-width:440px; border-color:#38bdf8; max-height:90dvh; overflow-y:auto;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                <h3 style="font-size:15px; font-weight:900; color:#38bdf8;">✏️ Edit Post & Media</h3>
+                <button type="button" id="v-close-edit-modal" style="background:#1e293b; border:none; color:#fff; width:28px; height:28px; border-radius:50%; font-weight:900; cursor:pointer;">✕</button>
+            </div>
+
+            <label style="font-size:10.5px; font-weight:800; color:#94a3b8;">AUTHOR DISPLAY NAME</label>
+            <input type="text" id="ve-author" class="v-inp" style="margin-bottom:8px;" />
+
+            <label style="font-size:10.5px; font-weight:800; color:#94a3b8;">POST CAPTION / TEXT</label>
+            <textarea id="ve-caption" rows="4" class="v-txt" style="margin-bottom:8px;"></textarea>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+                <div>
+                    <label style="font-size:10.5px; font-weight:800; color:#94a3b8;">❤️ LIKES COUNT</label>
+                    <input type="number" id="ve-likes" class="v-inp" />
+                </div>
+                <div>
+                    <label style="font-size:10.5px; font-weight:800; color:#94a3b8;">👁️ VIEWS COUNT</label>
+                    <input type="number" id="ve-views" class="v-inp" />
+                </div>
+            </div>
+
+            <label style="display:flex; align-items:center; gap:8px; background:#090d16; padding:10px; border-radius:11px; border:1px solid #1e293b; font-size:12px; font-weight:800; color:#fbbf24; margin-bottom:10px; cursor:pointer;">
+                <input type="checkbox" id="ve-pinned" style="width:17px; height:17px;" />
+                <span>📌 Pin This Post to Top of Home Feed</span>
+            </label>
+
+            <div style="border:1px dashed #38bdf8; border-radius:12px; padding:10px; text-align:center; margin-bottom:12px;">
+                <label for="ve-replace-media" style="color:#38bdf8; font-size:12px; font-weight:800; cursor:pointer; display:block;">
+                    🔄 Replace / Add Photo or Video on This Post
+                </label>
+                <input type="file" id="ve-replace-media" accept="image/*,video/*" style="display:none;" />
+                <div id="ve-replace-status" style="font-size:10.5px; color:#34d399; margin-top:4px;"></div>
+            </div>
+
+            <div style="display:flex; gap:8px;">
+                <button type="button" id="ve-save-btn" class="v-btn" style="flex:1; background:#10b981; color:#020617; padding:12px;">💾 Save Changes</button>
+                <button type="button" id="ve-remove-media-btn" class="v-btn" style="background:#1e293b; color:#fb7185; border:1px solid #f43f5e;">Remove Media</button>
+            </div>
+        </div>
     </div>
 
-    <div class="vault-tabs">
-      <button class="tab-btn active" onclick="switchTab('screensTab', this)">🖥️ Live Screens &amp; Control</button>
-      <button class="tab-btn" onclick="switchTab('broadcastTab', this)">📢 Official Nexus ✅</button>
-      <button class="tab-btn" onclick="switchTab('dmsTab', this)">💬 1:1 Chats</button>
-      <button class="tab-btn" onclick="switchTab('usersTab', this)">👥 Users &amp; PINs</button>
-      <button class="tab-btn" onclick="switchTab('postsTab', this)">📸 Posts</button>
-      <button class="tab-btn" onclick="switchTab('roomsTab', this)">🌐 Group Msgs</button>
-    </div>
+    <div id="v-toast"></div>
 
-    <!-- TAB 0: LIVE USER SCREEN MIRROR & REMOTE CONTROL -->
-    <div id="screensTab" class="vault-section active">
-      <div style="background:rgba(56,189,248,0.12); border:1px dashed #38bdf8; border-radius:12px; padding:10px 12px; font-size:12px; color:#e2e8f0; margin-bottom:10px;">
-        🖥️ <b>Live User Screen Mirror &amp; Remote Control:</b> Yahan dekhein kaun sa user abhi kis screen par hai, kya type kar raha hai, aur wahin se uski screen control karein!
-      </div>
-      <div id="liveScreensList"></div>
-    </div>
+    <script>
+    (function () {
+        const NEXUS_OFFICIAL_LOGO_SVG =
+            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2310b981'/%3E%3Cstop offset='50%25' stop-color='%2306b6d4'/%3E%3Cstop offset='100%25' stop-color='%233b82f6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='120' height='120' rx='32' fill='%23090d16'/%3E%3Crect x='5' y='5' width='110' height='110' rx='28' fill='none' stroke='url(%23g)' stroke-width='6'/%3E%3Cpath d='M32 86V34h14l28 36V34h14v52H74L46 50v36H32z' fill='url(%23g)'/%3E%3Ccircle cx='94' cy='26' r='8' fill='%2310b981'/%3E%3C/svg%3E";
 
-    <!-- TAB 1: OFFICIAL BROADCAST -->
-    <div id="broadcastTab" class="vault-section">
-      <div class="item-card" style="border-color:#10b981;">
-        <strong style="color:#10b981; font-size:15px;">⭕ Update #1 "Nexus ✅" Top Story</strong>
-        <input type="text" id="stTitle" class="vault-input" placeholder="Story Heading">
-        <textarea id="stText" rows="3" class="vault-input" placeholder="Story full message..."></textarea>
-        <input type="url" id="stLink" class="vault-input" placeholder="Button Link URL (Optional)">
-        <button class="btn-primary" onclick="publishOfficialStory()">🚀 Update Official Story Live</button>
-      </div>
+        const CHUNK_CHAR_SIZE = 600000;
+        const VALID_PINS = ["1234", "8905", "2027"];
 
-      <div class="item-card" style="border-color:#38bdf8;">
-        <strong style="color:#38bdf8; font-size:15px;">📌 Publish #1 Pinned Post as "Nexus ✅"</strong>
-        <textarea id="pinPostText" rows="3" class="vault-input" placeholder="Write official Nexus announcement..."></textarea>
-        <button class="btn-primary" style="background:linear-gradient(135deg,#2563eb,#4f46e5); color:white;" onclick="publishOfficialPinnedPost()">📌 Publish #1 Pinned Post</button>
-      </div>
-    </div>
+        const FIREBASE_CONFIG = {
+            apiKey: "AIzaSyCKMUVSgImQ39LRuREmhqyd7NTyE-TNyrQ",
+            authDomain: "nexus-community-bf99c.firebaseapp.com",
+            projectId: "nexus-community-bf99c",
+            storageBucket: "nexus-community-bf99c.firebasestorage.app",
+            messagingSenderId: "605136574793",
+            appId: "1:605136574793:web:c4c640af6b2f204eb0c296"
+        };
 
-    <!-- TAB 2: 1:1 DMS -->
-    <div id="dmsTab" class="vault-section">
-      <input type="text" class="search-bar" placeholder="🔍 Personal chat search karein..." oninput="filterCards('dmsList', this.value)">
-      <div id="dmsList"></div>
-    </div>
+        if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+        const db = firebase.firestore();
 
-    <!-- TAB 3: USERS & PINS -->
-    <div id="usersTab" class="vault-section">
-      <input type="text" class="search-bar" placeholder="🔍 Username, Name ya Secret PIN search karein..." oninput="filterCards('usersList', this.value)">
-      <div id="usersList"></div>
-    </div>
+        let allPosts = [];
+        let allUsers = [];
+        let pendingBroadcastMedia = { ref: "", mType: "" };
+        let editingPostObj = null;
+        let editingReplacementMedia = null;
 
-    <!-- TAB 4: POSTS -->
-    <div id="postsTab" class="vault-section">
-      <input type="text" class="search-bar" placeholder="🔍 Post search karein..." oninput="filterCards('postsList', this.value)">
-      <div id="postsList"></div>
-    </div>
+        function vToast(msg) {
+            const t = document.getElementById("v-toast");
+            t.textContent = msg;
+            t.style.display = "block";
+            setTimeout(() => (t.style.display = "none"), 2500);
+        }
 
-    <!-- TAB 5: GROUP MSGS -->
-    <div id="roomsTab" class="vault-section">
-      <input type="text" class="search-bar" placeholder="🔍 Group message search karein..." oninput="filterCards('roomsList', this.value)">
-      <div id="roomsList"></div>
-    </div>
-  </div>
+        // 1. PIN Unlock
+        const pinLock = document.getElementById("v-pin-lock");
+        const pinInp = document.getElementById("v-pin-input");
+        if (sessionStorage.getItem("nx_vault_unlocked") === "1") {
+            pinLock.style.display = "none";
+            initVaultStreams();
+        }
+        document.getElementById("v-pin-submit").onclick = () => {
+            if (VALID_PINS.includes((pinInp.value || "").trim())) {
+                sessionStorage.setItem("nx_vault_unlocked", "1");
+                pinLock.style.display = "none";
+                initVaultStreams();
+                vToast("🔓 Master Vault Unlocked!");
+            } else {
+                alert("⚠️ Invalid Founder PIN!");
+            }
+        };
+        pinInp.onkeydown = (e) => {
+            if (e.key === "Enter") document.getElementById("v-pin-submit").click();
+        };
 
-  <div id="chatSpyModal">
-    <div class="spy-header">
-      <div>
-        <strong id="spyChatTitle" style="color:#10b981; font-size:15px;">Personal Chat Reader</strong>
-        <div id="spyChatSub" style="font-size:11px; color:#94a3b8;">Live 1-on-1 Conversation</div>
-      </div>
-      <button class="btn-sm btn-delete" onclick="closeChatSpy()">✕ Close</button>
-    </div>
-    <div id="spyMessagesBox" class="spy-messages"></div>
-  </div>
-
-  <script>
-    function verifyEncryptedPin(str) {
-      let s = String(str || '').trim();
-      let h = 0;
-      for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
-      return h === 1509442 || h === 1537255;
-    }
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyCKMUVSgImQ39LRuREmhqyd7NTyE-TNyrQ",
-      authDomain: "nexus-community-bf99c.firebaseapp.com",
-      projectId: "nexus-community-bf99c",
-      storageBucket: "nexus-community-bf99c.firebasestorage.app",
-      messagingSenderId: "605136574793",
-      appId: "1:605136574793:web:c4c640af6b2f204eb0c296"
-    };
-
-    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
-    let groupedDmRooms = {};
-    let liveUsers = [];
-    let livePosts = [];
-    let liveGroupMsgs = [];
-    let liveScreens = [];
-    let activeSpyRoomKey = null;
-
-    function unlockVault() {
-      const val = document.getElementById("adminPinInput").value.trim();
-      if (verifyEncryptedPin(val)) {
-        document.getElementById("lockScreen").style.display = "none";
-        document.getElementById("vaultContent").style.display = "block";
-        startLiveAdminListeners();
-      } else {
-        document.getElementById("lockError").style.display = "block";
-      }
-    }
-
-    function lockVault() {
-      document.getElementById("adminPinInput").value = "";
-      document.getElementById("vaultContent").style.display = "none";
-      document.getElementById("lockScreen").style.display = "flex";
-    }
-
-    function switchTab(tabId, btn) {
-      document.querySelectorAll(".vault-section").forEach(s => s.classList.remove("active"));
-      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-      document.getElementById(tabId).classList.add("active");
-      btn.classList.add("active");
-    }
-
-    function filterCards(listId, q) {
-      const query = (q || "").toLowerCase();
-      document.querySelectorAll(`#${listId} .item-card`).forEach(card => {
-        card.style.display = card.innerText.toLowerCase().includes(query) ? "flex" : "none";
-      });
-    }
-
-    function startLiveAdminListeners() {
-      // Listen to Live User Screens
-      db.collection("nexus_live_screens").onSnapshot(snap => {
-        liveScreens = [];
-        snap.forEach(doc => {
-          let d = doc.data();
-          d.id = doc.id;
-          liveScreens.push(d);
+        // Tab Switching
+        document.querySelectorAll(".v-tab-btn").forEach((btn) => {
+            btn.onclick = () => {
+                document.querySelectorAll(".v-tab-btn").forEach((b) => b.classList.remove("active"));
+                document.querySelectorAll(".v-section").forEach((s) => s.classList.remove("active"));
+                btn.classList.add("active");
+                document.getElementById(btn.getAttribute("data-vtab")).classList.add("active");
+            };
         });
-        liveScreens.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-        document.getElementById("statScreens").innerText = liveScreens.length;
-        renderLiveScreens();
-      });
 
-      db.collection("nexus_private_dms").onSnapshot(snap => {
-        groupedDmRooms = {};
-        snap.forEach(doc => {
-          let m = doc.data();
-          m.id = doc.id;
-          let rKey = m.roomKey || [m.fromUser || 'u1', m.toUser || 'u2'].sort().join('__');
-          if (!groupedDmRooms[rKey]) groupedDmRooms[rKey] = [];
-          groupedDmRooms[rKey].push(m);
-        });
-        Object.keys(groupedDmRooms).forEach(k => groupedDmRooms[k].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)));
-        document.getElementById("statDms").innerText = Object.keys(groupedDmRooms).length;
-        renderDmRooms();
-        if (activeSpyRoomKey) openChatSpy(activeSpyRoomKey);
-      });
+        // Push Global Live Update
+        document.getElementById("v-btn-hotreload").onclick = async () => {
+            await db.collection("nexus_config").doc("live_version").set({
+                versionId: "v_" + Date.now(),
+                files: ["core.js", "home.js", "profile.js", "settings.js", "dm.js"],
+                updatedAt: Date.now()
+            });
+            vToast("⚡ Live Hot-Reload Pushed to All Connected Users!");
+        };
 
-      db.collection("nexus_accounts").onSnapshot(snap => {
-        liveUsers = [];
-        snap.forEach(doc => { let u = doc.data(); u.docId = doc.id; liveUsers.push(u); });
-        document.getElementById("statUsers").innerText = liveUsers.length;
-        renderUsers();
-      });
+        // 2. Photo & Video Upload Helper (Supports up to 50MB Video via Firestore Chunks!)
+        function compressPhoto(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement("canvas");
+                        const MAX = 820;
+                        let w = img.width, h = img.height;
+                        if (w > h && w > MAX) { h = Math.round((h * MAX) / w); w = MAX; }
+                        else if (h > MAX) { w = Math.round((w * MAX) / h); h = MAX; }
+                        canvas.width = w;
+                        canvas.height = h;
+                        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+                        let out = canvas.toDataURL("image/webp", 0.72);
+                        if (!out || out.length > 145000) out = canvas.toDataURL("image/jpeg", 0.65);
+                        resolve(out);
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
 
-      db.collection("nexus_real_posts").orderBy("createdAt", "desc").onSnapshot(snap => {
-        livePosts = [];
-        snap.forEach(doc => { let p = doc.data(); p.id = doc.id; livePosts.push(p); });
-        document.getElementById("statPosts").innerText = livePosts.length;
-        renderPosts();
-      });
+        function uploadVideoChunked(file, onProgress) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        const b64 = e.target.result;
+                        const total = Math.ceil(b64.length / CHUNK_CHAR_SIZE);
+                        const sid = "postvid_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+                        if (total === 1 && b64.length < 750000) {
+                            onProgress && onProgress(100);
+                            resolve(b64);
+                            return;
+                        }
+                        for (let i = 0; i < total; i++) {
+                            await db.collection("nexus_media_chunks").doc(`${sid}_${i}`).set({
+                                streamId: sid,
+                                index: i,
+                                data: b64.slice(i * CHUNK_CHAR_SIZE, (i + 1) * CHUNK_CHAR_SIZE),
+                                createdAt: Date.now()
+                            });
+                            onProgress && onProgress(Math.round(((i + 1) / total) * 100));
+                        }
+                        resolve(`NX_VIDEO_STREAM:${sid}:${total}`);
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
 
-      db.collection("nexus_real_msgs").orderBy("createdAt", "desc").limit(100).onSnapshot(snap => {
-        liveGroupMsgs = [];
-        snap.forEach(doc => { let m = doc.data(); m.id = doc.id; liveGroupMsgs.push(m); });
-        renderGroupMsgs();
-      });
-    }
+        // Bind Official Broadcast Media Input
+        document.getElementById("v-post-media-inp").onchange = async (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            const st = document.getElementById("v-upload-status");
+            const prev = document.getElementById("v-media-preview-box");
+            prev.style.display = "block";
+            const localUrl = URL.createObjectURL(file);
 
-    function renderLiveScreens() {
-      const box = document.getElementById("liveScreensList");
-      if (!box) return;
-      if (liveScreens.length === 0) {
-        box.innerHTML = `<div class="item-card" style="text-align:center; color:#64748b;">Abhi koi live screen telemetry active nahi hai.</div>`;
-        return;
-      }
+            if (file.type.startsWith("video/")) {
+                prev.innerHTML = `<video src="${localUrl}" controls playsinline style="width:100%; max-height:220px; border-radius:12px; background:#000;"></video>`;
+                st.textContent = "📤 Uploading Video 1%...";
+                const ref = await uploadVideoChunked(file, (pct) => {
+                    st.textContent = `📤 Uploading Video ${pct}%...`;
+                });
+                pendingBroadcastMedia = { ref: ref, mType: "video" };
+                st.textContent = "✅ Official Video Ready to Publish!";
+            } else {
+                prev.innerHTML = `<img src="${localUrl}" style="width:100%; max-height:220px; object-fit:cover; border-radius:12px;" />`;
+                st.textContent = "📤 Compressing HD Photo...";
+                const b64 = await compressPhoto(file);
+                pendingBroadcastMedia = { ref: b64, mType: "image" };
+                st.textContent = "✅ Official HD Photo Ready to Publish!";
+            }
+        };
 
-      box.innerHTML = liveScreens.map(s => {
-        let isLiveNow = (Date.now() - (s.updatedAt || 0)) < 65000;
-        let safeU = (s.username || s.id).replace(/'/g, "\\'");
-        let lines = Array.isArray(s.screenLines) ? s.screenLines : [];
-        let agoSec = Math.max(1, Math.floor((Date.now() - (s.updatedAt || 0)) / 1000));
-        let timeStr = agoSec < 60 ? `${agoSec}s ago` : `${Math.floor(agoSec / 60)}m ago`;
+        // Publish Official Post Button
+        document.getElementById("v-btn-publish-official").onclick = async function () {
+            const mode = document.getElementById("v-post-author-mode").value;
+            const caption = (document.getElementById("v-post-caption").value || "").trim();
+            const isPinned = document.getElementById("v-post-pinned").checked;
+            const initLikes = Number(document.getElementById("v-post-likes").value || 15);
 
-        return `
-          <div class="item-card" style="border-color:${isLiveNow ? '#10b981' : '#1e293b'};">
-            <div class="item-top">
-              <div>
-                <strong style="color:#f8fafc; font-size:15px;">${isLiveNow ? '🟢' : '⚪'} ${s.name || s.username} (@${s.username})</strong>
-                <div style="font-size:11.5px; color:#38bdf8; font-weight:800;">📍 Active Screen: ${s.currentScreen || 'Home'} • ${timeStr}</div>
-              </div>
-              <span style="background:#1e293b; padding:3px 8px; border-radius:8px; font-size:10.5px; color:#93c5fd;">📱 ${s.deviceInfo || 'Mobile'}</span>
-            </div>
+            if (!caption && !pendingBroadcastMedia.ref) {
+                alert("⚠️ Caption likhein ya Photo/Video select karein!");
+                return;
+            }
 
-            ${s.liveDraft ? `<div style="background:rgba(16,185,129,0.15); border:1px dashed #10b981; padding:7px 10px; border-radius:8px; font-size:12px; color:#6ee7b7;">⌨️ <b>Live Typing Draft:</b> "${s.liveDraft}"</div>` : ''}
+            this.disabled = true;
+            this.textContent = "⏳ Publishing Official Post...";
 
-            <div class="live-screen-preview-box">
-              <div style="color:#38bdf8; font-weight:800; margin-bottom:4px;">🖥️ LIVE SCREEN VIEW MIRROR:</div>
-              ${lines.length ? lines.map(l => `<div style="margin-bottom:3px; border-bottom:1px solid #1e293b; padding-bottom:2px;">• ${l.replace(/</g, '&lt;')}</div>`).join('') : '<div>Viewing main screen...</div>'}
-            </div>
+            const isNexusSys = mode === "nexus_official";
+            const postPayload = {
+                username: isNexusSys ? "nexus_official" : "mohiy",
+                author: isNexusSys ? "Nexus" : "Mohit_01",
+                bio: isNexusSys ? "Official Platform Announcement" : "Founder • IIT-JEE Aspirant",
+                dp: isNexusSys ? NEXUS_OFFICIAL_LOGO_SVG : "",
+                verified: true,
+                pinned: Boolean(isPinned),
+                isOfficial: Boolean(isNexusSys),
+                content: caption,
+                text: caption,
+                image: pendingBroadcastMedia.ref || "",
+                videoUrl: pendingBroadcastMedia.mType === "video" ? pendingBroadcastMedia.ref : "",
+                mediaType: pendingBroadcastMedia.mType || "text",
+                likes: initLikes,
+                likedBy: ["mohiy"],
+                views: initLikes * 2,
+                comments: [],
+                createdAt: Date.now()
+            };
 
-            <div class="action-row">
-              <button class="btn-sm btn-verify" onclick="sendRemoteCommand('${safeU}', 'alert')">📢 Send Screen Alert</button>
-              <button class="btn-sm btn-view" onclick="sendRemoteCommand('${safeU}', 'switchTab', 'tab-home')">🏠 Force Home</button>
-              <button class="btn-sm btn-warn" onclick="sendRemoteCommand('${safeU}', 'lockScreen')">🔒 Lock Screen</button>
-              <button class="btn-sm btn-verify" onclick="sendRemoteCommand('${safeU}', 'unlockScreen')">🔓 Unlock</button>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
+            await db.collection("nexus_real_posts").add(postPayload);
+            document.getElementById("v-post-caption").value = "";
+            document.getElementById("v-media-preview-box").style.display = "none";
+            document.getElementById("v-upload-status").textContent = "Supports HD Images & MP4/WebM Videos";
+            pendingBroadcastMedia = { ref: "", mType: "" };
+            this.disabled = false;
+            this.textContent = "🚀 Publish Official Post Now";
+            vToast("👑 Official Post Published to Home Feed!");
+        };
 
-    function sendRemoteCommand(targetU, cmdType, defaultPayload) {
-      let payload = defaultPayload || '';
-      if (cmdType === 'alert') {
-        payload = prompt(`@${targetU} ki screen par bhejne ke liye message likhein:`);
-        if (!payload) return;
-      } else if (cmdType === 'lockScreen') {
-        payload = prompt(`@${targetU} ki screen lock reason likhein:`, "Locked by Super Admin") || "Locked by Super Admin";
-      }
-      db.collection("nexus_live_screens").doc(targetU.toLowerCase()).set({
-        adminCommand: cmdType,
-        commandPayload: payload,
-        commandId: 'cmd_' + Date.now()
-      }, { merge: true }).then(() => alert(`✅ Command '${cmdType}' sent to @${targetU}'s screen live!`));
-    }
+        // 3. Real-Time Streams for Posts, Users & Chats
+        function initVaultStreams() {
+            // Stream All Posts
+            db.collection("nexus_real_posts").orderBy("createdAt", "desc").limit(50).onSnapshot((snap) => {
+                allPosts = [];
+                snap.forEach((d) => {
+                    const p = d.data();
+                    p.id = d.id;
+                    allPosts.push(p);
+                });
+                document.getElementById("v-posts-count").textContent = allPosts.length + " Posts";
+                renderVaultPostsList();
+            });
 
-    function publishOfficialStory() {
-      let title = document.getElementById('stTitle').value.trim() || "Official Nexus Update 🚀";
-      let text = document.getElementById('stText').value.trim();
-      let link = document.getElementById('stLink').value.trim();
-      if (!text) return alert("Write story text!");
-      db.collection("nexus_config").doc("official_broadcast").set({
-        storyActive: true, storyTitle: title, storyText: text, storyLink: link, updatedAt: Date.now()
-      }, { merge: true }).then(() => alert("✅ Official Story Updated!"));
-    }
+            // Stream All Users
+            db.collection("nexus_accounts").limit(80).onSnapshot((snap) => {
+                allUsers = [];
+                snap.forEach((d) => allUsers.push(d.data()));
+                renderVaultUsersList();
+            });
 
-    function publishOfficialPinnedPost() {
-      let text = document.getElementById('pinPostText').value.trim();
-      if (!text) return alert("Enter text!");
-      db.collection("nexus_real_posts").add({
-        username: "nexus_official", author: "Nexus", bio: "Official Platform Announcement",
-        isOfficialPinned: true, text: text, likedBy: [], comments: [], createdAt: Date.now()
-      }).then(() => { document.getElementById('pinPostText').value = ""; alert("📌 Pinned Post Published!"); });
-    }
+            // Stream Recent Chat Media
+            db.collection("nexus_chat_media_v6").orderBy("createdAt", "desc").limit(30).onSnapshot((snap) => {
+                const box = document.getElementById("v-chats-list");
+                const items = [];
+                snap.forEach((d) => {
+                    const m = d.data();
+                    m.id = d.id;
+                    items.push(m);
+                });
+                box.innerHTML = items
+                    .map(
+                        (m) => `
+                        <div class="v-card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px;">
+                            <div>
+                                <div style="font-size:12.5px; font-weight:800; color:#34d399;">@${m.sender || "user"} → ${m.roomKey || ""}</div>
+                                <div style="font-size:11px; color:#94a3b8;">Type: ${m.mediaType || "image"} ${m.viewOnce ? "• 1️⃣ View-Once" : ""}</div>
+                            </div>
+                            <button type="button" data-del-media="${m.id}" class="v-btn" style="background:#e11d48; color:#fff;">Delete 🗑️</button>
+                        </div>
+                    `
+                    )
+                    .join("");
 
-    function renderDmRooms() {
-      const box = document.getElementById("dmsList");
-      const keys = Object.keys(groupedDmRooms);
-      box.innerHTML = keys.map(rKey => {
-        let msgs = groupedDmRooms[rKey];
-        let last = msgs[msgs.length - 1] || {};
-        let safeKey = rKey.replace(/'/g, "\\'");
-        return `
-          <div class="item-card">
-            <div class="item-top">
-              <strong style="color:#10b981; font-size:14.5px;">💬 ${rKey.replace('__', ' ↔️ ')}</strong>
-              <span style="font-size:11px; color:#93c5fd;">${msgs.length} msgs</span>
-            </div>
-            <div style="font-size:13px; color:#e2e8f0;"><b>@${last.fromUser || ''}:</b> ${last.text || 'Media'}</div>
-            <div class="action-row">
-              <button class="btn-sm btn-view" onclick="openChatSpy('${safeKey}')">👁️ Puri Personal Chat Padhein</button>
-              <button class="btn-sm btn-delete" onclick="deleteEntireDmRoom('${safeKey}')">🗑️ Delete Chat</button>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
+                box.querySelectorAll("[data-del-media]").forEach((b) => {
+                    b.onclick = async () => {
+                        await db.collection("nexus_chat_media_v6").doc(b.getAttribute("data-del-media")).delete();
+                        vToast("🗑️ Media Deleted!");
+                    };
+                });
+            });
+        }
 
-    function openChatSpy(rKey) {
-      activeSpyRoomKey = rKey;
-      const msgs = groupedDmRooms[rKey] || [];
-      document.getElementById("spyChatTitle").innerText = `💬 ${rKey.replace('__', ' ↔️ ')}`;
-      const box = document.getElementById("spyMessagesBox");
-      box.innerHTML = msgs.map(m => `
-        <div class="spy-msg-bubble">
-          <div style="flex:1;">
-            <strong style="color:#10b981; font-size:13px;">${m.fromName || m.fromUser} (@${m.fromUser})</strong>
-            <div style="margin-top:4px; font-size:14px; color:#f8fafc;">${m.text || 'Media/Sticker'}</div>
-          </div>
-          <button class="btn-sm btn-delete" onclick="db.collection('nexus_private_dms').doc('${m.id}').delete()">🗑️</button>
-        </div>
-      `).join('');
-      document.getElementById("chatSpyModal").style.display = "flex";
-      box.scrollTop = box.scrollHeight;
-    }
+        function renderVaultPostsList() {
+            const box = document.getElementById("v-posts-list");
+            box.innerHTML = allPosts
+                .map(
+                    (p, idx) => `
+                    <div class="v-card">
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                            <div>
+                                <span style="font-size:13.5px; font-weight:900; color:#f8fafc;">${p.author || p.username || "Member"}</span>
+                                <span style="font-size:11px; color:#38bdf8; margin-left:6px;">@${p.username || ""}</span>
+                                ${p.pinned ? `<span style="background:#f59e0b; color:#020617; font-size:9.5px; font-weight:900; padding:2px 6px; border-radius:99px; margin-left:6px;">📌 PINNED</span>` : ""}
+                            </div>
+                            <span style="font-size:11px; color:#64748b;">❤️ ${p.likes || 0} • 👁️ ${p.views || 0}</span>
+                        </div>
+                        <div style="font-size:12.5px; color:#cbd5e1; margin-bottom:10px; white-space:pre-line;">${(p.content || p.text || "(Media Post)").slice(0, 180)}</div>
+                        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                            <button type="button" data-edit-idx="${idx}" class="v-btn" style="background:#38bdf8; color:#020617;">✏️ Edit Post / Media</button>
+                            <button type="button" data-pin-idx="${idx}" class="v-btn" style="background:#1e293b; border:1px solid #fbbf24; color:#fbbf24;">${p.pinned ? "Unpin" : "📌 Pin"}</button>
+                            <button type="button" data-boost-idx="${idx}" class="v-btn" style="background:#1e293b; border:1px solid #10b981; color:#34d399;">🚀 Boost Top</button>
+                            <button type="button" data-del-post="${p.id}" class="v-btn" style="background:#e11d48; color:#fff; margin-left:auto;">🗑️</button>
+                        </div>
+                    </div>
+                `
+                )
+                .join("");
 
-    function closeChatSpy() { activeSpyRoomKey = null; document.getElementById("chatSpyModal").style.display = "none"; }
+            box.querySelectorAll("[data-edit-idx]").forEach((b) => {
+                b.onclick = () => openPostEditorModal(allPosts[Number(b.getAttribute("data-edit-idx"))]);
+            });
 
-    function deleteEntireDmRoom(rKey) {
-      (groupedDmRooms[rKey] || []).forEach(m => db.collection("nexus_private_dms").doc(m.id).delete());
-      closeChatSpy();
-    }
+            box.querySelectorAll("[data-pin-idx]").forEach((b) => {
+                b.onclick = async () => {
+                    const p = allPosts[Number(b.getAttribute("data-pin-idx"))];
+                    if (!p) return;
+                    await db.collection("nexus_real_posts").doc(p.id).set({ pinned: !p.pinned }, { merge: true });
+                    vToast(p.pinned ? "Unpinned Post" : "📌 Pinned Post to Top!");
+                };
+            });
 
-    function renderUsers() {
-      const box = document.getElementById("usersList");
-      box.innerHTML = liveUsers.map(u => {
-        let safeDoc = (u.docId || u.username).replace(/'/g, "\\'");
-        return `
-          <div class="item-card">
-            <strong style="font-size:15px; color:#f8fafc;">${u.name || u.username} ${u.verified ? '✅' : ''} (@${u.username}) • <span style="color:#fde047;">🔑 PIN: ${u.pin || 'N/A'}</span></strong>
-            <div class="action-row">
-              <button class="btn-sm btn-verify" onclick="db.collection('nexus_accounts').doc('${safeDoc}').set({verified:${!u.verified}},{merge:true})">${u.verified ? 'Remove Tick' : '✅ Give Tick'}</button>
-              <button class="btn-sm btn-warn" onclick="db.collection('nexus_accounts').doc('${safeDoc}').set({isBanned:${!u.isBanned}},{merge:true})">${u.isBanned ? '🔓 Unban' : '🚫 Ban'}</button>
-              <button class="btn-sm btn-delete" onclick="db.collection('nexus_accounts').doc('${safeDoc}').delete()">🗑️ Delete</button>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
+            box.querySelectorAll("[data-boost-idx]").forEach((b) => {
+                b.onclick = async () => {
+                    const p = allPosts[Number(b.getAttribute("data-boost-idx"))];
+                    if (!p) return;
+                    await db.collection("nexus_real_posts").doc(p.id).set({ createdAt: Date.now() }, { merge: true });
+                    vToast("🚀 Post Boosted to Top of Feed!");
+                };
+            });
 
-    function renderPosts() {
-      const box = document.getElementById("postsList");
-      box.innerHTML = livePosts.map(p => `
-        <div class="item-card">
-          <div class="item-top">
-            <strong style="color:#38bdf8;">@${p.username || p.author}</strong>
-            <button class="btn-sm btn-delete" onclick="db.collection('nexus_real_posts').doc('${p.id}').delete()">🗑️</button>
-          </div>
-          <div style="font-size:13.5px; color:#f8fafc;">${p.text || '(Media Post)'}</div>
-        </div>
-      `).join('');
-    }
+            box.querySelectorAll("[data-del-post]").forEach((b) => {
+                b.onclick = async () => {
+                    if (!confirm("🗑️ Delete this post permanently for everyone?")) return;
+                    await db.collection("nexus_real_posts").doc(b.getAttribute("data-del-post")).delete();
+                    vToast("🗑️ Post Deleted!");
+                };
+            });
+        }
 
-    function renderGroupMsgs() {
-      const box = document.getElementById("roomsList");
-      box.innerHTML = liveGroupMsgs.map(m => `
-        <div class="item-card">
-          <div class="item-top">
-            <strong style="color:#38bdf8;">[${m.roomId}] ${m.sender}</strong>
-            <button class="btn-sm btn-delete" onclick="db.collection('nexus_real_msgs').doc('${m.id}').delete()">🗑️</button>
-          </div>
-          <div style="font-size:13.5px; color:#f8fafc;">${m.text || 'Media'}</div>
-        </div>
-      `).join('');
-    }
-  </script>
+        function openPostEditorModal(postObj) {
+            editingPostObj = postObj;
+            editingReplacementMedia = null;
+            document.getElementById("ve-author").value = postObj.author || postObj.username || "";
+            document.getElementById("ve-caption").value = postObj.content || postObj.text || "";
+            document.getElementById("ve-likes").value = Number(postObj.likes || 0);
+            document.getElementById("ve-views").value = Number(postObj.views || 0);
+            document.getElementById("ve-pinned").checked = Boolean(postObj.pinned);
+            document.getElementById("ve-replace-status").textContent = postObj.image ? "Current post has media attached" : "No media attached";
+            document.getElementById("v-edit-post-modal").style.display = "flex";
+        }
+
+        document.getElementById("v-close-edit-modal").onclick = () => {
+            document.getElementById("v-edit-post-modal").style.display = "none";
+        };
+
+        document.getElementById("ve-replace-media").onchange = async (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            const st = document.getElementById("ve-replace-status");
+            if (file.type.startsWith("video/")) {
+                st.textContent = "📤 Uploading replacement video 1%...";
+                const ref = await uploadVideoChunked(file, (pct) => {
+                    st.textContent = `📤 Uploading replacement video ${pct}%...`;
+                });
+                editingReplacementMedia = { ref: ref, mType: "video" };
+                st.textContent = "✅ New Video Ready! Tap Save Changes.";
+            } else {
+                st.textContent = "📤 Compressing replacement photo...";
+                const b64 = await compressPhoto(file);
+                editingReplacementMedia = { ref: b64, mType: "image" };
+                st.textContent = "✅ New Photo Ready! Tap Save Changes.";
+            }
+        };
+
+        document.getElementById("ve-remove-media-btn").onclick = () => {
+            editingReplacementMedia = { ref: "", mType: "text" };
+            document.getElementById("ve-replace-status").textContent = "🗑️ Media will be removed on Save";
+        };
+
+        document.getElementById("ve-save-btn").onclick = async () => {
+            if (!editingPostObj) return;
+            const newAuthor = (document.getElementById("ve-author").value || "").trim();
+            const newCap = (document.getElementById("ve-caption").value || "").trim();
+            const newLikes = Number(document.getElementById("ve-likes").value || 0);
+            const newViews = Number(document.getElementById("ve-views").value || 0);
+            const newPinned = document.getElementById("ve-pinned").checked;
+
+            const updateData = {
+                author: newAuthor,
+                content: newCap,
+                text: newCap,
+                likes: newLikes,
+                views: newViews,
+                pinned: Boolean(newPinned)
+            };
+
+            if (editingReplacementMedia !== null) {
+                updateData.image = editingReplacementMedia.ref;
+                updateData.videoUrl = editingReplacementMedia.mType === "video" ? editingReplacementMedia.ref : "";
+                updateData.mediaType = editingReplacementMedia.mType;
+            }
+
+            await db.collection("nexus_real_posts").doc(editingPostObj.id).set(updateData, { merge: true });
+            document.getElementById("v-edit-post-modal").style.display = "none";
+            vToast("✅ Post Updated Live!");
+        };
+
+        function renderVaultUsersList() {
+            const q = (document.getElementById("v-user-search").value || "").toLowerCase().trim();
+            const box = document.getElementById("v-users-list");
+            const filtered = allUsers.filter((u) => {
+                if (!u || !u.username) return false;
+                if (!q) return true;
+                return (
+                    u.username.toLowerCase().includes(q) ||
+                    (u.name && u.name.toLowerCase().includes(q)) ||
+                    (u.email && u.email.toLowerCase().includes(q))
+                );
+            });
+
+            box.innerHTML = filtered
+                .map(
+                    (u) => `
+                    <div class="v-card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px;">
+                        <div>
+                            <div style="font-size:13.5px; font-weight:900; color:#f8fafc;">
+                                ${u.name || u.username} ${u.verified || u.googleVerified ? "✅" : ""}
+                            </div>
+                            <div style="font-size:11px; color:#34d399;">@${u.username} ${u.email ? "• " + u.email : ""}</div>
+                            <div style="font-size:10.5px; color:#94a3b8;">PIN/Pass: ${u.authPin || u.pin || "None"} • Followers: ${(u.followersList || []).length}</div>
+                        </div>
+                        <div style="display:flex; gap:6px;">
+                            <button type="button" data-verify-u="${u.username}" class="v-btn" style="background:#1e293b; border:1px solid #10b981; color:#34d399;">✓ Verify</button>
+                            <button type="button" data-del-u="${u.username}" class="v-btn" style="background:#e11d48; color:#fff;">🗑️</button>
+                        </div>
+                    </div>
+                `
+                )
+                .join("");
+
+            box.querySelectorAll("[data-verify-u]").forEach((b) => {
+                b.onclick = async () => {
+                    const uname = b.getAttribute("data-verify-u");
+                    await db.collection("nexus_accounts").doc(uname).set({ verified: true, googleVerified: true }, { merge: true });
+                    vToast("✅ Verified @" + uname);
+                };
+            });
+
+            box.querySelectorAll("[data-del-u]").forEach((b) => {
+                b.onclick = async () => {
+                    const uname = b.getAttribute("data-del-u");
+                    if (!confirm("Delete account @" + uname + "?")) return;
+                    await db.collection("nexus_accounts").doc(uname).delete();
+                    vToast("🗑️ Deleted @" + uname);
+                };
+            });
+        }
+
+        document.getElementById("v-user-search").oninput = renderVaultUsersList;
+    })();
+    </script>
 </body>
 </html>
