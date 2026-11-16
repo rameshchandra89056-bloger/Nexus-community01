@@ -1,43 +1,67 @@
 /* ============================================================================
-   NEXUS OFFICIAL PROFILE.JS (V30 FINAL PRODUCTION MASTER - ZERO DUMMY, 100% REAL)
-   1. Direct 1:1 DM Opener: Clicking 'Message 💬' on ANY profile or Followers list
-      opens the exact 1:1 personal DM chat window immediately!
-   2. Zero Dummy 'member' or '.' Posts (Fixes 1000076974.jpg - 76978.jpg):
-      - Strictly filters out nameless/member/dot test posts and restores all real posts!
-   3. Clean Professional Instagram Profile Header (Removed childish highlight circles
-      from 1000076980.jpg!)
-   4. Clickable '👁️' (Eye / Views) Button on Posts -> Opens '👁️ Viewed by' Modal!
-   5. Playable Video Post Restorer (Fixes 0:00 broken video icon in 1000076976.jpg!)
-   6. Preserves Cloud Song Sync, Full-Screen Followers, HD Lightbox & 1-Step Back Router
+   NEXUS OFFICIAL PROFILE.JS (V31 MASTER - ZERO HOME POST OVERLAP LOCK)
+   1. Fixes Home Posts Overlapping 100%:
+      - Locks out duplicate/clashing post cards rendered by legacy `home.js` / `cards.js`
+      - Renders a SINGLE, clean, non-overlapping `#nx-clean-home-feed-v31` container
+        directly below `#nx-stories-bar` on `#tab-home`!
+   2. Strict Flex/Block Flow Layout on Every Post Card:
+      - Header, Caption, Photo/Video, '❤️ Liked by' bar, and 5 Action Buttons sit in
+        strict vertical flow (`position: relative`) so nothing EVER overlaps!
+   3. Zero Dummy 'member' or '.' Posts + Playable Video Streams + Direct 1:1 DM Opener
+   4. Preserves Clean Profile Tab, Cloud Song Sync, Full-Screen Followers & 1-Step Back
    ============================================================================ */
 (function () {
-    if (window.__NEXUS_INSTAGRAM_PROFILE_V30__) return;
-    window.__NEXUS_INSTAGRAM_PROFILE_V30__ = true;
+    if (window.__NEXUS_INSTAGRAM_PROFILE_V31__) return;
+    window.__NEXUS_INSTAGRAM_PROFILE_V31__ = true;
 
     let currentProfileTabMode = "posts"; // 'posts' | 'videos' | 'vault'
     let currentPublicTabMode = "grid"; // 'grid' | 'feed' | 'videos'
     let activeSongAudio = null;
     let activeSongBtn = null;
     let longPressTimer = null;
+    let lastRenderedHomeHash = "";
     const realLastSeenCache = {};
     const videoBlobCache = {};
-    const videoLoadingSet = new Set();
     const backStackLayers = [];
 
     document.getElementById("nx-all-groups-hub")?.remove();
     document.getElementById("nx-group-chat-fullscreen")?.remove();
+    document.getElementById("nx-missing-posts-restorer-box")?.remove();
 
-    const v30MasterStyle = document.createElement("style");
-    v30MasterStyle.textContent = `
+    // STRICT ANTI-OVERLAP CSS SHIELD FOR #tab-home AND #tab-profile
+    const v31MasterStyle = document.createElement("style");
+    v31MasterStyle.textContent = `
         #nx-all-groups-hub,
         #nx-group-chat-fullscreen,
+        #nx-missing-posts-restorer-box,
         .nx-auto-seen-pill,
         .nx-dm-open-pill-hidden,
         .nx-refresh-spam-hidden {
             display: none !important;
         }
-        img {
-            content-visibility: auto;
+        /* Hide legacy overlapping post containers inside #tab-home; keep ONLY Story Bar & our Clean V31 Feed! */
+        #tab-home > *:not(#nx-stories-bar):not(#nx-clean-home-feed-v31) {
+            display: none !important;
+        }
+        #nx-clean-home-feed-v31 {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 16px !important;
+            padding: 8px 12px 48px 12px !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+        }
+        .nx-v31-post-card {
+            position: relative !important;
+            display: flex !important;
+            flex-direction: column !important;
+            width: 100% !important;
+            background: #0f172a !important;
+            border: 1px solid #1e293b !important;
+            border-radius: 20px !important;
+            overflow: hidden !important;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5) !important;
+            margin: 0 !important;
         }
         @keyframes nxEqBounce {
             0%, 100% { height: 4px; }
@@ -60,7 +84,7 @@
             100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0; }
         }
     `;
-    document.head.appendChild(v30MasterStyle);
+    document.head.appendChild(v31MasterStyle);
 
     // =========================================================================
     // 1. SINGLE-STEP HARDWARE BACK BUTTON ROUTER
@@ -184,7 +208,6 @@
 
         const txt = String(p.content || p.text || "").trim();
         const img = String(p.image || p.videoUrl || "").trim();
-        // Hide accidental empty or single-dot ('.') test posts that have no image/video!
         if (!img && (!txt || txt === "." || txt === "..")) return false;
         if (window.__nxIsRefreshSpamPost && window.__nxIsRefreshSpamPost(p)) return false;
         return true;
@@ -211,8 +234,7 @@
     }
 
     // =========================================================================
-    // 2. DIRECT 1:1 PERSONAL DM CHAT LAUNCHER (FIXES 'Message 💬' BUTTON!)
-    //    Opens the exact 1:1 DM conversation with `targetUsername` immediately!
+    // 2. DIRECT 1:1 PERSONAL DM CHAT LAUNCHER
     // =========================================================================
     window.openDirect1to1ChatWithUser = function (targetIdentifier) {
         if (!isUserVerified()) {
@@ -231,7 +253,6 @@
         const targetUname = uObj.username.toLowerCase().trim();
         const targetDisplay = (uObj.name || uObj.username).trim();
 
-        // Close any open profile or connections modal first
         document.getElementById("nx-public-profile-modal")?.remove();
         document.getElementById("nx-follow-list-modal")?.remove();
         document.getElementById("nx-avatar-zoom-overlay")?.remove();
@@ -239,7 +260,6 @@
         window.currentChatUser = targetUname;
         window.activeDMUser = targetUname;
 
-        // 1. Try direct global DM functions if exposed by dm.js / dminbox.js
         const directFns = [
             window.openDirectChat,
             window.openDMChat,
@@ -261,19 +281,16 @@
             }
         }
 
-        // 2. Switch to Community Tab -> Open 1:1 Personal DM Inbox -> Click the user's DM row automatically!
         if (window.Nexus && Nexus.switchTab) {
             Nexus.switchTab("tab-community");
         }
 
         const tryClickTargetDmRow = (attempt) => {
-            // Check if 1:1 DM chat box is already open
             const msgInp =
                 document.getElementById("nx-dm-input") ||
                 document.querySelector('input[placeholder*="Message"]');
             if (msgInp && msgInp.offsetParent !== null) return;
 
-            // Step A: If "Nexus Official 1:1 Personal DM [Open →]" card is visible on Community tab, click its Open button!
             const commTab = document.getElementById("tab-community");
             if (commTab) {
                 const openDmCardBtn = Array.from(commTab.querySelectorAll("button, div, span, a")).find((el) => {
@@ -289,7 +306,6 @@
                 }
             }
 
-            // Step B: Find the user's row or "Chat →" button inside the DM Inbox list and click it!
             const allClickableRows = Array.from(
                 document.querySelectorAll("[data-dm-user], [data-username], [data-user], button, div")
             );
@@ -307,7 +323,6 @@
                     return;
                 }
 
-                // Match row containing `@username` or `DisplayName` + `"Chat →"` button
                 if (el.children.length >= 1 && el.children.length <= 6 && el.clientHeight >= 36 && el.clientHeight <= 110) {
                     const rowTxt = (el.innerText || "").toLowerCase();
                     if (
@@ -333,7 +348,9 @@
     };
 
     // =========================================================================
-    // 3. VIDEO STREAM ASSEMBLER & DUMMY POST CLEANER (FIXES 1000076974.jpg - 76978.jpg!)
+    // 3. SINGLE MASTER HOME FEED RENDERER (ELIMINATES ALL HOME POST OVERLAPS!)
+    //    Replaces broken/overlapping legacy home.js post cards with one clean,
+    //    strictly vertical flex feed container (`#nx-clean-home-feed-v31`)!
     // =========================================================================
     async function resolveVideoStreamToUrl(streamRef) {
         if (!streamRef) return "";
@@ -367,108 +384,57 @@
         }
     }
 
-    function cleanDummyPostsAndFixVideosOnHome() {
+    function renderCleanZeroOverlapHomeFeed(forceRebuild) {
         const homeTab = document.getElementById("tab-home");
-        if (!homeTab) return;
+        if (!homeTab || !window.Nexus || !Array.isArray(Nexus.posts)) return;
 
-        // 1. Auto-clear "🔍 Filtering posts... [Clear ✕]" if triggered
-        homeTab.querySelectorAll("button, span, div").forEach((el) => {
-            if (el.children.length === 0) {
-                const txt = (el.innerText || "").trim();
-                if (txt === "Clear ✕" || txt === "Clear X") {
-                    const parentTxt = (el.parentElement && el.parentElement.innerText) || "";
-                    if (parentTxt.includes("Filtering posts")) {
-                        el.click();
-                        if (el.parentElement) el.parentElement.style.display = "none";
-                    }
-                }
-            }
-        });
+        // Ensure Story Bar has ID `nx-stories-bar` so our CSS shield keeps it visible at the top
+        const firstChild = homeTab.firstElementChild;
+        if (firstChild && firstChild.id !== "nx-clean-home-feed-v31" && !document.getElementById("nx-stories-bar")) {
+            firstChild.id = "nx-stories-bar";
+        }
 
-        // 2. Remove any leftover '#nx-missing-posts-restorer-box' that had dummy 'member' cards
-        document.getElementById("nx-missing-posts-restorer-box")?.remove();
+        const validPosts = Nexus.posts
+            .filter((p) => isRealValidPost(p))
+            .sort((a, b) => {
+                if (a.pinned && !b.pinned) return -1;
+                if (!a.pinned && b.pinned) return 1;
+                return Number(b.createdAt || 0) - Number(a.createdAt || 0);
+            });
 
-        const storyBar = document.getElementById("nx-stories-bar") || homeTab.querySelector("div:first-child");
+        const currentHash = validPosts
+            .map(
+                (p) =>
+                    `${p.id}:${p.likes || 0}:${(p.likedBy || []).length}:${(p.comments || []).length}:${p.pinned ? 1 : 0}:${(
+                        p.content || ""
+                    ).slice(0, 15)}:${(p.image || "").slice(0, 30)}`
+            )
+            .join("|");
 
-        // 3. Hide any dummy 'member ✓ • Nexus Member' card, single-dot '.' test card, or old refresh spam card on #tab-home
-        homeTab.querySelectorAll("article, div").forEach((card) => {
-            if (!card || card === homeTab || card === storyBar || (storyBar && card.contains(storyBar))) return;
-            if (card.children.length >= 2 && card.children.length <= 10 && card.clientHeight >= 80 && card.clientHeight <= 560) {
-                const rawTxt = (card.innerText || "").trim();
-                const lower = rawTxt.toLowerCase();
+        let feedBox = document.getElementById("nx-clean-home-feed-v31");
+        if (!feedBox) {
+            feedBox = document.createElement("div");
+            feedBox.id = "nx-clean-home-feed-v31";
+            homeTab.appendChild(feedBox);
+            forceRebuild = true;
+        }
 
-                const isDummyMemberCard =
-                    lower.startsWith("m\nmember") ||
-                    lower.includes("member\nnexus member") ||
-                    lower.includes("liked by @member");
+        if (!forceRebuild && currentHash === lastRenderedHomeHash && feedBox.children.length > 0) {
+            return;
+        }
+        lastRenderedHomeHash = currentHash;
 
-                const isRefreshCard =
-                    (lower.includes("website ko") && lower.includes("refresh")) ||
-                    (lower.includes("post by nexus") && lower.includes("official announcement") && lower.includes("refresh"));
+        if (!validPosts.length) {
+            feedBox.innerHTML = `<div style="text-align:center; padding:36px 16px; color:#94a3b8; font-size:13px;">⏳ Loading real community posts...</div>`;
+            return;
+        }
 
-                // Check if card is an empty single-dot ('.') test post with no image or video
-                const lines = rawTxt.split("\n").map((l) => l.trim()).filter(Boolean);
-                const hasMedia = Boolean(card.querySelector("img:not([style*='border-radius: 50%']), video"));
-                const isSingleDotTestCard = !hasMedia && lines.includes(".");
-
-                if ((isDummyMemberCard || isRefreshCard || isSingleDotTestCard) && card.querySelectorAll("article").length === 0) {
-                    card.classList.add("nx-refresh-spam-hidden");
-                    card.style.display = "none";
-                }
-            }
-        });
-
-        // 4. Fix Video Posts on Home Feed (Fixes 0:00 broken icon in 1000076976.jpg!)
-        homeTab.querySelectorAll("img").forEach((img) => {
-            const src = img.getAttribute("src") || "";
-            if (
-                src.startsWith("NX_VIDEO_STREAM:") ||
-                src.startsWith("data:video/") ||
-                src.startsWith("blob:") ||
-                src.match(/\.(mp4|webm|mov)(\?|$)/i)
-            ) {
-                // Only convert post media images (not small circular avatars)
-                if (img.clientWidth > 120 || src.startsWith("NX_VIDEO_STREAM:") || src.startsWith("data:video/")) {
-                    const parentWrap = img.parentElement;
-                    if (parentWrap) {
-                        parentWrap.querySelectorAll("button, span, div").forEach((b) => {
-                            if (b.children.length === 0 && (b.innerText || "").includes("Full View")) {
-                                b.style.display = "none";
-                            }
-                        });
-                    }
-
-                    const v = document.createElement("video");
-                    v.controls = true;
-                    v.playsInline = true;
-                    v.preload = "metadata";
-                    v.style.cssText =
-                        "width:100%; max-height:440px; min-height:220px; border-radius:16px; border:1px solid #1e293b; background:#000; margin-top:8px; display:block; object-fit:contain;";
-                    img.replaceWith(v);
-
-                    resolveVideoStreamToUrl(src).then((playableUrl) => {
-                        if (playableUrl) v.src = playableUrl;
-                    });
-                }
-            }
-        });
-
-        homeTab.querySelectorAll("video").forEach((v) => {
-            const currentSrc = v.getAttribute("src") || "";
-            if (currentSrc.startsWith("NX_VIDEO_STREAM:")) {
-                if (videoBlobCache[currentSrc]) {
-                    v.src = videoBlobCache[currentSrc];
-                } else if (!videoLoadingSet.has(currentSrc)) {
-                    videoLoadingSet.add(currentSrc);
-                    resolveVideoStreamToUrl(currentSrc).then((playableUrl) => {
-                        videoLoadingSet.delete(currentSrc);
-                        if (playableUrl) v.src = playableUrl;
-                    });
-                }
-            }
+        feedBox.innerHTML = buildScrollablePostCardsHtml(validPosts, null);
+        bindRealPostCardEvents(feedBox, validPosts, () => {
+            renderCleanZeroOverlapHomeFeed(true);
         });
     }
-    setInterval(cleanDummyPostsAndFixVideosOnHome, 550);
+    setInterval(() => renderCleanZeroOverlapHomeFeed(false), 450);
 
     // =========================================================================
     // 4. FOLLOWERS / FOLLOWING AUTO-CROSS-SYNC ENGINE
@@ -519,7 +485,7 @@
     setInterval(crossSyncAllFollowersAndSongs, 800);
 
     // =========================================================================
-    // 5. STRICT REAL TIMESTAMP & STORY BAR ENGINE (REMOVES DUMMY 'member' CIRCLE!)
+    // 5. STRICT REAL TIMESTAMP & STORY BAR ENGINE
     // =========================================================================
     function extractTrueTimestamp(u) {
         if (!u) return 0;
@@ -624,7 +590,6 @@
             if (!lines.length) return;
 
             const rawName = lines[lines.length - 1].toLowerCase().replace(/\.+$/, "").trim();
-            // Hide dummy 'member' story circle immediately (Fixes 1000076974.jpg!)
             if (rawName === "member") {
                 card.style.display = "none";
                 return;
@@ -680,8 +645,8 @@
                 }
             });
 
-            if (!card.dataset.v30CaptureBound) {
-                card.dataset.v30CaptureBound = "1";
+            if (!card.dataset.v31CaptureBound) {
+                card.dataset.v31CaptureBound = "1";
                 card.addEventListener(
                     "click",
                     (ev) => {
@@ -854,6 +819,7 @@
                 }
                 p.likedBy = arr;
                 renderLightboxUI();
+                renderCleanZeroOverlapHomeFeed(true);
                 if (window.Nexus && Nexus.db && p.id) {
                     await Nexus.db.collection("nexus_real_posts").doc(p.id).set({ likedBy: arr, likes: p.likes }, { merge: true }).catch(() => {});
                 }
@@ -878,7 +844,10 @@
 
             overlay.querySelector("#nx-lb-like-btn").onclick = () => toggleLikeNow(false);
             overlay.querySelector("#nx-lb-comment-btn").onclick = () => {
-                window.openRealPostCommentsDrawer(p, renderLightboxUI);
+                window.openRealPostCommentsDrawer(p, () => {
+                    renderLightboxUI();
+                    renderCleanZeroOverlapHomeFeed(true);
+                });
             };
             overlay.querySelector("#nx-lb-views-btn").onclick = () => {
                 const viewers = cleanUniqueList([...(p.viewedBy || []), ...(p.likedBy || []), p.username || "mohiy"]);
@@ -906,40 +875,6 @@
         renderLightboxUI();
         document.body.appendChild(overlay);
     };
-
-    document.addEventListener(
-        "click",
-        (e) => {
-            const target = e.target;
-            if (!target) return;
-
-            const fullViewBtn = target.closest("button, span, div");
-            if (
-                fullViewBtn &&
-                fullViewBtn.children.length === 0 &&
-                (fullViewBtn.innerText || "").trim().includes("Full View")
-            ) {
-                const card = fullViewBtn.closest("article, div");
-                const img = card && card.querySelector("img:not([style*='border-radius: 50%'])");
-                if (img && img.src && !String(img.src).startsWith("NX_VIDEO_STREAM:")) {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    window.openNexusHdMediaLightbox(img.src, null);
-                    return;
-                }
-            }
-
-            if (target.tagName === "IMG" && target.closest("#tab-home")) {
-                const r = target.getBoundingClientRect();
-                if (r.width > 180 && r.height > 120 && !String(target.src).startsWith("NX_VIDEO_STREAM:")) {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    window.openNexusHdMediaLightbox(target.src, null);
-                }
-            }
-        },
-        true
-    );
 
     // =========================================================================
     // 7. 👥 FULL-SCREEN INSTAGRAM FOLLOWERS / FOLLOWING / VIEWERS MODAL
@@ -1605,7 +1540,7 @@
     };
 
     // =========================================================================
-    // 9. 📱 SCROLLABLE POST FEED WITH CLICKABLE '👁️' VIEWS & STRICT OWNER-ONLY MENU
+    // 9. 📱 ZERO-OVERLAP POST CARDS BUILDER (USED BY BOTH HOME FEED & PROFILE FEED!)
     // =========================================================================
     function openSystematicPostThreeDotSheet(postObj, onUpdateCallback) {
         document.getElementById("nx-sys-post-3dot-sheet")?.remove();
@@ -1700,6 +1635,7 @@
                     await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ pinned: postObj.pinned }, { merge: true }).catch(() => {});
                 }
                 sheet.remove();
+                renderCleanZeroOverlapHomeFeed(true);
                 if (onUpdateCallback) onUpdateCallback();
                 if (window.Nexus && Nexus.toast) Nexus.toast(postObj.pinned ? "📌 Pinned to Profile!" : "Unpinned Post");
             };
@@ -1724,6 +1660,7 @@
                         if (window.Nexus && Nexus.db && postObj.id) {
                             await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ image: videoRef, videoUrl: videoRef, mediaType: "video" }, { merge: true }).catch(() => {});
                         }
+                        renderCleanZeroOverlapHomeFeed(true);
                         if (onUpdateCallback) onUpdateCallback();
                         if (window.Nexus && Nexus.toast) Nexus.toast("🎬 Post Video Updated!");
                     });
@@ -1734,6 +1671,7 @@
                         if (window.Nexus && Nexus.db && postObj.id) {
                             await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ image: b64, mediaType: "image" }, { merge: true }).catch(() => {});
                         }
+                        renderCleanZeroOverlapHomeFeed(true);
                         if (onUpdateCallback) onUpdateCallback();
                         if (window.Nexus && Nexus.toast) Nexus.toast("📸 Post Photo Updated!");
                     });
@@ -1750,6 +1688,7 @@
                 }
                 sheet.remove();
                 document.getElementById("nx-scrollable-profile-feed-modal")?.remove();
+                renderCleanZeroOverlapHomeFeed(true);
                 renderMyInstagramProfileTab();
                 if (window.Nexus && Nexus.toast) Nexus.toast("🗑️ Your Post Deleted!");
             };
@@ -1787,6 +1726,7 @@
                 await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ content: newTxt, text: newTxt }, { merge: true }).catch(() => {});
             }
             modal.remove();
+            renderCleanZeroOverlapHomeFeed(true);
             if (onUpdateCallback) onUpdateCallback();
             renderMyInstagramProfileTab();
             if (window.Nexus && Nexus.toast) Nexus.toast("✅ Caption Updated!");
@@ -1815,22 +1755,26 @@
                     String(img).match(/\.(mp4|webm|mov)(\?|$)/i);
 
                 const av = dpUrl
-                    ? `<img src="${dpUrl}" loading="lazy" decoding="async" style="width:38px; height:38px; border-radius:50%; object-fit:cover; border:1.5px solid #10b981;" />`
-                    : `<div style="width:38px; height:38px; border-radius:50%; background:#10b981; color:#020617; font-weight:900; display:flex; align-items:center; justify-content:center;">${pOwnerName[0].toUpperCase()}</div>`;
+                    ? `<img src="${dpUrl}" loading="lazy" decoding="async" style="width:40px; height:40px; border-radius:50%; object-fit:cover; border:1.5px solid #10b981; flex-shrink:0;" />`
+                    : `<div style="width:40px; height:40px; border-radius:50%; background:#10b981; color:#020617; font-weight:900; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${pOwnerName[0].toUpperCase()}</div>`;
 
                 let mediaHtml = "";
                 if (img) {
                     if (isVid) {
                         const cachedBlob = videoBlobCache[img] || "";
-                        mediaHtml = `<video data-stream-ref="${
-                            String(img).startsWith("NX_VIDEO_STREAM:") ? img : ""
-                        }" src="${
-                            cachedBlob || (String(img).startsWith("NX_VIDEO_STREAM:") ? "" : img)
-                        }" controls playsinline preload="metadata" style="width:100%; max-height:460px; min-height:220px; background:#000; display:block; border-top:1px solid #1e293b; border-bottom:1px solid #1e293b;"></video>`;
+                        mediaHtml = `
+                            <div style="width:100%; background:#000; border-top:1px solid #1e293b; border-bottom:1px solid #1e293b;">
+                                <video data-stream-ref="${
+                                    String(img).startsWith("NX_VIDEO_STREAM:") ? img : ""
+                                }" src="${
+                                    cachedBlob || (String(img).startsWith("NX_VIDEO_STREAM:") ? "" : img)
+                                }" controls playsinline preload="metadata" style="width:100%; max-height:460px; min-height:220px; display:block; object-fit:contain;"></video>
+                            </div>
+                        `;
                     } else {
                         mediaHtml = `
-                            <div class="nx-feed-photo-open" data-fidx="${idx}" style="position:relative; cursor:pointer;">
-                                <img src="${img}" loading="lazy" decoding="async" style="width:100%; max-height:520px; object-fit:cover; display:block; border-top:1px solid #1e293b; border-bottom:1px solid #1e293b;" />
+                            <div class="nx-feed-photo-open" data-fidx="${idx}" style="position:relative; width:100%; background:#090d16; border-top:1px solid #1e293b; border-bottom:1px solid #1e293b; cursor:pointer;">
+                                <img src="${img}" loading="lazy" decoding="async" style="width:100%; max-height:520px; object-fit:cover; display:block;" />
                                 <span style="position:absolute; top:12px; right:12px; background:rgba(9,13,22,0.85); border:1px solid #38bdf8; color:#e0f2fe; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:800;">🔍 Full View</span>
                             </div>
                         `;
@@ -1850,7 +1794,7 @@
                 const firstLikerName = likedByArr[0] || pOwnerUname;
                 const likedByBannerHtml =
                     realLikesCount > 0
-                        ? `<div class="nx-real-likers-bar" data-fidx="${idx}" style="margin:10px 14px 4px; padding:8px 12px; border-radius:12px; background:rgba(244,63,94,0.12); border:1px solid rgba(244,63,94,0.3); display:flex; align-items:center; justify-content:space-between; cursor:pointer;">
+                        ? `<div class="nx-real-likers-bar" data-fidx="${idx}" style="margin:10px 14px 2px; padding:8px 12px; border-radius:12px; background:rgba(244,63,94,0.12); border:1px solid rgba(244,63,94,0.3); display:flex; align-items:center; justify-content:space-between; cursor:pointer;">
                                <span style="font-size:12px; font-weight:800; color:#fda4af;">
                                    ❤️ Liked by <strong>@${firstLikerName}</strong>${
                               realLikesCount > 1 ? ` + ${realLikesCount - 1} others` : ""
@@ -1864,13 +1808,14 @@
                     "padding:7px 12px; border-radius:999px; background:#1e293b; border:1px solid #334155; color:#cbd5e1; font-size:12px; font-weight:800; display:inline-flex; align-items:center; gap:5px; cursor:pointer;";
 
                 return `
-                    <article id="nx-feed-post-card-${idx}" class="nx-restored-feed-card" style="background:#0f172a; border:1px solid #1e293b; border-radius:20px; margin:12px 12px 18px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
-                        <div style="padding:12px 14px; display:flex; align-items:center; justify-content:space-between;">
-                            <div data-card-author="${pOwnerUname}" style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                    <article id="nx-feed-post-card-${idx}" class="nx-v31-post-card">
+                        <!-- Top Author Row (Strict Flex, Zero Overlap) -->
+                        <div style="padding:12px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                            <div data-card-author="${pOwnerUname}" style="display:flex; align-items:center; gap:10px; min-width:0; flex:1; cursor:pointer;">
                                 ${av}
-                                <div>
-                                    <div style="font-size:14px; font-weight:900; color:#f8fafc; display:flex; align-items:center; gap:5px;">
-                                        <span>${pOwnerName}</span>
+                                <div style="min-width:0; flex:1;">
+                                    <div style="font-size:14px; font-weight:900; color:#f8fafc; display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
+                                        <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${pOwnerName}</span>
                                         <span style="background:#10b981; color:#020617; font-size:9.5px; font-weight:900; padding:1px 5px; border-radius:99px;">✓</span>
                                         ${
                                             p.pinned
@@ -1878,33 +1823,38 @@
                                                 : ""
                                         }
                                     </div>
-                                    <div style="font-size:11px; color:#38bdf8;">${
+                                    <div style="font-size:11px; color:#38bdf8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${
                                         authorBio ? authorBio + " • " : "@" + pOwnerUname + " • "
                                     }${timeLabel}</div>
                                 </div>
                             </div>
-                            <button type="button" class="nx-feed-card-3dot" data-fidx="${idx}" style="width:34px; height:34px; border-radius:50%; background:#1e293b; border:1px solid #334155; color:#f8fafc; font-size:17px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+                            <button type="button" class="nx-feed-card-3dot" data-fidx="${idx}" style="width:34px; height:34px; border-radius:50%; background:#1e293b; border:1px solid #334155; color:#f8fafc; font-size:17px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
                                 ⋮
                             </button>
                         </div>
 
+                        <!-- Post Text / Caption -->
                         ${
                             p.content || p.text
                                 ? `<div style="padding:${
-                                      p.cardGradient ? "28px 18px" : "4px 15px 12px"
+                                      p.cardGradient ? "28px 18px" : "2px 15px 12px"
                                   }; background:${p.cardGradient || "transparent"}; text-align:${
                                       p.cardGradient ? "center" : "left"
                                   }; font-size:${p.cardGradient ? "17px" : "13.5px"}; font-weight:${
                                       p.cardGradient ? "900" : "500"
-                                  }; color:#f1f5f9; line-height:1.5; white-space:pre-line;">${
+                                  }; color:#f1f5f9; line-height:1.5; white-space:pre-line; word-break:break-word;">${
                                       p.content || p.text
                                   }</div>`
                                 : ""
                         }
 
+                        <!-- Post Photo / Video -->
                         ${mediaHtml}
+
+                        <!-- Liked By Bar -->
                         ${likedByBannerHtml}
 
+                        <!-- 5 Bottom Action Buttons -->
                         <div style="padding:10px 12px 12px; display:flex; align-items:center; justify-content:space-between; gap:6px; flex-wrap:wrap;">
                             <button type="button" class="nx-feed-like-btn" data-fidx="${idx}" style="${btnPillStyle} ${
                     isLikedByMe
@@ -1920,7 +1870,6 @@
                                 <span class="nx-comment-num">${commentsArr.length}</span>
                             </button>
 
-                            <!-- Clickable '👁️' Views Button (Opens '👁️ Post Viewed By' Modal!) -->
                             <button type="button" class="nx-feed-views-btn" data-fidx="${idx}" style="${btnPillStyle}" title="See who viewed this post">
                                 <span>👁️</span>
                                 <span>${realViewsCount}</span>
@@ -2023,7 +1972,6 @@
             };
         });
 
-        // Clickable '👁️' Views Button Handler!
         containerEl.querySelectorAll(".nx-feed-views-btn").forEach((btn) => {
             btn.onclick = (e) => {
                 e.stopPropagation();
@@ -2096,7 +2044,7 @@
                         </div>
                     </div>
                 </div>
-                <div style="padding-bottom:60px;">
+                <div style="display:flex; flex-direction:column; gap:16px; padding:12px 12px 60px;">
                     ${buildScrollablePostCardsHtml(postsArray, ownerUserObj)}
                 </div>
             `;
@@ -2281,7 +2229,10 @@
             let tabBodyHtml = "";
             if (currentPublicTabMode === "feed") {
                 tabBodyHtml = userPosts.length
-                    ? buildScrollablePostCardsHtml(userPosts, userObj)
+                    ? `<div style="display:flex; flex-direction:column; gap:16px; padding:12px;">${buildScrollablePostCardsHtml(
+                          userPosts,
+                          userObj
+                      )}</div>`
                     : `<div style="text-align:center; padding:36px 12px; color:#64748b; font-size:13px;">📷 No posts shared yet.</div>`;
             } else {
                 const listToGrid = currentPublicTabMode === "videos" ? userVideos : userPosts;
@@ -2501,7 +2452,6 @@
                 }
             };
 
-            // Opens Direct 1:1 Personal DM Chat with `userObj` immediately!
             modal.querySelector("#nx-pub-msg-btn").onclick = () => {
                 window.openDirect1to1ChatWithUser(userObj);
             };
@@ -2573,7 +2523,7 @@
     bindGlobalAvatarLongPress();
 
     // =========================================================================
-    // 11. EDIT PROFILE MODAL & MAIN PROFILE TAB RENDERER (NO CHILDISH HIGHLIGHT ICONS!)
+    // 11. EDIT PROFILE MODAL & MAIN PROFILE TAB RENDERER
     // =========================================================================
     function openEditInstagramProfileModal() {
         const me = getActiveUser();
@@ -2700,6 +2650,7 @@
                 } catch (e) {}
             }
 
+            renderCleanZeroOverlapHomeFeed(true);
             if (window.Nexus) {
                 Nexus.notifyAll && Nexus.notifyAll();
                 Nexus.toast && Nexus.toast("✅ Bio & Profile Updated Everywhere!");
@@ -3005,13 +2956,14 @@
 
     if (window.Nexus && Nexus.listeners) {
         Nexus.listeners.onUsers.push(() => {
+            renderCleanZeroOverlapHomeFeed(false);
             const pTab = document.getElementById("tab-profile");
             if (pTab && pTab.classList.contains("active") && isUserVerified()) {
                 renderMyInstagramProfileTab();
             }
         });
         Nexus.listeners.onPosts.push(() => {
-            cleanDummyPostsAndFixVideosOnHome();
+            renderCleanZeroOverlapHomeFeed(true);
             const pTab = document.getElementById("tab-profile");
             if (pTab && pTab.classList.contains("active") && isUserVerified()) {
                 renderMyInstagramProfileTab();
