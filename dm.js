@@ -1343,3 +1343,185 @@
     };
 })();
 // === END OF DM.JS ===
+// ==========================================================
+// 2. RESTORE ALL 1:1 CHAT FEATURES + YT WATCH PARTY + TOOLS
+// ==========================================================
+window.restoreAll1v1ChatFeatures = function() {
+    // ओवरलैपिंग रोकने और सभी पॉपअप को क्लीन दिखाने के लिए CSS
+    if (!document.getElementById('nexus-full-features-css')) {
+        const style = document.createElement('style');
+        style.id = 'nexus-full-features-css';
+        style.innerHTML = `
+            #nexus-plus-drawer {
+                display: none; position: fixed; bottom: 72px; left: 12px; right: 12px; max-width: 340px;
+                background: #191922; border: 1px solid #323246; border-radius: 16px; padding: 12px;
+                z-index: 9999; box-shadow: 0 10px 30px rgba(0,0,0,0.75);
+                grid-template-columns: repeat(2, 1fr); gap: 10px;
+            }
+            #nexus-plus-drawer.open { display: grid !important; }
+            .nx-tool-btn {
+                background: #252533; color: #fff; border: 1px solid #35354a; padding: 10px 12px;
+                border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer;
+                display: flex; align-items: center; gap: 8px; text-align: left;
+            }
+            .nx-tool-btn:active { transform: scale(0.97); }
+            #nx-yt-party-container {
+                display: none; background: #0f0f14; border-bottom: 2px solid #ff0033;
+                padding: 10px; width: 100%; box-sizing: border-box; z-index: 90;
+            }
+            .nx-msg-react-bar {
+                display: flex; gap: 8px; background: #22222e; border: 1px solid #444;
+                padding: 5px 10px; border-radius: 24px; position: absolute; top: -34px; right: 8px;
+                z-index: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // 1. चैट हेडर में YouTube Watch Party और Video/Audio Call बटन जोड़ें
+    const chatHeader = document.querySelector('.chat-header, #dm-header, .dm-top-bar');
+    if (chatHeader && !document.getElementById('nx-header-tools')) {
+        const headerTools = document.createElement('div');
+        headerTools.id = 'nx-header-tools';
+        headerTools.style.cssText = 'display:flex; align-items:center; gap:8px; margin-left:auto;';
+        headerTools.innerHTML = `
+            <button onclick="window.toggleNexusWatchParty()" style="background:#ff0033; color:#fff; border:none; border-radius:18px; padding:6px 11px; font-size:12px; font-weight:bold; cursor:pointer;">
+                ▶️ YT Party
+            </button>
+            <button onclick="window.startWebRTCCall && window.startWebRTCCall()" style="background:#2b2b3a; color:#fff; border:none; border-radius:50%; width:32px; height:32px; cursor:pointer;" title="Video Call">
+                📹
+            </button>
+        `;
+        chatHeader.appendChild(headerTools);
+    }
+
+    // 2. YouTube Watch Party सिंक प्लेयर पैनल (चैट हेडर के ठीक नीचे)
+    if (!document.getElementById('nx-yt-party-container')) {
+        const ytPanel = document.createElement('div');
+        ytPanel.id = 'nx-yt-party-container';
+        ytPanel.innerHTML = `
+            <div style="display:flex; gap:6px; margin-bottom:8px;">
+                <input type="text" id="nx-yt-link" placeholder="Paste YouTube video or Shorts link..." style="flex:1; padding:8px 10px; border-radius:8px; border:1px solid #333; background:#1c1c26; color:#fff; font-size:13px;">
+                <button onclick="window.launchSyncedYT()" style="background:#ff0033; color:#fff; border:none; border-radius:8px; padding:0 14px; font-weight:bold; cursor:pointer;">Sync Play</button>
+                <button onclick="window.toggleNexusWatchParty(false)" style="background:#333; color:#fff; border:none; border-radius:8px; padding:0 10px; cursor:pointer;">✖</button>
+            </div>
+            <div id="nx-yt-player-frame" style="width:100%; aspect-ratio:16/9; background:#000; border-radius:10px; overflow:hidden; display:none;"></div>
+        `;
+        if (chatHeader && chatHeader.parentNode) {
+            chatHeader.parentNode.insertBefore(ytPanel, chatHeader.nextSibling);
+        } else {
+            document.body.prepend(ytPanel);
+        }
+    }
+
+    // 3. Plus (+) बटन का पूरा ऑल-इन-वन फीचर मेन्यू
+    if (!document.getElementById('nexus-plus-drawer')) {
+        const drawer = document.createElement('div');
+        drawer.id = 'nexus-plus-drawer';
+        drawer.innerHTML = `
+            <button class="nx-tool-btn" onclick="window.openChatFilePicker('normal')">📷 Photo / Video</button>
+            <button class="nx-tool-btn" style="color:#ffb300;" onclick="window.openChatFilePicker('view_once')">1️⃣ View-Once Media</button>
+            <button class="nx-tool-btn" style="color:#ff4d4d;" onclick="window.toggleNexusWatchParty(true)">▶️ YT Watch Party</button>
+            <button class="nx-tool-btn" style="color:#ffd700;" onclick="window.sendNexusShagun()">🧧 Shagun Envelope</button>
+            <button class="nx-tool-btn" style="color:#00e676;" onclick="window.toggleVoiceRecorder()">🎙️ Voice Note (1x/2x)</button>
+            <button class="nx-tool-btn" style="color:#64b5f6;" onclick="window.startScreenShare && window.startScreenShare()">🖥️ Screen Share</button>
+        `;
+        document.body.appendChild(drawer);
+    }
+
+    // Plus (+) बटन को ऑटोमैटिक कनेक्ट करें
+    const plusBtn = document.querySelector('#plus-btn, .plus-btn, #attach-btn, [data-action="plus"]');
+    if (plusBtn && !plusBtn.dataset.bound) {
+        plusBtn.dataset.bound = "true";
+        plusBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById('nexus-plus-drawer')?.classList.toggle('open');
+        });
+    }
+};
+
+// ==========================================
+// WATCH PARTY, SHAGUN & REACTIONS FUNCTIONS
+// ==========================================
+window.toggleNexusWatchParty = function(forceState) {
+    const panel = document.getElementById('nx-yt-party-container');
+    const drawer = document.getElementById('nexus-plus-drawer');
+    if (drawer) drawer.classList.remove('open');
+    if (!panel) return;
+    const isHidden = panel.style.display === 'none' || panel.style.display === '';
+    panel.style.display = (typeof forceState === 'boolean') ? (forceState ? 'block' : 'none') : (isHidden ? 'block' : 'none');
+};
+
+window.launchSyncedYT = function(incomingVideoId) {
+    let videoId = incomingVideoId;
+    if (!videoId) {
+        const url = document.getElementById('nx-yt-link')?.value.trim() || '';
+        const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:.*v=|.*\/|.*embed\/|.*shorts\/))([^&?/\s]+)/);
+        if (!match || !match[1]) return alert('कृपया सही YouTube लिंक पेस्ट करें!');
+        videoId = match[1];
+    }
+    const panel = document.getElementById('nx-yt-party-container');
+    const frame = document.getElementById('nx-yt-player-frame');
+    if (panel) panel.style.display = 'block';
+    if (frame) {
+        frame.style.display = 'block';
+        frame.innerHTML = `<iframe width="100%" height="100%" src="https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+    }
+    // 1:1 चैट में दोस्त के साथ रियल-टाइम सिंक करें
+    if (!incomingVideoId && typeof window.sendChatMessageToDB === 'function') {
+        window.sendChatMessageToDB({ type: 'yt_watch_party', videoId: videoId, text: `▶️ Started a YouTube Watch Party!` });
+    }
+};
+
+window.sendNexusShagun = function() {
+    document.getElementById('nexus-plus-drawer')?.classList.remove('open');
+    const amount = prompt("🧧 शगुन कॉइन्स (Shagun Coins) की राशि दर्ज करें:", "101");
+    if (!amount) return;
+    if (typeof window.sendChatMessageToDB === 'function') {
+        window.sendChatMessageToDB({
+            type: 'shagun_envelope',
+            amount: amount,
+            text: `🧧 Sent a Shagun Envelope of ₹${amount} Coins! (Tap to Claim)`
+        });
+    }
+};
+
+// हर चैट मैसेज पर डबल-टैप या होल्ड करने पर Reaction (❤️😂🔥👍) + Delete for Everyone
+window.enableMessageActions = function(msgElement, msgId) {
+    if (!msgElement || msgElement.dataset.reactBound) return;
+    msgElement.dataset.reactBound = "true";
+    msgElement.addEventListener('dblclick', () => {
+        document.querySelectorAll('.nx-msg-react-bar').forEach(el => el.remove());
+        const bar = document.createElement('div');
+        bar.className = 'nx-msg-react-bar';
+        ['❤️', '😂', '🔥', '👍', '😮', '🗑️'].forEach(item => {
+            const btn = document.createElement('span');
+            btn.textContent = item;
+            btn.style.cursor = 'pointer';
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                if (item === '🗑️') {
+                    const mode = confirm("OK = Delete for Everyone\nCancel = Delete for Me");
+                    if (mode && typeof window.deleteMsgForEveryone === 'function') window.deleteMsgForEveryone(msgId);
+                    else msgElement.remove();
+                } else if (typeof window.addReactionToMsg === 'function') {
+                    window.addReactionToMsg(msgId, item);
+                }
+                bar.remove();
+            };
+            bar.appendChild(btn);
+        });
+        msgElement.style.position = 'relative';
+        msgElement.appendChild(bar);
+    });
+};
+
+// ऑटो-इनिशियलाइज़
+document.addEventListener('DOMContentLoaded', () => {
+    restoreAllNexusPosts();
+    restoreAll1v1ChatFeatures();
+});
+setTimeout(() => {
+    restoreAllNexusPosts();
+    restoreAll1v1ChatFeatures();
+}, 1200);
