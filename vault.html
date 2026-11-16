@@ -3,628 +3,704 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nexus Master Vault — Admin Control & Video Studio</title>
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+    <meta name="theme-color" content="#090d16">
+    <title>Nexus Official • Founder Master Vault</title>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
     <style>
-        :root {
-            --bg: #0b141a;
-            --card: #111b21;
-            --card2: #1f2c34;
-            --accent: #00e676;
-            --wa-green: #00a884;
-            --danger: #ff3b30;
-            --text: #e9edef;
-            --muted: #8696a0;
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-        body { background: var(--bg); color: var(--text); padding-bottom: 60px; }
-
-        /* PIN Lock Screen */
-        #pin-lock-screen {
-            position: fixed; inset: 0; background: #070d11; z-index: 99999;
-            display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px;
+        body {
+            background: #050811;
+            color: #f8fafc;
+            max-width: 680px;
+            margin: 0 auto;
+            min-height: 100dvh;
+            padding-bottom: 60px;
+            border-left: 1px solid #1e293b;
+            border-right: 1px solid #1e293b;
         }
-        .pin-box {
-            background: var(--card); border: 1px solid #2a3942; border-radius: 20px;
-            padding: 28px 22px; width: 100%; max-width: 340px; text-align: center;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+        .v-header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(15, 23, 42, 0.96);
+            border-bottom: 1px solid #1e293b;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            backdrop-filter: blur(8px);
         }
-        .pin-input {
-            width: 100%; padding: 14px; font-size: 24px; text-align: center; letter-spacing: 10px;
-            background: var(--card2); border: 1.5px solid var(--wa-green); color: #fff;
-            border-radius: 12px; margin: 18px 0; outline: none;
+        .v-tabs {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            padding: 10px 12px;
+            background: #090d16;
+            border-bottom: 1px solid #1e293b;
+            position: sticky;
+            top: 56px;
+            z-index: 90;
         }
-
-        /* Header & Tabs */
-        .vault-header {
-            background: var(--card); padding: 16px; border-bottom: 1px solid #222e35;
-            display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100;
+        .v-tab-btn {
+            padding: 9px 4px;
+            border-radius: 11px;
+            border: 1px solid #1e293b;
+            background: #0f172a;
+            color: #94a3b8;
+            font-size: 11.5px;
+            font-weight: 800;
+            cursor: pointer;
+            text-align: center;
         }
-        .vault-tabs {
-            display: flex; gap: 8px; overflow-x: auto; padding: 12px 16px; background: #0e171d;
-            border-bottom: 1px solid #222e35;
+        .v-tab-btn.active {
+            background: rgba(16, 185, 129, 0.16);
+            color: #34d399;
+            border-color: #10b981;
         }
-        .tab-btn {
-            background: var(--card2); color: var(--text); border: 1px solid #2a3942;
-            padding: 9px 16px; border-radius: 20px; font-size: 13px; font-weight: 700;
-            white-space: nowrap; cursor: pointer;
+        .v-section {
+            display: none;
+            padding: 14px;
         }
-        .tab-btn.active { background: var(--wa-green); color: #000; border-color: var(--accent); }
-
-        .section-panel { display: none; padding: 16px; max-width: 900px; margin: 0 auto; }
-        .section-panel.active { display: block; }
-
-        .card {
-            background: var(--card); border: 1px solid #222e35; border-radius: 16px;
-            padding: 16px; margin-bottom: 16px;
+        .v-section.active {
+            display: block;
         }
-        .input, select, textarea {
-            width: 100%; padding: 11px 14px; background: var(--card2); border: 1px solid #2a3942;
-            border-radius: 10px; color: #fff; font-size: 14px; margin-bottom: 10px; outline: none;
+        .v-card {
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 18px;
+            padding: 15px;
+            margin-bottom: 12px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.45);
         }
-        .btn {
-            background: var(--wa-green); color: #000; border: none; padding: 11px 18px;
-            border-radius: 10px; font-weight: 800; font-size: 13px; cursor: pointer;
-            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+        .v-inp, .v-txt, .v-sel {
+            width: 100%;
+            padding: 11px 13px;
+            border-radius: 12px;
+            background: #090d16;
+            border: 1px solid #334155;
+            color: #fff;
+            font-size: 13px;
+            outline: none;
+            margin-top: 5px;
         }
-        .btn-danger { background: var(--danger); color: #fff; }
-        .btn-dark { background: #2a3942; color: #fff; }
-
-        /* Video Studio Canvas */
-        .studio-grid {
-            display: grid; grid-template-columns: 1fr; gap: 18px;
+        .v-btn {
+            padding: 10px 14px;
+            border-radius: 11px;
+            border: none;
+            font-weight: 900;
+            font-size: 12px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
         }
-        @media(min-width: 700px) { .studio-grid { grid-template-columns: 1.2fr 1fr; } }
-        .canvas-wrap {
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            background: #070c10; padding: 14px; border-radius: 16px; border: 1px solid #2a3942;
-        }
-        canvas#wa-motion-canvas {
-            width: 270px; height: 480px; border-radius: 20px;
-            box-shadow: 0 12px 35px rgba(0, 230, 118, 0.2); border: 2px solid #2a3942;
-            background: #0b141a;
-        }
-        .spy-msg {
-            padding: 10px 14px; border-radius: 12px; background: var(--card2);
-            margin-bottom: 8px; font-size: 13px; border-left: 3px solid var(--accent);
+        #v-toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #10b981;
+            color: #020617;
+            font-weight: 900;
+            font-size: 12.5px;
+            padding: 9px 18px;
+            border-radius: 999px;
+            z-index: 99999;
+            display: none;
+            box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
         }
     </style>
 </head>
 <body>
 
-<!-- 1. PIN LOCK SCREEN -->
-<div id="pin-lock-screen">
-    <div class="pin-box">
-        <div style="width:56px;height:56px;border-radius:50%;background:#00a884;color:#000;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:900;margin:0 auto;">N</div>
-        <h2 style="margin-top:12px;">Nexus Admin Vault</h2>
-        <p style="font-size:12px;color:var(--muted);margin-top:4px;">Enter Master PIN to unlock all controls</p>
-        <input type="password" id="vault-pin-input" class="pin-input" maxlength="6" placeholder="••••">
-        <button class="btn" style="width:100%;padding:14px;" onclick="unlockVault()">🔓 Unlock Vault</button>
-    </div>
-</div>
-
-<!-- 2. TOP HEADER -->
-<div class="vault-header">
-    <div style="display:flex;align-items:center;gap:10px;">
-        <div style="width:36px;height:36px;border-radius:10px;background:var(--wa-green);color:#000;display:flex;align-items:center;justify-content:center;font-weight:900;">N</div>
-        <div>
-            <div style="font-weight:800;font-size:16px;">Nexus Master Vault ⚡</div>
-            <div style="font-size:11px;color:var(--accent);">● Connected to Live Database</div>
+    <!-- 1. FOUNDER SECURITY PIN LOCK SCREEN (DEFAULT PIN: 1234) -->
+    <div id="v-pin-lock" style="position:fixed; inset:0; background:#050811; z-index:50000; display:flex; align-items:center; justify-content:center; padding:18px;">
+        <div style="background:linear-gradient(155deg,#0f172a,#090d16); border:1.5px solid #10b981; border-radius:24px; width:100%; max-width:360px; padding:26px 20px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.9);">
+            <div style="width:58px; height:58px; border-radius:16px; background:rgba(16,185,129,0.15); border:1.5px solid #10b981; display:flex; align-items:center; justify-content:center; margin:0 auto 12px; font-size:26px;">🛡️</div>
+            <h2 style="font-size:19px; font-weight:900; color:#f8fafc;">Nexus Founder Vault</h2>
+            <p style="font-size:12px; color:#94a3b8; margin:4px 0 18px;">Enter Founder Security PIN to unlock Master Controls</p>
+            <input type="password" id="v-pin-input" maxlength="8" placeholder="Enter PIN..." style="width:100%; padding:13px; border-radius:14px; background:#090d16; border:1px solid #334155; color:#34d399; font-size:18px; font-weight:900; text-align:center; letter-spacing:6px; outline:none; margin-bottom:14px;" />
+            <button type="button" id="v-pin-submit" style="width:100%; padding:13px; border-radius:14px; background:linear-gradient(90deg,#10b981,#06b6d4); color:#020617; font-weight:900; font-size:14px; border:none; cursor:pointer;">Unlock Master Vault 🔓</button>
         </div>
     </div>
-    <a href="index.html" class="btn btn-dark" style="text-decoration:none;">🏠 Back to App</a>
-</div>
 
-<!-- 3. NAVIGATION TABS -->
-<div class="vault-tabs">
-    <button class="tab-btn active" onclick="switchVaultTab('studio', this)">🎬 WA Video & Story Studio</button>
-    <button class="tab-btn" onclick="switchVaultTab('spy', this)">🕵️‍♂️ 1:1 Personal Chat Spy</button>
-    <button class="tab-btn" onclick="switchVaultTab('posts', this)">📢 Official Post & Feed Control</button>
-    <button class="tab-btn" onclick="switchVaultTab('users', this)">👥 Users & Verification (✅)</button>
-</div>
-
-<!-- =========================================================================
-     TAB 1: REAL WHATSAPP MOTION VIDEO GENERATOR & OFFICIAL STORY STUDIO
-     ========================================================================= -->
-<div id="tab-studio" class="section-panel active">
-    <div class="card">
-        <h3 style="color:var(--accent);margin-bottom:6px;">🎬 WhatsApp-Style Bouncing Bubble Video Maker</h3>
-        <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">
-            यहाँ आप जो भी लिखेंगे, दाईं तरफ के Live Canvas में WhatsApp की तरह <b>Bouncing Icons, Chat Bubbles और Phone UI</b> के साथ उसका असली 60FPS वीडियो तैयार होगा! आप इसे <b>.webm/.mp4 वीडियो की तरह Download</b> भी कर सकते हैं और सीधे <b>Nexus Official Story Bar</b> में भी भेज सकते हैं।
-        </p>
-
-        <div class="studio-grid">
-            <!-- Left Controls -->
+    <!-- 2. MAIN VAULT HEADER -->
+    <header class="v-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:20px;">👑</span>
             <div>
-                <label style="font-size:12px;color:var(--muted);">1. Feature Tag / Badge:</label>
-                <input id="v-badge" class="input" value="✨ NEW FEATURE UPDATE" oninput="restartCanvasPreview()">
+                <div style="font-size:15.5px; font-weight:900; color:#34d399;">Nexus Official Vault</div>
+                <div style="font-size:10.5px; color:#94a3b8;">Founder Control • Official Broadcast & Post Editor</div>
+            </div>
+        </div>
+        <div style="display:flex; gap:8px;">
+            <button type="button" id="v-btn-hotreload" class="v-btn" style="background:#1e293b; border:1px solid #38bdf8; color:#38bdf8;">⚡ Push Update</button>
+            <a href="index.html" class="v-btn" style="background:#10b981; color:#020617; text-decoration:none;">🏠 App</a>
+        </div>
+    </header>
 
-                <label style="font-size:12px;color:var(--muted);">2. Main Feature Title (Bada Naam):</label>
-                <input id="v-title" class="input" value="1:1 YouTube Watch Party" oninput="restartCanvasPreview()">
+    <!-- 3. VAULT NAVIGATION TABS -->
+    <nav class="v-tabs">
+        <button type="button" class="v-tab-btn active" data-vtab="sec-broadcast">📢 Official Post</button>
+        <button type="button" class="v-tab-btn" data-vtab="sec-posts">✏️ Edit Posts</button>
+        <button type="button" class="v-tab-btn" data-vtab="sec-users">👥 Members</button>
+        <button type="button" class="v-tab-btn" data-vtab="sec-chats">💬 Live Media</button>
+    </nav>
 
-                <label style="font-size:12px;color:var(--muted);">3. Short Description (Niche ki line):</label>
-                <textarea id="v-desc" class="input" style="height:56px;" oninput="restartCanvasPreview()">Chat karte huye (+) dabayein aur doston ke sath real-time sync mein video dekhein!</textarea>
+    <!-- TAB 1: OFFICIAL NEXUS PHOTO & 50MB VIDEO BROADCASTER -->
+    <section id="sec-broadcast" class="v-section active">
+        <div class="v-card" style="border-color:#10b981;">
+            <h3 style="font-size:15px; font-weight:900; color:#34d399; margin-bottom:10px;">👑 Send Official Photo / Video Post</h3>
 
-                <label style="font-size:12px;color:var(--muted);">4. 3 Bouncing Icons (Comma laga kar likhein):</label>
-                <input id="v-icons" class="input" value="▶️, 🍿, 🔥" oninput="restartCanvasPreview()">
+            <label style="font-size:11px; font-weight:800; color:#94a3b8;">PUBLISH AS ACCOUNT</label>
+            <select id="v-post-author-mode" class="v-sel" style="margin-bottom:10px;">
+                <option value="nexus_official">🛡️ Nexus Official ✅ (Official System Emblem)</option>
+                <option value="mohiy">👑 Mohit_01 (@mohiy • Founder Account)</option>
+            </select>
 
-                <label style="font-size:12px;color:var(--muted);">5. Demo Chat Bubble 1 (Left Side):</label>
-                <input id="v-b1" class="input" value="Yaar koi achha song sunte hain sath mein! 🎧" oninput="restartCanvasPreview()">
+            <label style="font-size:11px; font-weight:800; color:#94a3b8;">POST CAPTION / ANNOUNCEMENT TEXT</label>
+            <textarea id="v-post-caption" rows="4" class="v-txt" placeholder="Write official Nexus announcement, update or study post here..." style="margin-bottom:10px;"></textarea>
 
-                <label style="font-size:12px;color:var(--muted);">6. Demo Chat Bubble 2 (Right Side Green):</label>
-                <input id="v-b2" class="input" value="Ruko (+) se YT Watch Party chalu karta hu! 🔥" oninput="restartCanvasPreview()">
+            <!-- Photo OR Video Upload Box -->
+            <div style="border:1.5px dashed #10b981; border-radius:14px; padding:14px; text-align:center; background:rgba(16,185,129,0.06); margin-bottom:10px;">
+                <label for="v-post-media-inp" style="cursor:pointer; display:block;">
+                    <div style="font-size:24px; margin-bottom:4px;">📸 🎬</div>
+                    <div style="font-size:13px; font-weight:800; color:#34d399;">Tap to Select Official Photo or Video (Up to 50MB)</div>
+                    <div id="v-upload-status" style="font-size:11px; color:#94a3b8; margin-top:3px;">Supports HD Images & MP4/WebM Videos</div>
+                </label>
+                <input type="file" id="v-post-media-inp" accept="image/*,video/mp4,video/webm,video/*" style="display:none;" />
+                <div id="v-media-preview-box" style="margin-top:10px; display:none;"></div>
+            </div>
 
-                <label style="font-size:12px;color:var(--muted);">7. Highlight Action Pill (Center Button):</label>
-                <input id="v-pill" class="input" value="▶️ Tap + to Start Watch Party" oninput="restartCanvasPreview()">
-
-                <label style="font-size:12px;color:var(--muted);">8. Theme Color:</label>
-                <select id="v-theme" class="input" onchange="restartCanvasPreview()">
-                    <option value="#00a884">WhatsApp Emerald Green (#00a884)</option>
-                    <option value="#ff0033">YouTube Crimson Red (#ff0033)</option>
-                    <option value="#7c3aed">Nexus Royal Purple (#7c3aed)</option>
-                    <option value="#f59e0b">Shagun Gold (#f59e0b)</option>
-                </select>
-
-                <hr style="border-color:#222e35;margin:14px 0;">
-                <label style="font-size:12px;color:var(--accent);font-weight:bold;">OR Upload Ready-Made Video (.mp4) / URL:</label>
-                <input type="file" id="v-file-upload" class="input" accept="video/*">
-                <input type="text" id="v-direct-url" class="input" placeholder="Or paste direct .mp4 video link here...">
-
-                <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;">
-                    <button class="btn btn-dark" onclick="restartCanvasPreview()">🔄 Replay Animation</button>
-                    <button class="btn" style="background:#3b82f6;color:#fff;" onclick="recordAndDownloadCanvasVideo()">📥 Record & Download .MP4/.WebM</button>
-                    <button class="btn" style="width:100%;padding:14px;font-size:14px;" onclick="publishToOfficialStoryAndPost()">🚀 Publish to Nexus Official Story + Feed Post</button>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
+                <label style="display:flex; align-items:center; gap:8px; background:#090d16; padding:10px; border-radius:11px; border:1px solid #1e293b; font-size:12px; font-weight:800; color:#fbbf24; cursor:pointer;">
+                    <input type="checkbox" id="v-post-pinned" checked style="width:17px; height:17px;" />
+                    <span>📌 Pin to Top</span>
+                </label>
+                <div>
+                    <input type="number" id="v-post-likes" value="15" class="v-inp" style="margin-top:0;" placeholder="Initial Likes" title="Initial Likes Count" />
                 </div>
-                <p id="studio-status" style="font-size:12px;color:var(--accent);margin-top:8px;"></p>
             </div>
 
-            <!-- Right Live 60FPS Motion Canvas -->
-            <div class="canvas-wrap">
-                <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">📱 Live 60FPS Motion Preview (9:16)</div>
-                <canvas id="wa-motion-canvas" width="540" height="960"></canvas>
+            <button type="button" id="v-btn-publish-official" class="v-btn" style="width:100%; padding:13px; background:linear-gradient(90deg,#10b981,#06b6d4); color:#020617; font-size:13.5px;">
+                🚀 Publish Official Post Now
+            </button>
+        </div>
+    </section>
+
+    <!-- TAB 2: ALL-POSTS LIVE EDITOR (EDIT ANY MEMBER'S OR OWN POST, MEDIA, CAPTION, PIN) -->
+    <section id="sec-posts" class="v-section">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+            <h3 style="font-size:14.5px; font-weight:900; color:#38bdf8;">✏️ All Community Posts (Edit / Replace Media / Pin)</h3>
+            <span id="v-posts-count" style="font-size:11px; font-weight:800; color:#34d399;">0 Posts</span>
+        </div>
+        <div id="v-posts-list"></div>
+    </section>
+
+    <!-- TAB 3: MEMBERS & VERIFICATION MANAGER -->
+    <section id="sec-users" class="v-section">
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <input type="text" id="v-user-search" class="v-inp" placeholder="Search member by @username, name or email..." style="margin-top:0;" />
+        </div>
+        <div id="v-users-list"></div>
+    </section>
+
+    <!-- TAB 4: LIVE CHAT & MEDIA INSPECTOR -->
+    <section id="sec-chats" class="v-section">
+        <h3 style="font-size:14.5px; font-weight:900; color:#fbbf24; margin-bottom:10px;">💬 Recent Chat Media & Rooms</h3>
+        <div id="v-chats-list"></div>
+    </section>
+
+    <!-- MODAL FOR EDITING ANY POST (CAPTION + PHOTO/VIDEO REPLACEMENT + PIN + LIKES) -->
+    <div id="v-edit-post-modal" style="position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:20000; display:none; align-items:center; justify-content:center; padding:16px;">
+        <div class="v-card" style="width:100%; max-width:440px; border-color:#38bdf8; max-height:90dvh; overflow-y:auto;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                <h3 style="font-size:15px; font-weight:900; color:#38bdf8;">✏️ Edit Post & Media</h3>
+                <button type="button" id="v-close-edit-modal" style="background:#1e293b; border:none; color:#fff; width:28px; height:28px; border-radius:50%; font-weight:900; cursor:pointer;">✕</button>
+            </div>
+
+            <label style="font-size:10.5px; font-weight:800; color:#94a3b8;">AUTHOR DISPLAY NAME</label>
+            <input type="text" id="ve-author" class="v-inp" style="margin-bottom:8px;" />
+
+            <label style="font-size:10.5px; font-weight:800; color:#94a3b8;">POST CAPTION / TEXT</label>
+            <textarea id="ve-caption" rows="4" class="v-txt" style="margin-bottom:8px;"></textarea>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+                <div>
+                    <label style="font-size:10.5px; font-weight:800; color:#94a3b8;">❤️ LIKES COUNT</label>
+                    <input type="number" id="ve-likes" class="v-inp" />
+                </div>
+                <div>
+                    <label style="font-size:10.5px; font-weight:800; color:#94a3b8;">👁️ VIEWS COUNT</label>
+                    <input type="number" id="ve-views" class="v-inp" />
+                </div>
+            </div>
+
+            <label style="display:flex; align-items:center; gap:8px; background:#090d16; padding:10px; border-radius:11px; border:1px solid #1e293b; font-size:12px; font-weight:800; color:#fbbf24; margin-bottom:10px; cursor:pointer;">
+                <input type="checkbox" id="ve-pinned" style="width:17px; height:17px;" />
+                <span>📌 Pin This Post to Top of Home Feed</span>
+            </label>
+
+            <div style="border:1px dashed #38bdf8; border-radius:12px; padding:10px; text-align:center; margin-bottom:12px;">
+                <label for="ve-replace-media" style="color:#38bdf8; font-size:12px; font-weight:800; cursor:pointer; display:block;">
+                    🔄 Replace / Add Photo or Video on This Post
+                </label>
+                <input type="file" id="ve-replace-media" accept="image/*,video/*" style="display:none;" />
+                <div id="ve-replace-status" style="font-size:10.5px; color:#34d399; margin-top:4px;"></div>
+            </div>
+
+            <div style="display:flex; gap:8px;">
+                <button type="button" id="ve-save-btn" class="v-btn" style="flex:1; background:#10b981; color:#020617; padding:12px;">💾 Save Changes</button>
+                <button type="button" id="ve-remove-media-btn" class="v-btn" style="background:#1e293b; color:#fb7185; border:1px solid #f43f5e;">Remove Media</button>
             </div>
         </div>
     </div>
-</div>
 
-<!-- =========================================================================
-     TAB 2: 1:1 PERSONAL CHAT SPY (READ ALL ROOMS & MESSAGES)
-     ========================================================================= -->
-<div id="tab-spy" class="section-panel">
-    <div class="card">
-        <h3 style="color:var(--accent);margin-bottom:8px;">🕵️‍♂️ Live 1:1 Personal Chat Inspector</h3>
-        <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">किसी भी चैट रूम पर क्लिक करके दोनों यूज़र्स के बीच की बातचीत और मीडिया देखें:</p>
-        <div style="display:flex;gap:10px;margin-bottom:12px;">
-            <button class="btn" onclick="loadAll1v1ChatRooms()">🔄 Load All 1:1 Chat Rooms</button>
-        </div>
-        <div id="spy-rooms-list" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:10px;margin-bottom:12px;"></div>
-        <div id="spy-messages-box" style="max-height:480px;overflow-y:auto;background:#070d11;padding:12px;border-radius:12px;border:1px solid #222e35;">
-            <p style="color:var(--muted);font-size:13px;">Click "Load All 1:1 Chat Rooms" above to inspect messages...</p>
-        </div>
-    </div>
-</div>
+    <div id="v-toast"></div>
 
-<!-- =========================================================================
-     TAB 3: OFFICIAL POSTS & FEED MANAGER
-     ========================================================================= -->
-<div id="tab-posts" class="section-panel">
-    <div class="card">
-        <h3 style="color:var(--accent);margin-bottom:10px;">📢 Manage All User Posts (Delete / Pin)</h3>
-        <button class="btn" style="margin-bottom:12px;" onclick="loadAllFeedPostsForAdmin()">🔄 Refresh Posts List</button>
-        <div id="admin-posts-list"></div>
-    </div>
-</div>
+    <script>
+    (function () {
+        const NEXUS_OFFICIAL_LOGO_SVG =
+            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2310b981'/%3E%3Cstop offset='50%25' stop-color='%2306b6d4'/%3E%3Cstop offset='100%25' stop-color='%233b82f6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='120' height='120' rx='32' fill='%23090d16'/%3E%3Crect x='5' y='5' width='110' height='110' rx='28' fill='none' stroke='url(%23g)' stroke-width='6'/%3E%3Cpath d='M32 86V34h14l28 36V34h14v52H74L46 50v36H32z' fill='url(%23g)'/%3E%3Ccircle cx='94' cy='26' r='8' fill='%2310b981'/%3E%3C/svg%3E";
 
-<!-- =========================================================================
-     TAB 4: USERS & VERIFICATION TICK (✅) MANAGER
-     ========================================================================= -->
-<div id="tab-users" class="section-panel">
-    <div class="card">
-        <h3 style="color:var(--accent);margin-bottom:10px;">👥 Manage Users, Green Tick (✅) & Ban</h3>
-        <button class="btn" style="margin-bottom:12px;" onclick="loadAllUsersForAdmin()">🔄 Load All Users</button>
-        <div id="admin-users-list"></div>
-    </div>
-</div>
+        const CHUNK_CHAR_SIZE = 600000;
+        const VALID_PINS = ["1234", "8905", "2027"];
 
-<!-- Load your existing core/firebase config if present -->
-<script src="core.js"></script>
-<script>
-// =========================================================================
-// 1. ADMIN PIN LOCK (Default: 1234)
-// =========================================================================
-const MASTER_PIN = "1234";
-function unlockVault() {
-    const val = document.getElementById('vault-pin-input').value.trim();
-    if (val === MASTER_PIN) {
-        document.getElementById('pin-lock-screen').style.display = 'none';
-        sessionStorage.setItem('nexus_vault_unlocked', 'true');
-        restartCanvasPreview();
-    } else {
-        alert("❌ गलत PIN! कृपया सही Admin PIN डालें।");
-    }
-}
-if (sessionStorage.getItem('nexus_vault_unlocked') === 'true') {
-    document.getElementById('pin-lock-screen').style.display = 'none';
-}
+        const FIREBASE_CONFIG = {
+            apiKey: "AIzaSyCKMUVSgImQ39LRuREmhqyd7NTyE-TNyrQ",
+            authDomain: "nexus-community-bf99c.firebaseapp.com",
+            projectId: "nexus-community-bf99c",
+            storageBucket: "nexus-community-bf99c.firebasestorage.app",
+            messagingSenderId: "605136574793",
+            appId: "1:605136574793:web:c4c640af6b2f204eb0c296"
+        };
 
-function switchVaultTab(tabName, btn) {
-    document.querySelectorAll('.section-panel').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('tab-' + tabName).classList.add('active');
-    btn.classList.add('active');
-    if (tabName === 'spy') loadAll1v1ChatRooms();
-    if (tabName === 'posts') loadAllFeedPostsForAdmin();
-    if (tabName === 'users') loadAllUsersForAdmin();
-}
+        if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+        const db = firebase.firestore();
 
-// =========================================================================
-// 2. WHATSAPP-STYLE 60FPS PHYSICS CANVAS VIDEO ENGINE
-// =========================================================================
-const canvas = document.getElementById('wa-motion-canvas');
-const ctx = canvas.getContext('2d');
-let animStartTime = performance.now();
-let animFrameId = null;
+        let allPosts = [];
+        let allUsers = [];
+        let pendingBroadcastMedia = { ref: "", mType: "" };
+        let editingPostObj = null;
+        let editingReplacementMedia = null;
 
-// Physics Spring Function (Wahi uchhalne wala bounce jo WhatsApp use karta hai!)
-function springOut(t) {
-    if (t <= 0) return 0;
-    if (t >= 1) return 1;
-    const c4 = (2 * Math.PI) / 3;
-    return Math.pow(2, -9 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
-}
-
-function drawRoundedRect(ctx, x, y, w, h, r, fill, stroke) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); }
-}
-
-function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
-    const words = (text || '').split(' ');
-    let line = '';
-    for (let n = 0; n < words.length; n++) {
-        const testLine = line + words[n] + ' ';
-        const metrics = ctx.measureText(testLine);
-        if (metrics.width > maxWidth && n > 0) {
-            ctx.fillText(line, x, y);
-            line = words[n] + ' ';
-            y += lineHeight;
-        } else {
-            line = testLine;
+        function vToast(msg) {
+            const t = document.getElementById("v-toast");
+            t.textContent = msg;
+            t.style.display = "block";
+            setTimeout(() => (t.style.display = "none"), 2500);
         }
-    }
-    ctx.fillText(line, x, y);
-}
 
-function renderMotionFrame(now) {
-    const elapsed = (now - animStartTime) / 1000; // seconds
-    const loopTime = elapsed % 6.0; // 6 second seamless loop
+        // 1. PIN Unlock
+        const pinLock = document.getElementById("v-pin-lock");
+        const pinInp = document.getElementById("v-pin-input");
+        if (sessionStorage.getItem("nx_vault_unlocked") === "1") {
+            pinLock.style.display = "none";
+            initVaultStreams();
+        }
+        document.getElementById("v-pin-submit").onclick = () => {
+            if (VALID_PINS.includes((pinInp.value || "").trim())) {
+                sessionStorage.setItem("nx_vault_unlocked", "1");
+                pinLock.style.display = "none";
+                initVaultStreams();
+                vToast("🔓 Master Vault Unlocked!");
+            } else {
+                alert("⚠️ Invalid Founder PIN!");
+            }
+        };
+        pinInp.onkeydown = (e) => {
+            if (e.key === "Enter") document.getElementById("v-pin-submit").click();
+        };
 
-    const badge = document.getElementById('v-badge').value;
-    const title = document.getElementById('v-title').value;
-    const desc = document.getElementById('v-desc').value;
-    const icons = (document.getElementById('v-icons').value || '▶️,🍿,🔥').split(',').map(s => s.trim());
-    const b1 = document.getElementById('v-b1').value;
-    const b2 = document.getElementById('v-b2').value;
-    const pill = document.getElementById('v-pill').value;
-    const themeColor = document.getElementById('v-theme').value;
-
-    // 1. Dark WhatsApp Background + Glowing Radial Circle
-    ctx.fillStyle = '#0b141a';
-    ctx.fillRect(0, 0, 540, 960);
-
-    const grad = ctx.createRadialGradient(270, 380, 20, 270, 380, 320);
-    grad.addColorStop(0, themeColor + '44');
-    grad.addColorStop(1, 'transparent');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 540, 960);
-
-    // 2. Top Progress Bar & Nexus Official Header
-    drawRoundedRect(ctx, 30, 32, 480, 6, 3, 'rgba(255,255,255,0.2)');
-    drawRoundedRect(ctx, 30, 32, Math.min(480, (loopTime / 5.8) * 480), 6, 3, '#00e676');
-
-    ctx.fillStyle = themeColor;
-    ctx.beginPath(); ctx.arc(60, 82, 24, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#000'; ctx.font = '900 24px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('N', 60, 90);
-
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'left';
-    ctx.fillText('Nexus Official ✅', 96, 80);
-    ctx.fillStyle = '#8696a0'; ctx.font = '16px sans-serif';
-    ctx.fillText('Feature Explainer', 96, 102);
-
-    // 3. Bouncing Floating Icons (Spring Physics!)
-    icons.slice(0, 3).forEach((icon, i) => {
-        const s = springOut((loopTime - 0.15 * i) * 1.4);
-        const floatY = Math.sin(loopTime * 3 + i) * 10;
-        const cx = 150 + i * 120;
-        const cy = 200 + floatY;
-
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.scale(s, s);
-        ctx.beginPath(); ctx.arc(0, 0, 44, 0, Math.PI * 2);
-        ctx.fillStyle = '#182229'; ctx.fill();
-        ctx.lineWidth = 3; ctx.strokeStyle = themeColor; ctx.stroke();
-        ctx.font = '38px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(icon, 0, 14);
-        ctx.restore();
-    });
-
-    // 4. Center Phone UI Card
-    const cardScale = springOut((loopTime - 0.3) * 1.3);
-    ctx.save();
-    ctx.translate(270, 430);
-    ctx.scale(cardScale, cardScale);
-    drawRoundedRect(ctx, -210, -140, 420, 280, 28, '#182229', '#2a3942');
-
-    // Bubble 1 (Left)
-    if (b1 && loopTime > 0.6) {
-        const b1Scale = springOut((loopTime - 0.6) * 1.5);
-        ctx.save();
-        ctx.translate(-180, -85);
-        ctx.scale(b1Scale, b1Scale);
-        drawRoundedRect(ctx, 0, 0, 310, 64, 18, '#202c33', '#32414b');
-        ctx.fillStyle = '#e9edef'; ctx.font = '18px sans-serif'; ctx.textAlign = 'left';
-        ctx.fillText(b1.substring(0, 34), 16, 38);
-        ctx.restore();
-    }
-
-    // Bubble 2 (Right Green)
-    if (b2 && loopTime > 1.2) {
-        const b2Scale = springOut((loopTime - 1.2) * 1.5);
-        ctx.save();
-        ctx.translate(180, 5);
-        ctx.scale(b2Scale, b2Scale);
-        drawRoundedRect(ctx, -320, -10, 320, 64, 18, '#005c4b', '#00a884');
-        ctx.fillStyle = '#fff'; ctx.font = '18px sans-serif'; ctx.textAlign = 'left';
-        ctx.fillText(b2.substring(0, 34), -302, 28);
-        ctx.restore();
-    }
-
-    // Action Pill Button (Bouncing Pulse)
-    if (pill && loopTime > 1.8) {
-        const pillScale = springOut((loopTime - 1.8) * 1.5) * (1 + Math.sin(loopTime * 6) * 0.04);
-        ctx.save();
-        ctx.translate(0, 95);
-        ctx.scale(pillScale, pillScale);
-        drawRoundedRect(ctx, -165, -24, 330, 48, 24, themeColor);
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 19px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(pill, 0, 7);
-        ctx.restore();
-    }
-    ctx.restore();
-
-    // 5. Bottom Feature Badge, Big Title & Description
-    const textScale = springOut((loopTime - 0.8) * 1.4);
-    ctx.save();
-    ctx.translate(270, 660);
-    ctx.scale(textScale, textScale);
-    drawRoundedRect(ctx, -120, -20, 240, 38, 19, 'rgba(0,230,118,0.16)', '#00e676');
-    ctx.fillStyle = '#00e676'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(badge, 0, 5);
-    ctx.restore();
-
-    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(title, 270, 735);
-
-    ctx.fillStyle = '#94a3b8'; ctx.font = '21px sans-serif'; ctx.textAlign = 'center';
-    wrapCanvasText(ctx, desc, 270, 785, 440, 30);
-
-    animFrameId = requestAnimationFrame(renderMotionFrame);
-}
-
-function restartCanvasPreview() {
-    animStartTime = performance.now();
-    if (!animFrameId) animFrameId = requestAnimationFrame(renderMotionFrame);
-}
-
-// =========================================================================
-// 3. RECORD REAL VIDEO (.WEBM / .MP4) FROM CANVAS
-// =========================================================================
-function recordAndDownloadCanvasVideo() {
-    const status = document.getElementById('studio-status');
-    status.textContent = "🎥 Recording 6-second HD Feature Video... Please wait...";
-    restartCanvasPreview();
-
-    const stream = canvas.captureStream(60);
-    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-    const chunks = [];
-    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-    recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Nexus_Official_Feature_${Date.now()}.webm`;
-        a.click();
-        status.textContent = "✅ Video Downloaded! Aap ise WhatsApp Status ya Story mein laga sakte hain!";
-    };
-    recorder.start();
-    setTimeout(() => recorder.stop(), 6000);
-}
-
-// =========================================================================
-// 4. PUBLISH DIRECTLY TO NEXUS OFFICIAL STORY BAR + FEED POST
-// =========================================================================
-async function publishToOfficialStoryAndPost() {
-    const status = document.getElementById('studio-status');
-    status.textContent = "🚀 Publishing to Nexus Official Story & Feed...";
-
-    let videoDataUrl = document.getElementById('v-direct-url').value.trim();
-    const fileInput = document.getElementById('v-file-upload');
-    if (fileInput.files.length > 0) {
-        const file = fileInput.files[0];
-        videoDataUrl = await new Promise(res => {
-            const r = new FileReader();
-            r.onload = e => res(e.target.result);
-            r.readAsDataURL(file);
+        // Tab Switching
+        document.querySelectorAll(".v-tab-btn").forEach((btn) => {
+            btn.onclick = () => {
+                document.querySelectorAll(".v-tab-btn").forEach((b) => b.classList.remove("active"));
+                document.querySelectorAll(".v-section").forEach((s) => s.classList.remove("active"));
+                btn.classList.add("active");
+                document.getElementById(btn.getAttribute("data-vtab")).classList.add("active");
+            };
         });
-    }
 
-    const storyData = {
-        badge: document.getElementById('v-badge').value.trim(),
-        title: document.getElementById('v-title').value.trim(),
-        desc: document.getElementById('v-desc').value.trim(),
-        icons: document.getElementById('v-icons').value.split(',').map(s => s.trim()),
-        bubble1: document.getElementById('v-b1').value.trim(),
-        bubble2: document.getElementById('v-b2').value.trim(),
-        pill: document.getElementById('v-pill').value.trim(),
-        themeColor: document.getElementById('v-theme').value,
-        videoUrl: videoDataUrl || "",
-        timestamp: Date.now()
-    };
-
-    // Save in LocalStorage + Firebase so it works 100% instantly everywhere
-    const existingStories = JSON.parse(localStorage.getItem('nexus_official_stories') || '[]');
-    existingStories.unshift(storyData);
-    localStorage.setItem('nexus_official_stories', JSON.stringify(existingStories));
-
-    if (typeof db !== 'undefined' && db.collection) {
-        try {
-            await db.collection('official_stories').add(storyData);
-            await db.collection('posts').add({
-                username: "Nexus",
-                authorName: "Nexus",
-                isOfficial: true,
-                isPinned: true,
-                text: `📢 ${storyData.badge}: ${storyData.title}\n\n${storyData.desc}`,
-                videoUrl: storyData.videoUrl,
-                motionCard: storyData,
-                timestamp: Date.now(),
-                likesCount: 1
+        // Push Global Live Update
+        document.getElementById("v-btn-hotreload").onclick = async () => {
+            await db.collection("nexus_config").doc("live_version").set({
+                versionId: "v_" + Date.now(),
+                files: ["core.js", "home.js", "profile.js", "settings.js", "dm.js"],
+                updatedAt: Date.now()
             });
-        } catch (e) { console.warn(e); }
-    }
+            vToast("⚡ Live Hot-Reload Pushed to All Connected Users!");
+        };
 
-    status.textContent = "✅ LIVE! Ab Home Feed ke 'Nexus Official' circle aur Post mein dekhein!";
-    alert("✅ Nexus Official Story और Pinned Post दोनों सफलतापूर्वक लाइव हो गए!");
-}
+        // 2. Photo & Video Upload Helper (Supports up to 50MB Video via Firestore Chunks!)
+        function compressPhoto(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement("canvas");
+                        const MAX = 820;
+                        let w = img.width, h = img.height;
+                        if (w > h && w > MAX) { h = Math.round((h * MAX) / w); w = MAX; }
+                        else if (h > MAX) { w = Math.round((w * MAX) / h); h = MAX; }
+                        canvas.width = w;
+                        canvas.height = h;
+                        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+                        let out = canvas.toDataURL("image/webp", 0.72);
+                        if (!out || out.length > 145000) out = canvas.toDataURL("image/jpeg", 0.65);
+                        resolve(out);
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
 
-// =========================================================================
-// 5. LIVE 1:1 PERSONAL CHAT SPY (ADMIN ONLY)
-// =========================================================================
-async function loadAll1v1ChatRooms() {
-    const list = document.getElementById('spy-rooms-list');
-    const msgBox = document.getElementById('spy-messages-box');
-    list.innerHTML = '<span style="color:var(--muted);">Loading rooms...</span>';
+        function uploadVideoChunked(file, onProgress) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        const b64 = e.target.result;
+                        const total = Math.ceil(b64.length / CHUNK_CHAR_SIZE);
+                        const sid = "postvid_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+                        if (total === 1 && b64.length < 750000) {
+                            onProgress && onProgress(100);
+                            resolve(b64);
+                            return;
+                        }
+                        for (let i = 0; i < total; i++) {
+                            await db.collection("nexus_media_chunks").doc(`${sid}_${i}`).set({
+                                streamId: sid,
+                                index: i,
+                                data: b64.slice(i * CHUNK_CHAR_SIZE, (i + 1) * CHUNK_CHAR_SIZE),
+                                createdAt: Date.now()
+                            });
+                            onProgress && onProgress(Math.round(((i + 1) / total) * 100));
+                        }
+                        resolve(`NX_VIDEO_STREAM:${sid}:${total}`);
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
 
-    if (typeof db === 'undefined' || !db.collection) {
-        list.innerHTML = '<span style="color:var(--danger);">Firebase DB not initialized in core.js</span>';
-        return;
-    }
+        // Bind Official Broadcast Media Input
+        document.getElementById("v-post-media-inp").onchange = async (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            const st = document.getElementById("v-upload-status");
+            const prev = document.getElementById("v-media-preview-box");
+            prev.style.display = "block";
+            const localUrl = URL.createObjectURL(file);
 
-    const snap = await db.collection('chats').get();
-    list.innerHTML = '';
-    if (snap.empty) {
-        list.innerHTML = '<span style="color:var(--muted);">No chat rooms found in "chats" collection.</span>';
-        return;
-    }
+            if (file.type.startsWith("video/")) {
+                prev.innerHTML = `<video src="${localUrl}" controls playsinline style="width:100%; max-height:220px; border-radius:12px; background:#000;"></video>`;
+                st.textContent = "📤 Uploading Video 1%...";
+                const ref = await uploadVideoChunked(file, (pct) => {
+                    st.textContent = `📤 Uploading Video ${pct}%...`;
+                });
+                pendingBroadcastMedia = { ref: ref, mType: "video" };
+                st.textContent = "✅ Official Video Ready to Publish!";
+            } else {
+                prev.innerHTML = `<img src="${localUrl}" style="width:100%; max-height:220px; object-fit:cover; border-radius:12px;" />`;
+                st.textContent = "📤 Compressing HD Photo...";
+                const b64 = await compressPhoto(file);
+                pendingBroadcastMedia = { ref: b64, mType: "image" };
+                st.textContent = "✅ Official HD Photo Ready to Publish!";
+            }
+        };
 
-    snap.forEach(doc => {
-        const btn = document.createElement('button');
-        btn.className = 'tab-btn';
-        btn.textContent = `💬 Room: ${doc.id}`;
-        btn.onclick = () => inspectRoomMessages(doc.id);
-        list.appendChild(btn);
-    });
-}
+        // Publish Official Post Button
+        document.getElementById("v-btn-publish-official").onclick = async function () {
+            const mode = document.getElementById("v-post-author-mode").value;
+            const caption = (document.getElementById("v-post-caption").value || "").trim();
+            const isPinned = document.getElementById("v-post-pinned").checked;
+            const initLikes = Number(document.getElementById("v-post-likes").value || 15);
 
-function inspectRoomMessages(roomId) {
-    const msgBox = document.getElementById('spy-messages-box');
-    msgBox.innerHTML = `<h4 style="color:var(--accent);margin-bottom:10px;">Room ID: ${roomId}</h4>`;
+            if (!caption && !pendingBroadcastMedia.ref) {
+                alert("⚠️ Caption likhein ya Photo/Video select karein!");
+                return;
+            }
 
-    db.collection('chats').doc(roomId).collection('messages').orderBy('timestamp', 'asc').onSnapshot(snap => {
-        msgBox.innerHTML = `<h4 style="color:var(--accent);margin-bottom:10px;">Room ID: ${roomId} (${snap.size} msgs)</h4>`;
-        snap.forEach(doc => {
-            const m = doc.data();
-            const div = document.createElement('div');
-            div.className = 'spy-msg';
-            div.innerHTML = `
-                <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px;">
-                    <span><b>From:</b> ${m.senderName || m.senderId || 'User'}</span>
-                    <span>${new Date(m.timestamp || Date.now()).toLocaleTimeString()}</span>
-                </div>
-                <div>${m.text || ''}</div>
-                ${m.mediaUrl ? `<img src="${m.mediaUrl}" style="max-width:180px;border-radius:8px;margin-top:6px;">` : ''}
-            `;
-            msgBox.appendChild(div);
-        });
-        msgBox.scrollTop = msgBox.scrollHeight;
-    });
-}
+            this.disabled = true;
+            this.textContent = "⏳ Publishing Official Post...";
 
-// =========================================================================
-// 6. POSTS & USERS CONTROL
-// =========================================================================
-async function loadAllFeedPostsForAdmin() {
-    const box = document.getElementById('admin-posts-list');
-    if (typeof db === 'undefined') return;
-    const snap = await db.collection('posts').get();
-    box.innerHTML = '';
-    snap.forEach(doc => {
-        const p = doc.data();
-        const item = document.createElement('div');
-        item.className = 'spy-msg';
-        item.style.display = 'flex';
-        item.style.justifyContent = 'space-between';
-        item.style.alignItems = 'center';
-        item.innerHTML = `
-            <div>
-                <b>@${p.username || p.authorName || 'User'}</b>: ${(p.text || p.caption || 'Media Post').substring(0, 60)}
-            </div>
-            <button class="btn btn-danger" onclick="deletePostFromVault('${doc.id}')">🗑️ Delete</button>
-        `;
-        box.appendChild(item);
-    });
-}
+            const isNexusSys = mode === "nexus_official";
+            const postPayload = {
+                username: isNexusSys ? "nexus_official" : "mohiy",
+                author: isNexusSys ? "Nexus" : "Mohit_01",
+                bio: isNexusSys ? "Official Platform Announcement" : "Founder • IIT-JEE Aspirant",
+                dp: isNexusSys ? NEXUS_OFFICIAL_LOGO_SVG : "",
+                verified: true,
+                pinned: Boolean(isPinned),
+                isOfficial: Boolean(isNexusSys),
+                content: caption,
+                text: caption,
+                image: pendingBroadcastMedia.ref || "",
+                videoUrl: pendingBroadcastMedia.mType === "video" ? pendingBroadcastMedia.ref : "",
+                mediaType: pendingBroadcastMedia.mType || "text",
+                likes: initLikes,
+                likedBy: ["mohiy"],
+                views: initLikes * 2,
+                comments: [],
+                createdAt: Date.now()
+            };
 
-async function deletePostFromVault(postId) {
-    if (!confirm("Delete this post permanently?")) return;
-    await db.collection('posts').doc(postId).delete();
-    loadAllFeedPostsForAdmin();
-}
+            await db.collection("nexus_real_posts").add(postPayload);
+            document.getElementById("v-post-caption").value = "";
+            document.getElementById("v-media-preview-box").style.display = "none";
+            document.getElementById("v-upload-status").textContent = "Supports HD Images & MP4/WebM Videos";
+            pendingBroadcastMedia = { ref: "", mType: "" };
+            this.disabled = false;
+            this.textContent = "🚀 Publish Official Post Now";
+            vToast("👑 Official Post Published to Home Feed!");
+        };
 
-async function loadAllUsersForAdmin() {
-    const box = document.getElementById('admin-users-list');
-    if (typeof db === 'undefined') return;
-    const snap = await db.collection('users').get();
-    box.innerHTML = '';
-    snap.forEach(doc => {
-        const u = doc.data();
-        const row = document.createElement('div');
-        row.className = 'spy-msg';
-        row.style.display = 'flex';
-        row.style.justifyContent = 'space-between';
-        row.style.alignItems = 'center';
-        row.innerHTML = `
-            <div>
-                <b>${u.username || u.name || doc.id}</b> ${u.verified ? '✅' : ''}
-                <div style="font-size:11px;color:var(--muted);">${u.isOnline ? '🟢 Online' : '⚪ Offline'}</div>
-            </div>
-            <div style="display:flex;gap:6px;">
-                <button class="btn" onclick="toggleVerifyUser('${doc.id}', ${!u.verified})">${u.verified ? 'Remove ✅' : 'Give ✅'}</button>
-            </div>
-        `;
-        box.appendChild(row);
-    });
-}
+        // 3. Real-Time Streams for Posts, Users & Chats
+        function initVaultStreams() {
+            // Stream All Posts
+            db.collection("nexus_real_posts").orderBy("createdAt", "desc").limit(50).onSnapshot((snap) => {
+                allPosts = [];
+                snap.forEach((d) => {
+                    const p = d.data();
+                    p.id = d.id;
+                    allPosts.push(p);
+                });
+                document.getElementById("v-posts-count").textContent = allPosts.length + " Posts";
+                renderVaultPostsList();
+            });
 
-async function toggleVerifyUser(uid, state) {
-    await db.collection('users').doc(uid).set({ verified: state }, { merge: true });
-    loadAllUsersForAdmin();
-}
+            // Stream All Users
+            db.collection("nexus_accounts").limit(80).onSnapshot((snap) => {
+                allUsers = [];
+                snap.forEach((d) => allUsers.push(d.data()));
+                renderVaultUsersList();
+            });
 
-restartCanvasPreview();
-</script>
+            // Stream Recent Chat Media
+            db.collection("nexus_chat_media_v6").orderBy("createdAt", "desc").limit(30).onSnapshot((snap) => {
+                const box = document.getElementById("v-chats-list");
+                const items = [];
+                snap.forEach((d) => {
+                    const m = d.data();
+                    m.id = d.id;
+                    items.push(m);
+                });
+                box.innerHTML = items
+                    .map(
+                        (m) => `
+                        <div class="v-card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px;">
+                            <div>
+                                <div style="font-size:12.5px; font-weight:800; color:#34d399;">@${m.sender || "user"} → ${m.roomKey || ""}</div>
+                                <div style="font-size:11px; color:#94a3b8;">Type: ${m.mediaType || "image"} ${m.viewOnce ? "• 1️⃣ View-Once" : ""}</div>
+                            </div>
+                            <button type="button" data-del-media="${m.id}" class="v-btn" style="background:#e11d48; color:#fff;">Delete 🗑️</button>
+                        </div>
+                    `
+                    )
+                    .join("");
+
+                box.querySelectorAll("[data-del-media]").forEach((b) => {
+                    b.onclick = async () => {
+                        await db.collection("nexus_chat_media_v6").doc(b.getAttribute("data-del-media")).delete();
+                        vToast("🗑️ Media Deleted!");
+                    };
+                });
+            });
+        }
+
+        function renderVaultPostsList() {
+            const box = document.getElementById("v-posts-list");
+            box.innerHTML = allPosts
+                .map(
+                    (p, idx) => `
+                    <div class="v-card">
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                            <div>
+                                <span style="font-size:13.5px; font-weight:900; color:#f8fafc;">${p.author || p.username || "Member"}</span>
+                                <span style="font-size:11px; color:#38bdf8; margin-left:6px;">@${p.username || ""}</span>
+                                ${p.pinned ? `<span style="background:#f59e0b; color:#020617; font-size:9.5px; font-weight:900; padding:2px 6px; border-radius:99px; margin-left:6px;">📌 PINNED</span>` : ""}
+                            </div>
+                            <span style="font-size:11px; color:#64748b;">❤️ ${p.likes || 0} • 👁️ ${p.views || 0}</span>
+                        </div>
+                        <div style="font-size:12.5px; color:#cbd5e1; margin-bottom:10px; white-space:pre-line;">${(p.content || p.text || "(Media Post)").slice(0, 180)}</div>
+                        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                            <button type="button" data-edit-idx="${idx}" class="v-btn" style="background:#38bdf8; color:#020617;">✏️ Edit Post / Media</button>
+                            <button type="button" data-pin-idx="${idx}" class="v-btn" style="background:#1e293b; border:1px solid #fbbf24; color:#fbbf24;">${p.pinned ? "Unpin" : "📌 Pin"}</button>
+                            <button type="button" data-boost-idx="${idx}" class="v-btn" style="background:#1e293b; border:1px solid #10b981; color:#34d399;">🚀 Boost Top</button>
+                            <button type="button" data-del-post="${p.id}" class="v-btn" style="background:#e11d48; color:#fff; margin-left:auto;">🗑️</button>
+                        </div>
+                    </div>
+                `
+                )
+                .join("");
+
+            box.querySelectorAll("[data-edit-idx]").forEach((b) => {
+                b.onclick = () => openPostEditorModal(allPosts[Number(b.getAttribute("data-edit-idx"))]);
+            });
+
+            box.querySelectorAll("[data-pin-idx]").forEach((b) => {
+                b.onclick = async () => {
+                    const p = allPosts[Number(b.getAttribute("data-pin-idx"))];
+                    if (!p) return;
+                    await db.collection("nexus_real_posts").doc(p.id).set({ pinned: !p.pinned }, { merge: true });
+                    vToast(p.pinned ? "Unpinned Post" : "📌 Pinned Post to Top!");
+                };
+            });
+
+            box.querySelectorAll("[data-boost-idx]").forEach((b) => {
+                b.onclick = async () => {
+                    const p = allPosts[Number(b.getAttribute("data-boost-idx"))];
+                    if (!p) return;
+                    await db.collection("nexus_real_posts").doc(p.id).set({ createdAt: Date.now() }, { merge: true });
+                    vToast("🚀 Post Boosted to Top of Feed!");
+                };
+            });
+
+            box.querySelectorAll("[data-del-post]").forEach((b) => {
+                b.onclick = async () => {
+                    if (!confirm("🗑️ Delete this post permanently for everyone?")) return;
+                    await db.collection("nexus_real_posts").doc(b.getAttribute("data-del-post")).delete();
+                    vToast("🗑️ Post Deleted!");
+                };
+            });
+        }
+
+        function openPostEditorModal(postObj) {
+            editingPostObj = postObj;
+            editingReplacementMedia = null;
+            document.getElementById("ve-author").value = postObj.author || postObj.username || "";
+            document.getElementById("ve-caption").value = postObj.content || postObj.text || "";
+            document.getElementById("ve-likes").value = Number(postObj.likes || 0);
+            document.getElementById("ve-views").value = Number(postObj.views || 0);
+            document.getElementById("ve-pinned").checked = Boolean(postObj.pinned);
+            document.getElementById("ve-replace-status").textContent = postObj.image ? "Current post has media attached" : "No media attached";
+            document.getElementById("v-edit-post-modal").style.display = "flex";
+        }
+
+        document.getElementById("v-close-edit-modal").onclick = () => {
+            document.getElementById("v-edit-post-modal").style.display = "none";
+        };
+
+        document.getElementById("ve-replace-media").onchange = async (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            const st = document.getElementById("ve-replace-status");
+            if (file.type.startsWith("video/")) {
+                st.textContent = "📤 Uploading replacement video 1%...";
+                const ref = await uploadVideoChunked(file, (pct) => {
+                    st.textContent = `📤 Uploading replacement video ${pct}%...`;
+                });
+                editingReplacementMedia = { ref: ref, mType: "video" };
+                st.textContent = "✅ New Video Ready! Tap Save Changes.";
+            } else {
+                st.textContent = "📤 Compressing replacement photo...";
+                const b64 = await compressPhoto(file);
+                editingReplacementMedia = { ref: b64, mType: "image" };
+                st.textContent = "✅ New Photo Ready! Tap Save Changes.";
+            }
+        };
+
+        document.getElementById("ve-remove-media-btn").onclick = () => {
+            editingReplacementMedia = { ref: "", mType: "text" };
+            document.getElementById("ve-replace-status").textContent = "🗑️ Media will be removed on Save";
+        };
+
+        document.getElementById("ve-save-btn").onclick = async () => {
+            if (!editingPostObj) return;
+            const newAuthor = (document.getElementById("ve-author").value || "").trim();
+            const newCap = (document.getElementById("ve-caption").value || "").trim();
+            const newLikes = Number(document.getElementById("ve-likes").value || 0);
+            const newViews = Number(document.getElementById("ve-views").value || 0);
+            const newPinned = document.getElementById("ve-pinned").checked;
+
+            const updateData = {
+                author: newAuthor,
+                content: newCap,
+                text: newCap,
+                likes: newLikes,
+                views: newViews,
+                pinned: Boolean(newPinned)
+            };
+
+            if (editingReplacementMedia !== null) {
+                updateData.image = editingReplacementMedia.ref;
+                updateData.videoUrl = editingReplacementMedia.mType === "video" ? editingReplacementMedia.ref : "";
+                updateData.mediaType = editingReplacementMedia.mType;
+            }
+
+            await db.collection("nexus_real_posts").doc(editingPostObj.id).set(updateData, { merge: true });
+            document.getElementById("v-edit-post-modal").style.display = "none";
+            vToast("✅ Post Updated Live!");
+        };
+
+        function renderVaultUsersList() {
+            const q = (document.getElementById("v-user-search").value || "").toLowerCase().trim();
+            const box = document.getElementById("v-users-list");
+            const filtered = allUsers.filter((u) => {
+                if (!u || !u.username) return false;
+                if (!q) return true;
+                return (
+                    u.username.toLowerCase().includes(q) ||
+                    (u.name && u.name.toLowerCase().includes(q)) ||
+                    (u.email && u.email.toLowerCase().includes(q))
+                );
+            });
+
+            box.innerHTML = filtered
+                .map(
+                    (u) => `
+                    <div class="v-card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px;">
+                        <div>
+                            <div style="font-size:13.5px; font-weight:900; color:#f8fafc;">
+                                ${u.name || u.username} ${u.verified || u.googleVerified ? "✅" : ""}
+                            </div>
+                            <div style="font-size:11px; color:#34d399;">@${u.username} ${u.email ? "• " + u.email : ""}</div>
+                            <div style="font-size:10.5px; color:#94a3b8;">PIN/Pass: ${u.authPin || u.pin || "None"} • Followers: ${(u.followersList || []).length}</div>
+                        </div>
+                        <div style="display:flex; gap:6px;">
+                            <button type="button" data-verify-u="${u.username}" class="v-btn" style="background:#1e293b; border:1px solid #10b981; color:#34d399;">✓ Verify</button>
+                            <button type="button" data-del-u="${u.username}" class="v-btn" style="background:#e11d48; color:#fff;">🗑️</button>
+                        </div>
+                    </div>
+                `
+                )
+                .join("");
+
+            box.querySelectorAll("[data-verify-u]").forEach((b) => {
+                b.onclick = async () => {
+                    const uname = b.getAttribute("data-verify-u");
+                    await db.collection("nexus_accounts").doc(uname).set({ verified: true, googleVerified: true }, { merge: true });
+                    vToast("✅ Verified @" + uname);
+                };
+            });
+
+            box.querySelectorAll("[data-del-u]").forEach((b) => {
+                b.onclick = async () => {
+                    const uname = b.getAttribute("data-del-u");
+                    if (!confirm("Delete account @" + uname + "?")) return;
+                    await db.collection("nexus_accounts").doc(uname).delete();
+                    vToast("🗑️ Deleted @" + uname);
+                };
+            });
+        }
+
+        document.getElementById("v-user-search").oninput = renderVaultUsersList;
+    })();
+    </script>
 </body>
 </html>
