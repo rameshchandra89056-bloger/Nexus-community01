@@ -3306,167 +3306,100 @@
         }
     })();
     </script>
-<script>
-(function() {
-    // 1. CLEAN CSS: Hide Chrome Video Controls & Chat "..." Clutter
-    if (!document.getElementById('nx-final-clean-css')) {
-        const st = document.createElement('style');
-        st.id = 'nx-final-clean-css';
-        st.innerHTML = `
-            /* Completely remove Chrome default video controls */
-            video::-webkit-media-controls,
-            video::-webkit-media-controls-enclosure,
-            video::-webkit-media-controls-panel {
-                display: none !important;
-                opacity: 0 !important;
-            }
-            /* Full-screen WhatsApp Official Video Story Container */
-            #nx-real-video-story-modal {
-                position: fixed; inset: 0; background: #000; z-index: 999999;
-                display: flex; flex-direction: column; justify-content: space-between;
-                user-select: none; font-family: sans-serif;
-            }
-            #nx-real-video-story-modal video {
-                position: absolute; inset: 0; width: 100%; height: 100%;
-                object-fit: contain; background: #0b141a; z-index: 1;
-            }
-            .nx-story-top-ui, .nx-story-bottom-ui {
-                position: relative; z-index: 10; padding: 16px;
-                background: linear-gradient(to bottom, rgba(0,0,0,0.75), transparent);
-            }
-            .nx-story-bottom-ui {
-                background: linear-gradient(to top, rgba(0,0,0,0.85), transparent);
-                text-align: center; padding-bottom: 28px;
-            }
-        `;
-        document.head.appendChild(st);
+    <script>
+(function () {
+    if (window.__NX_OFFICIAL_STORY_V2__) return;
+    window.__NX_OFFICIAL_STORY_V2__ = true;
+
+    const LOGO = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Crect width='120' height='120' rx='30' fill='%23090d16'/%3E%3Cpath d='M30 88V32h15l30 38V32h15v56H75L45 50v38z' fill='%2310b981'/%3E%3C/svg%3E";
+    const STYLE = `
+      #nx-real-video-story-modal{position:fixed;inset:0;background:#000;z-index:999999;display:flex;flex-direction:column;justify-content:space-between;color:#fff;font-family:system-ui,sans-serif;}
+      #nx-real-video-story-modal .nxsv-stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#000;}
+      #nx-real-video-story-modal .nxsv-stage img,#nx-real-video-story-modal .nxsv-stage video{width:100%;height:100%;object-fit:contain;background:#000;}
+      #nx-real-video-story-modal .nxsv-top{position:relative;z-index:5;padding:14px 14px 34px;background:linear-gradient(#000b,transparent);}
+      #nx-real-video-story-modal .nxsv-bottom{position:relative;z-index:5;padding:44px 16px 28px;background:linear-gradient(transparent,#000d);}
+      #nx-real-video-story-modal button{border:0;cursor:pointer;color:#fff;background:#ffffff22;border-radius:20px;padding:8px 12px;font-weight:800;}
+      #nx-real-video-story-modal .nxsv-bars{display:flex;gap:4px;margin-bottom:14px;}
+      #nx-real-video-story-modal .nxsv-bars span{height:3px;background:#ffffff55;flex:1;border-radius:5px;overflow:hidden;}
+      #nx-real-video-story-modal .nxsv-bars i{display:block;height:100%;width:0;background:#fff;}
+      #nx-real-video-story-modal .nxsv-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;margin-top:12px;}
+      .nx-official-story-entry{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:flex-start!important;gap:5px!important;min-width:66px!important;max-width:76px!important;padding:2px!important;border:0!important;background:transparent!important;color:inherit!important;cursor:pointer!important;}
+      .nx-official-story-entry .nxsv-ring{width:58px;height:58px;border-radius:50%;padding:3px;background:conic-gradient(#10b981,#38bdf8,#6366f1,#10b981);display:grid;place-items:center;}
+      .nx-official-story-entry img{width:100%;height:100%;border-radius:50%;object-fit:cover;border:2px solid #090d16;background:#090d16;}
+      .nx-official-story-entry small{font-size:10px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:72px;}
+    `;
+    const style=document.createElement('style'); style.textContent=STYLE; document.head.appendChild(style);
+
+    function dbRef(){ return window.Nexus && Nexus.db && typeof Nexus.db.collection==='function' ? Nexus.db : (window.firebase && firebase.firestore ? firebase.firestore() : null); }
+    function viewerId(){ const uname=getUser(); if(uname && uname!=='guest') return String(uname).toLowerCase(); let id=localStorage.getItem('nx_story_viewer_id'); if(!id){id='nxv_'+Math.random().toString(36).slice(2)+Date.now().toString(36);localStorage.setItem('nx_story_viewer_id',id);} return id; }
+    function getUser(){ try{const a=JSON.parse(localStorage.getItem('nx_active_account')||'null');return (a&&a.username)||'guest';}catch(e){return 'guest';} }
+    function activeStory(s){const now=Date.now();return s&&s.isOfficial===true&&!s.archived&&(Number(s.scheduledAt||0)<=now)&&(Number(s.expiresAt||0)>now||s.isHighlight===true);}
+    async function getStories(){const db=dbRef();if(!db)throw new Error('Nexus database is not ready.');const snap=await db.collection('official_stories').orderBy('timestamp','desc').limit(100).get();const out=[];snap.forEach(d=>{const x=d.data()||{};x.id=d.id;if(activeStory(x))out.push(x);});return out.sort((a,b)=>(Number(a.timestamp||0)-Number(b.timestamp||0)));}
+    async function loadAsset(item,prefix){
+      const inline=item[prefix+'Inline']; if(inline)return inline;
+      const direct=item[prefix+'Url']; if(direct)return direct;
+      const sid=item[prefix+'StreamId'], total=Number(item[prefix+'TotalChunks']||0); if(!sid||!total)return '';
+      const db=dbRef(); if(!db)throw new Error('Database not ready.');
+      const parts=[]; for(let i=0;i<total;i++){const d=await db.collection('nexus_media_chunks').doc(sid+'_'+i).get();if(!d.exists||!d.data().data)throw new Error('Story media is incomplete.');parts.push(d.data().data);}
+      return parts.join('');
     }
+    function escapeText(v){return String(v||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
-    // 2. FULL-SCREEN WHATSAPP OFFICIAL VIDEO STORY PLAYER
-    // (Plays your real .mp4/.webm video uploaded from vault.html + fallback animated slides)
-    window.openNexusOfficialStory = async function() {
-        document.getElementById('nx-real-video-story-modal')?.remove();
+    let liveStories=[];
+    function installStoryRing(){
+      const bar=document.getElementById('nx-stories-bar'); if(!bar)return;
+      let btn=bar.querySelector('.nx-official-story-entry');
+      if(!btn){btn=document.createElement('button');btn.type='button';btn.className='nx-official-story-entry';btn.innerHTML='<span class="nxsv-ring"><img alt="Nexus Official" src="'+LOGO+'"></span><small>Nexus Official</small>';btn.addEventListener('click',()=>window.openNexusOfficialStory());bar.prepend(btn);}
+      btn.style.display=liveStories.length?'flex':'none';
+    }
+    const barObserver=new MutationObserver(()=>installStoryRing());
+    function startStoryFeed(){
+      const db=dbRef(); if(!db)return;
+      try{db.collection('official_stories').orderBy('timestamp','desc').limit(100).onSnapshot(snap=>{liveStories=[];snap.forEach(d=>{const x=d.data()||{};x.id=d.id;if(activeStory(x))liveStories.push(x);});installStoryRing();},err=>console.warn('Official story feed:',err));}catch(e){console.warn(e);}
+      barObserver.observe(document.body,{childList:true,subtree:true}); installStoryRing();
+    }
+    window.addEventListener('load',()=>{let n=0;const t=setInterval(()=>{if(dbRef()){clearInterval(t);startStoryFeed();}if(++n>40)clearInterval(t);},500);});
 
-        let stories = JSON.parse(localStorage.getItem('nexus_official_stories') || '[]');
-
-        if (typeof db !== 'undefined' && db.collection) {
-            try {
-                const snap = await db.collection('official_stories').orderBy('timestamp', 'desc').limit(6).get();
-                const cloudStories = [];
-                snap.forEach(doc => cloudStories.push(doc.data()));
-                if (cloudStories.length > 0) stories = cloudStories;
-            } catch (e) {}
-        }
-
-        // Agar abhi tak koi video upload nahi ki hai, toh default Official Story dikhao
-        if (stories.length === 0) {
-            stories = [{
-                badge: "✨ OFFICIAL UPDATE",
-                title: "Welcome to Nexus 2.0",
-                desc: "Enjoy 1:1 YouTube Watch Party, View-Once Secret Photos & Instant Voice Notes!",
-                videoUrl: ""
-            }];
-        }
-
-        let currentIdx = 0;
-        let fallbackTimer = null;
-
-        const modal = document.createElement('div');
-        modal.id = 'nx-real-video-story-modal';
-        modal.innerHTML = `
-            <div class="nx-story-top-ui">
-                <div style="display:flex;gap:5px;margin-bottom:12px;">
-                    ${stories.map((_, i) => `<div style="flex:1;height:3px;background:rgba(255,255,255,0.3);border-radius:3px;overflow:hidden;"><div id="real-st-bar-${i}" style="width:0%;height:100%;background:#00e676;"></div></div>`).join('')}
-                </div>
-                <div style="display:flex;align-items:center;justify-content:space-between;color:#fff;">
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <div style="width:38px;height:38px;border-radius:50%;background:#00a884;color:#000;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;">N</div>
-                        <div>
-                            <div style="font-weight:bold;font-size:15px;">Nexus <span style="color:#00e676;">✔</span></div>
-                            <div style="font-size:11px;color:#cbd5e1;">Official Video Story</div>
-                        </div>
-                    </div>
-                    <div style="display:flex;gap:12px;align-items:center;">
-                        <button id="st-sound-toggle" style="background:rgba(255,255,255,0.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:16px;cursor:pointer;">🔊</button>
-                        <button id="st-close-modal" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer;">✖</button>
-                    </div>
-                </div>
-            </div>
-
-            <div id="st-media-stage" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;"></div>
-
-            <div class="nx-story-bottom-ui" id="st-caption-box"></div>
-        `;
-        document.body.appendChild(modal);
-
-        let isMuted = false;
-        document.getElementById('st-sound-toggle').onclick = (e) => {
-            e.stopPropagation();
-            isMuted = !isMuted;
-            e.target.textContent = isMuted ? '🔇' : '🔊';
-            const activeVid = modal.querySelector('video');
-            if (activeVid) activeVid.muted = isMuted;
-        };
-
-        function loadStorySlide(idx) {
-            clearTimeout(fallbackTimer);
-            if (idx >= stories.length) { modal.remove(); return; }
-            if (idx < 0) idx = 0;
-            currentIdx = idx;
-
-            stories.forEach((_, i) => {
-                const bar = document.getElementById(`real-st-bar-${i}`);
-                if (bar) { bar.style.transition = 'none'; bar.style.width = i < idx ? '100%' : '0%'; }
-            });
-
-            const item = stories[idx];
-            const stage = document.getElementById('st-media-stage');
-            const caption = document.getElementById('st-caption-box');
-            const activeBar = document.getElementById(`real-st-bar-${idx}`);
-
-            caption.innerHTML = `
-                <span style="background:rgba(0,230,118,0.2);color:#00e676;border:1px solid #00e676;padding:4px 12px;border-radius:14px;font-size:11px;font-weight:bold;">${item.badge || '✨ NEW FEATURE'}</span>
-                <h2 style="color:#fff;font-size:22px;margin:10px 0 6px;">${item.title || ''}</h2>
-                <p style="color:#cbd5e1;font-size:14px;max-width:320px;margin:0 auto;">${item.desc || ''}</p>
-            `;
-
-            // Agar asli .mp4/.webm video hai toh full-screen video chalao!
-            if (item.videoUrl) {
-                stage.innerHTML = `<video id="st-active-vid" src="${item.videoUrl}" autoplay playsinline webkit-playsinline></video>`;
-                const vid = document.getElementById('st-active-vid');
-                vid.muted = isMuted;
-                vid.play().catch(() => { vid.muted = true; vid.play(); });
-
-                vid.ontimeupdate = () => {
-                    if (vid.duration && activeBar) {
-                        activeBar.style.width = ((vid.currentTime / vid.duration) * 100) + '%';
-                    }
-                };
-                vid.onended = () => loadStorySlide(currentIdx + 1);
-            } else {
-                // Fallback Bouncing Card agar video URL khali hai
-                stage.innerHTML = `
-                    <div style="background:#182229;padding:22px;border-radius:22px;border:1.5px solid #00a884;max-width:290px;text-align:center;">
-                        <div style="font-size:42px;margin-bottom:12px;">${(item.icons || ['▶️','🍿','🔥']).join(' ')}</div>
-                        ${item.bubble1 ? `<div style="background:#202c33;color:#fff;padding:10px 14px;border-radius:14px;margin-bottom:8px;font-size:13px;">${item.bubble1}</div>` : ''}
-                        ${item.bubble2 ? `<div style="background:#005c4b;color:#fff;padding:10px 14px;border-radius:14px;font-size:13px;">${item.bubble2}</div>` : ''}
-                    </div>
-                `;
-                setTimeout(() => {
-                    if (activeBar) { activeBar.style.transition = 'width 5s linear'; activeBar.style.width = '100%'; }
-                }, 50);
-                fallbackTimer = setTimeout(() => loadStorySlide(currentIdx + 1), 5100);
-            }
-        }
-
-        modal.onclick = (e) => {
-            if (e.target.id === 'st-close-modal') { clearTimeout(fallbackTimer); modal.remove(); return; }
-            if (e.clientX < window.innerWidth / 3) loadStorySlide(currentIdx - 1);
-            else loadStorySlide(currentIdx + 1);
-        };
-
-        loadStorySlide(0);
+    window.openNexusOfficialStory=async function(targetId){
+      const old=document.getElementById('nx-real-video-story-modal');if(old)old.remove();
+      let stories;try{stories=await getStories();}catch(e){alert(e.message||'Stories load nahi ho sakin.');return;}
+      if(!stories.length){if(window.Nexus&&Nexus.toast)Nexus.toast('Abhi koi active Nexus Official Story nahi hai.');return;}
+      let index=targetId?Math.max(0,stories.findIndex(s=>s.id===targetId)):0;if(index<0)index=0;
+      const modal=document.createElement('div');modal.id='nx-real-video-story-modal';
+      modal.innerHTML=`<div class="nxsv-stage" id="nxsv-stage"></div><div class="nxsv-top"><div class="nxsv-bars" id="nxsv-bars">${stories.map((s,i)=>`<span><i id="nxsv-progress-${i}"></i></span>`).join('')}</div><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><div style="display:flex;align-items:center;gap:9px"><img src="${LOGO}" style="width:38px;height:38px;border-radius:50%;border:2px solid #10b981"/><div><b>Nexus Official ✓</b><div style="font-size:11px;color:#cbd5e1" id="nxsv-time"></div></div></div><div style="display:flex;gap:6px"><button id="nxsv-pause">Ⅱ</button><button id="nxsv-mute">🔊</button><button id="nxsv-close">✕</button></div></div></div><div class="nxsv-bottom"><div id="nxsv-caption" style="text-align:center"></div><div class="nxsv-actions"><button id="nxsv-like">♡ Like</button><button id="nxsv-share">↗ Share</button><button id="nxsv-reply">↩ Reply</button></div><div id="nxsv-poll" style="text-align:center;margin-top:10px"></div></div>`;
+      document.body.appendChild(modal);
+      let timer=null,paused=false,muted=true,currentMedia=null;
+      const db=dbRef(), uid=viewerId();
+      const close=()=>{clearTimeout(timer);if(currentMedia&&currentMedia.pause)currentMedia.pause();modal.remove();};
+      modal.querySelector('#nxsv-close').onclick=close;
+      modal.querySelector('#nxsv-pause').onclick=()=>{paused=!paused;const v=modal.querySelector('video');const a=modal.querySelector('audio');if(v){if(paused)v.pause();else v.play().catch(()=>{});}if(a){if(paused)a.pause();else a.play().catch(()=>{});}modal.querySelector('#nxsv-pause').textContent=paused?'▶':'Ⅱ';};
+      modal.querySelector('#nxsv-mute').onclick=()=>{muted=!muted;const v=modal.querySelector('video');if(v)v.muted=muted;const a=modal.querySelector('audio');if(a)a.muted=muted;modal.querySelector('#nxsv-mute').textContent=muted?'🔇':'🔊';};
+      async function shareStory(s){const url=location.origin+location.pathname+'?story='+encodeURIComponent(s.id);const data={title:'Nexus Official Story',text:s.title||'Nexus Community Story',url};try{if(navigator.share)await navigator.share(data);else{await navigator.clipboard.writeText(url);if(window.Nexus&&Nexus.toast)Nexus.toast('Story link copied!');}}catch(e){try{await navigator.clipboard.writeText(url);if(window.Nexus&&Nexus.toast)Nexus.toast('Story link copied!');}catch(_){}}}
+      async function show(i){clearTimeout(timer);if(i<0)i=0;if(i>=stories.length){close();return;}index=i;const s=stories[index];
+        stories.forEach((_,j)=>{const p=modal.querySelector('#nxsv-progress-'+j);if(p)p.style.width=j<index?'100%':'0%';});
+        modal.querySelector('#nxsv-time').textContent=new Date(Number(s.timestamp||s.createdAt||Date.now())).toLocaleString();
+        const stage=modal.querySelector('#nxsv-stage');stage.innerHTML='';currentMedia=null;
+        const cap=modal.querySelector('#nxsv-caption');cap.innerHTML=`<div style="font-weight:900;font-size:20px;margin-bottom:5px">${escapeText(s.title||'Nexus Official')}</div><div style="font-size:14px;color:#e2e8f0;white-space:pre-wrap">${escapeText(s.caption||s.desc||'')}</div>${s.stickerText?`<div style="display:inline-block;margin-top:9px;padding:8px 13px;border-radius:20px;background:#10b981;color:#052e2b;font-weight:900">${escapeText(s.stickerText)}</div>`:''}`;
+        const likeBtn=modal.querySelector('#nxsv-like');let liked=Array.isArray(s.likedBy)&&s.likedBy.includes(uid);likeBtn.textContent=(liked?'♥':'♡')+' Like · '+Number(s.likes||0);
+        likeBtn.onclick=async()=>{try{const ref=db.collection('official_stories').doc(s.id);await ref.update({likedBy:liked?firebase.firestore.FieldValue.arrayRemove(uid):firebase.firestore.FieldValue.arrayUnion(uid),likes:firebase.firestore.FieldValue.increment(liked?-1:1)});s.likedBy=s.likedBy||[];s.likedBy=liked?s.likedBy.filter(x=>x!==uid):s.likedBy.concat(uid);s.likes=Math.max(0,Number(s.likes||0)+(liked?-1:1));liked=!liked;likeBtn.textContent=(liked?'♥':'♡')+' Like · '+s.likes;}catch(e){alert('Like save nahi hua: '+e.message);}};
+        modal.querySelector('#nxsv-share').onclick=()=>shareStory(s);
+        modal.querySelector('#nxsv-reply').onclick=async()=>{const msg=prompt('Nexus Official ko reply bhejein:');if(!msg||!msg.trim())return;try{await db.collection('official_stories').doc(s.id).set({replies:firebase.firestore.FieldValue.arrayUnion({username:getUser(),text:msg.trim().slice(0,500),createdAt:Date.now()})},{merge:true});if(window.Nexus&&Nexus.toast)Nexus.toast('Reply sent!');}catch(e){alert('Reply save nahi hua: '+e.message);}};
+        const poll=modal.querySelector('#nxsv-poll');poll.innerHTML='';
+        if(s.pollQuestion&&Array.isArray(s.pollOptions)&&s.pollOptions.length){if(Array.isArray(s.pollVoters)&&s.pollVoters.includes(uid)){poll.innerHTML='<small>✓ You already voted</small>';}else{poll.innerHTML='<div style="font-weight:900;margin-bottom:7px">'+escapeText(s.pollQuestion)+'</div>'+s.pollOptions.map((o,j)=>'<button data-poll="'+j+'" style="margin:3px">'+escapeText(o)+'</button>').join('');poll.querySelectorAll('[data-poll]').forEach(b=>b.onclick=async()=>{try{const n=Number(b.dataset.poll);await db.collection('official_stories').doc(s.id).update({['pollVotes.'+n]:firebase.firestore.FieldValue.increment(1),pollVoters:firebase.firestore.FieldValue.arrayUnion(uid)});s.pollVoters=(s.pollVoters||[]).concat(uid);poll.innerHTML='<small>✓ Your vote was recorded</small>';}catch(e){alert('Vote save nahi hua: '+e.message);}});}}
+        try{const seen=Array.isArray(s.viewedBy)&&s.viewedBy.includes(uid);if(!seen){await db.collection('official_stories').doc(s.id).update({viewedBy:firebase.firestore.FieldValue.arrayUnion(uid),views:firebase.firestore.FieldValue.increment(1)});s.viewedBy=(s.viewedBy||[]).concat(uid);s.views=Number(s.views||0)+1;}}catch(e){console.warn('Story view tracking:',e);}
+        const media=await loadAsset(s,'media');
+        if(s.mediaType==='video'){const v=document.createElement('video');v.src=media;v.autoplay=true;v.playsInline=true;v.controls=true;v.muted=muted;v.style.cssText='width:100%;height:100%;object-fit:contain';stage.appendChild(v);currentMedia=v;v.onended=()=>show(index+1);v.play().catch(()=>{});}
+        else if(s.mediaType==='image'){const im=document.createElement('img');im.src=media;im.alt='Nexus Official Story';stage.appendChild(im);}
+        else {stage.innerHTML='<div style="padding:30px;text-align:center;font-size:24px;font-weight:900">'+escapeText(s.caption||s.title||'Nexus Official')+'</div>';}
+        if(s.musicInline||s.musicUrl||s.musicStreamId){try{const src=await loadAsset(s,'music');const a=document.createElement('audio');a.src=src;a.loop=true;a.autoplay=true;a.controls=true;a.style.cssText='position:absolute;bottom:18px;left:12%;width:76%;z-index:4';stage.appendChild(a);currentMedia=a;a.play().catch(()=>{});}catch(e){console.warn('Story music:',e);}}
+        const duration=s.mediaType==='video'?null:7000;const prog=modal.querySelector('#nxsv-progress-'+index);const videoEl=stage.querySelector('video');if(videoEl){videoEl.ontimeupdate=()=>{if(videoEl.duration&&prog)prog.style.width=(videoEl.currentTime/videoEl.duration*100)+'%';};}if(duration){let start=Date.now();const tick=()=>{if(!modal.isConnected)return;if(paused){timer=setTimeout(tick,100);return;}const pct=Math.min(100,(Date.now()-start)/duration*100);if(prog)prog.style.width=pct+'%';if(pct>=100){show(index+1);return;}timer=setTimeout(tick,100);};tick();}else if(videoEl){videoEl.onended=()=>show(index+1);}else{timer=setTimeout(()=>show(index+1),7000);}
+      }
+      let startX=0;modal.addEventListener('touchstart',e=>{startX=e.touches[0].clientX;},{passive:true});modal.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-startX;if(Math.abs(dx)>60)show(index+(dx<0?1:-1));},{passive:true});
+      modal.querySelector('#nxsv-stage').addEventListener('click',e=>{if(e.target.closest('video'))return;const x=e.clientX;if(x<window.innerWidth/2)show(index-1);else show(index+1);});
+      await show(index);
     };
+    const queryStory=new URLSearchParams(location.search).get('story');if(queryStory){let tries=0;const t=setInterval(()=>{if(dbRef()){clearInterval(t);window.openNexusOfficialStory(queryStory);}if(++tries>30)clearInterval(t);},500);}
 })();
+    </script>
 </body>
 </html>
