@@ -3348,9 +3348,33 @@
     let liveStories=[];
     function installStoryRing(){
       const bar=document.getElementById('nx-stories-bar'); if(!bar)return;
-      let btn=bar.querySelector('.nx-official-story-entry');
-      if(!btn){btn=document.createElement('button');btn.type='button';btn.className='nx-official-story-entry';btn.innerHTML='<span class="nxsv-ring"><img alt="Nexus Official" src="'+LOGO+'"></span><small>Nexus Official</small>';btn.addEventListener('click',()=>window.openNexusOfficialStory());bar.prepend(btn);}
-      btn.style.display=liveStories.length?'flex':'none';
+
+      // Do not create a second Nexus profile card. Reuse the existing
+      // Nexus Official profile/story item already rendered by the app.
+      bar.querySelectorAll('.nx-official-story-entry').forEach(el=>el.remove());
+      const existing=Array.from(bar.children).find(el=>{
+        const label=(el.innerText||el.textContent||'').replace(/\\s+/g,' ').toLowerCase();
+        return label.includes('nexus') && label.includes('official');
+      });
+      if(!existing)return;
+
+      existing.style.display=liveStories.length?'':'';
+      if(!existing.dataset.nxOfficialStoryBound){
+        existing.dataset.nxOfficialStoryBound='1';
+        existing.style.cursor='pointer';
+        existing.addEventListener('click',function(e){
+          if(!liveStories.length)return;
+          e.preventDefault();
+          e.stopPropagation();
+          if(e.stopImmediatePropagation)e.stopImmediatePropagation();
+          window.openNexusOfficialStory();
+        },true);
+      }
+      const avatar=existing.querySelector('img');
+      if(avatar){
+        avatar.style.boxShadow=liveStories.length?'0 0 0 3px #10b981':'';
+        avatar.style.borderRadius='50%';
+      }
     }
     const barObserver=new MutationObserver(()=>installStoryRing());
     function startStoryFeed(){
