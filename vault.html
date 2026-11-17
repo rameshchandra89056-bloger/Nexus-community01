@@ -71,6 +71,8 @@
         .v-section.active {
             display: block;
         }
+        .v-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+        .v-tab-btn { font-size: 10.5px; padding-left: 2px; padding-right: 2px; }
         .v-card {
             background: #0f172a;
             border: 1px solid #1e293b;
@@ -153,6 +155,7 @@
         <button type="button" class="v-tab-btn" data-vtab="sec-posts">✏️ Edit Posts</button>
         <button type="button" class="v-tab-btn" data-vtab="sec-users">👥 Members</button>
         <button type="button" class="v-tab-btn" data-vtab="sec-chats">💬 Live Media</button>
+        <button type="button" class="v-tab-btn" data-vtab="sec-stories">📸 Stories</button>
     </nav>
 
     <!-- TAB 1: OFFICIAL NEXUS PHOTO & 50MB VIDEO BROADCASTER -->
@@ -193,6 +196,44 @@
             <button type="button" id="v-btn-publish-official" class="v-btn" style="width:100%; padding:13px; background:linear-gradient(90deg,#10b981,#06b6d4); color:#020617; font-size:13.5px;">
                 🚀 Publish Official Post Now
             </button>
+        </div>
+    </section>
+
+    <!-- TAB 5: NEXUS OFFICIAL STORY CONTROL CENTER -->
+    <section id="sec-stories" class="v-section">
+        <div class="v-card" style="border-color:#10b981">
+            <h3 style="font-size:16px;font-weight:900;color:#34d399;margin-bottom:5px">📸 Nexus Official Story Studio</h3>
+            <p style="font-size:11px;color:#94a3b8;margin-bottom:12px">Only Nexus Official stories are published here. No external API key is required.</p>
+            <label style="font-size:11px;font-weight:800;color:#94a3b8">STORY PHOTO / VIDEO (VIDEO MUST BE UNDER 50 MB)</label>
+            <input id="v-story-files" class="v-inp" type="file" accept="image/*,video/mp4,video/webm,video/*" multiple style="margin-bottom:8px" />
+            <div id="v-story-file-list" style="font-size:11px;color:#94a3b8;margin-bottom:10px">No media selected.</div>
+            <label style="font-size:11px;font-weight:800;color:#94a3b8">TITLE</label>
+            <input id="v-story-title" class="v-inp" maxlength="90" placeholder="Nexus Official Update" />
+            <label style="font-size:11px;font-weight:800;color:#94a3b8">CAPTION</label>
+            <textarea id="v-story-caption" class="v-txt" rows="3" maxlength="700" placeholder="Write your story caption..."></textarea>
+            <label style="font-size:11px;font-weight:800;color:#94a3b8">STICKER / HIGHLIGHT TEXT (OPTIONAL)</label>
+            <input id="v-story-sticker" class="v-inp" maxlength="60" placeholder="Example: NEW UPDATE ✨" />
+            <label style="font-size:11px;font-weight:800;color:#94a3b8">BACKGROUND MUSIC (OPTIONAL — UPLOAD YOUR OWN AUDIO)</label>
+            <input id="v-story-music" class="v-inp" type="file" accept="audio/*" />
+            <div id="v-story-music-status" style="font-size:10.5px;color:#94a3b8;margin:4px 0 10px">No music selected. Use audio you own or have permission to use.</div>
+            <label style="font-size:11px;font-weight:800;color:#94a3b8">POLL QUESTION (OPTIONAL)</label>
+            <input id="v-story-poll-question" class="v-inp" maxlength="120" placeholder="Ask your community..." />
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+                <input id="v-story-poll-a" class="v-inp" maxlength="40" placeholder="Option 1" />
+                <input id="v-story-poll-b" class="v-inp" maxlength="40" placeholder="Option 2" />
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0">
+                <div><label style="font-size:11px;font-weight:800;color:#94a3b8">EXPIRE AFTER</label><select id="v-story-expiry" class="v-sel"><option value="24">24 hours</option><option value="12">12 hours</option><option value="48">48 hours</option><option value="72">72 hours</option></select></div>
+                <div><label style="font-size:11px;font-weight:800;color:#94a3b8">SCHEDULE (OPTIONAL)</label><input id="v-story-schedule" class="v-inp" type="datetime-local" /></div>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#fbbf24;margin:8px 0 12px"><input id="v-story-highlight" type="checkbox" style="width:17px;height:17px"> Keep as Official Highlight after expiry</label>
+            <div id="v-story-upload-status" style="font-size:11px;color:#94a3b8;margin-bottom:9px">Ready to upload.</div>
+            <button id="v-story-publish" type="button" class="v-btn" style="width:100%;padding:13px;background:linear-gradient(90deg,#10b981,#06b6d4);color:#020617;font-size:13px">🚀 Publish Official Stories</button>
+        </div>
+        <div class="v-card">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px"><h3 style="font-size:14px;color:#38bdf8;font-weight:900">📊 Story Monitoring</h3><span id="v-story-count" style="font-size:11px;color:#34d399">0 Stories</span></div>
+            <div id="v-story-summary" style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:10px"></div>
+            <div id="v-stories-list"><div style="font-size:12px;color:#94a3b8">Unlock Vault to load stories.</div></div>
         </div>
     </section>
 
@@ -288,6 +329,8 @@
 
         let allPosts = [];
         let allUsers = [];
+        let allStories = [];
+        let storyUnsub = null;
         let pendingBroadcastMedia = { ref: "", mType: "" };
         let editingPostObj = null;
         let editingReplacementMedia = null;
@@ -472,6 +515,7 @@
 
         // 3. Real-Time Streams for Posts, Users & Chats
         function initVaultStreams() {
+            initVaultStoryStream();
             // Stream All Posts
             db.collection("nexus_real_posts").orderBy("createdAt", "desc").limit(50).onSnapshot((snap) => {
                 allPosts = [];
@@ -697,6 +741,188 @@
                     vToast("🗑️ Deleted @" + uname);
                 };
             });
+        }
+
+        // ================= NEXUS OFFICIAL STORY CONTROL / MONITORING =================
+        const STORY_MAX_VIDEO = 50 * 1024 * 1024;
+        const STORY_CHUNK_SIZE = 560000;
+        let selectedStoryFiles = [];
+        let selectedStoryMusic = null;
+
+        document.getElementById("v-story-files").onchange = (e) => {
+            selectedStoryFiles = Array.from(e.target.files || []);
+            const box = document.getElementById("v-story-file-list");
+            box.textContent = selectedStoryFiles.length
+                ? selectedStoryFiles.map(f => `${f.name} • ${(f.size / 1024 / 1024).toFixed(2)} MB`).join(" | ")
+                : "No media selected.";
+            const tooLarge = selectedStoryFiles.find(f => f.type.startsWith("video/") && f.size >= STORY_MAX_VIDEO);
+            if (tooLarge) box.textContent += " — ERROR: Video must be less than 50 MB.";
+        };
+        document.getElementById("v-story-music").onchange = (e) => {
+            selectedStoryMusic = (e.target.files && e.target.files[0]) || null;
+            document.getElementById("v-story-music-status").textContent = selectedStoryMusic
+                ? `${selectedStoryMusic.name} • ${(selectedStoryMusic.size / 1024 / 1024).toFixed(2)} MB`
+                : "No music selected.";
+        };
+
+        function uploadStoryAsset(file, onProgress) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async (ev) => {
+                    try {
+                        const data = String(ev.target.result || "");
+                        if (data.length < 500000) { onProgress && onProgress(100); resolve({ mode: "inline", inline: data, mimeType: file.type || "application/octet-stream" }); return; }
+                        const streamId = "official_story_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+                        const total = Math.ceil(data.length / STORY_CHUNK_SIZE);
+                        for (let i = 0; i < total; i++) {
+                            await db.collection("nexus_media_chunks").doc(`${streamId}_${i}`).set({
+                                streamId, index: i, data: data.slice(i * STORY_CHUNK_SIZE, (i + 1) * STORY_CHUNK_SIZE),
+                                kind: "nexus_official_story", createdAt: Date.now()
+                            });
+                            onProgress && onProgress(Math.round(((i + 1) / total) * 100));
+                        }
+                        resolve({ mode: "chunked", streamId, totalChunks: total, mimeType: file.type || "application/octet-stream" });
+                    } catch (err) { reject(err); }
+                };
+                reader.onerror = () => reject(reader.error || new Error("Could not read selected file."));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function storyAssetFields(asset, prefix) {
+            const out = {};
+            if (!asset) return out;
+            if (asset.mode === "inline") out[prefix + "Inline"] = asset.inline;
+            else { out[prefix + "StreamId"] = asset.streamId; out[prefix + "TotalChunks"] = asset.totalChunks; }
+            out[prefix + "MimeType"] = asset.mimeType;
+            return out;
+        }
+
+        document.getElementById("v-story-publish").onclick = async function () {
+            if (!selectedStoryFiles.length) { alert("Pehle Story photo ya video select kijiye."); return; }
+            const badVideo = selectedStoryFiles.find(f => f.type.startsWith("video/") && f.size >= STORY_MAX_VIDEO);
+            if (badVideo) { alert("Video 50 MB se kam honi chahiye."); return; }
+            const badType = selectedStoryFiles.find(f => !f.type.startsWith("image/") && !f.type.startsWith("video/"));
+            if (badType) { alert("Sirf photo ya video select karein."); return; }
+            if (selectedStoryMusic && (!selectedStoryMusic.type.startsWith("audio/") || selectedStoryMusic.size > 15 * 1024 * 1024)) {
+                alert("Music file audio format mein aur 15 MB tak honi chahiye."); return;
+            }
+            this.disabled = true;
+            const status = document.getElementById("v-story-upload-status");
+            try {
+                let musicAsset = null;
+                if (selectedStoryMusic) {
+                    status.textContent = "Uploading background music...";
+                    musicAsset = await uploadStoryAsset(selectedStoryMusic, pct => status.textContent = `Uploading music ${pct}%...`);
+                }
+                const title = (document.getElementById("v-story-title").value || "Nexus Official").trim().slice(0, 90);
+                const caption = (document.getElementById("v-story-caption").value || "").trim().slice(0, 700);
+                const stickerText = (document.getElementById("v-story-sticker").value || "").trim().slice(0, 60);
+                const pollQuestion = (document.getElementById("v-story-poll-question").value || "").trim().slice(0, 120);
+                const pollOptions = [document.getElementById("v-story-poll-a").value, document.getElementById("v-story-poll-b").value].map(x => (x || "").trim().slice(0, 40)).filter(Boolean);
+                const scheduleValue = document.getElementById("v-story-schedule").value;
+                const scheduledAt = scheduleValue ? Math.max(Date.now(), new Date(scheduleValue).getTime()) : Date.now();
+                const expiryHours = Number(document.getElementById("v-story-expiry").value || 24);
+                const isHighlight = document.getElementById("v-story-highlight").checked;
+
+                for (let i = 0; i < selectedStoryFiles.length; i++) {
+                    const file = selectedStoryFiles[i];
+                    let mediaAsset;
+                    status.textContent = `Preparing ${i + 1}/${selectedStoryFiles.length}: ${file.name}`;
+                    if (file.type.startsWith("image/")) {
+                        const compressed = await compressPhoto(file);
+                        mediaAsset = { mode: "inline", inline: compressed, mimeType: "image/webp" };
+                    } else {
+                        mediaAsset = await uploadStoryAsset(file, pct => status.textContent = `Uploading story ${i + 1}/${selectedStoryFiles.length}: ${pct}%`);
+                    }
+                    const now = Date.now();
+                    const payload = {
+                        isOfficial: true, username: "nexus_official", author: "Nexus Official",
+                        title, caption, desc: caption, badge: "NEXUS OFFICIAL", stickerText,
+                        mediaType: file.type.startsWith("video/") ? "video" : "image",
+                        timestamp: now, createdAt: now, scheduledAt,
+                        expiresAt: scheduledAt + expiryHours * 60 * 60 * 1000,
+                        isHighlight, archived: false, status: scheduledAt > now ? "scheduled" : "published",
+                        views: 0, likes: 0, viewedBy: [], likedBy: [], replies: [],
+                        pollQuestion: pollOptions.length >= 2 ? pollQuestion : "",
+                        pollOptions: pollOptions.length >= 2 ? pollOptions : [], pollVotes: {}, pollVoters: []
+                    };
+                    Object.assign(payload, storyAssetFields(mediaAsset, "media"));
+                    if (musicAsset) Object.assign(payload, storyAssetFields(musicAsset, "music"));
+                    const doc = await db.collection("official_stories").add(payload);
+                    await doc.set({ id: doc.id }, { merge: true });
+                }
+                status.textContent = `✅ ${selectedStoryFiles.length} Official Story item(s) published / scheduled.`;
+                vToast("📸 Nexus Official Story Published!");
+                document.getElementById("v-story-files").value = "";
+                document.getElementById("v-story-music").value = "";
+                document.getElementById("v-story-title").value = "";
+                document.getElementById("v-story-caption").value = "";
+                document.getElementById("v-story-sticker").value = "";
+                document.getElementById("v-story-poll-question").value = "";
+                document.getElementById("v-story-poll-a").value = "";
+                document.getElementById("v-story-poll-b").value = "";
+                document.getElementById("v-story-schedule").value = "";
+                selectedStoryFiles = []; selectedStoryMusic = null;
+                document.getElementById("v-story-file-list").textContent = "No media selected.";
+                document.getElementById("v-story-music-status").textContent = "No music selected.";
+            } catch (err) {
+                console.error("Official story upload failed:", err);
+                status.textContent = "❌ Upload failed: " + (err.message || "Unknown error");
+                alert("Story upload fail hua: " + (err.message || "Unknown error"));
+            } finally { this.disabled = false; }
+        };
+
+        function initVaultStoryStream() {
+            if (storyUnsub) return;
+            storyUnsub = db.collection("official_stories").orderBy("timestamp", "desc").limit(100).onSnapshot(snap => {
+                allStories = [];
+                snap.forEach(d => { const s = d.data() || {}; s.id = d.id; allStories.push(s); });
+                renderVaultStories();
+            }, err => {
+                document.getElementById("v-stories-list").textContent = "Story monitoring error: " + (err.message || "Permission / network error");
+            });
+        }
+
+        function renderVaultStories() {
+            const box = document.getElementById("v-stories-list");
+            const now = Date.now();
+            const active = allStories.filter(s => s.isOfficial && !s.archived && Number(s.scheduledAt || 0) <= now && (Number(s.expiresAt || 0) > now || s.isHighlight)).length;
+            const views = allStories.reduce((n, s) => n + Number(s.views || 0), 0);
+            const likes = allStories.reduce((n, s) => n + Number(s.likes || 0), 0);
+            document.getElementById("v-story-count").textContent = allStories.length + " Stories";
+            document.getElementById("v-story-summary").innerHTML = `
+                <div style="background:#090d16;border:1px solid #1e293b;border-radius:11px;padding:9px;text-align:center"><b style="display:block;color:#34d399;font-size:18px">${active}</b><small style="color:#94a3b8">Active</small></div>
+                <div style="background:#090d16;border:1px solid #1e293b;border-radius:11px;padding:9px;text-align:center"><b style="display:block;color:#38bdf8;font-size:18px">${views}</b><small style="color:#94a3b8">Views</small></div>
+                <div style="background:#090d16;border:1px solid #1e293b;border-radius:11px;padding:9px;text-align:center"><b style="display:block;color:#f472b6;font-size:18px">${likes}</b><small style="color:#94a3b8">Likes</small></div>`;
+            if (!allStories.length) { box.innerHTML = '<div style="font-size:12px;color:#94a3b8">No Official Stories yet.</div>'; return; }
+            box.innerHTML = allStories.map(s => {
+                const isActive = !s.archived && Number(s.scheduledAt || 0) <= now && (Number(s.expiresAt || 0) > now || s.isHighlight);
+                const status = s.archived ? "Archived" : Number(s.scheduledAt || 0) > now ? "Scheduled" : Number(s.expiresAt || 0) <= now && !s.isHighlight ? "Expired" : "Live";
+                const viewers = Array.isArray(s.viewedBy) ? s.viewedBy : [];
+                return `<div class="v-card" style="padding:12px;border-color:${isActive ? '#10b981' : '#334155'}">
+                    <div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:13px;color:#f8fafc">${String(s.title || 'Nexus Official Story').replace(/[<>]/g,'')}</b><small style="color:${isActive?'#34d399':'#fbbf24'}">${status}</small></div>
+                    <div style="font-size:11px;color:#94a3b8;margin:5px 0">${String(s.caption || '').replace(/[<>]/g,'').slice(0,140)}</div>
+                    <div style="font-size:11px;color:#cbd5e1;margin-bottom:8px">👁 ${Number(s.views||0)} views • ❤️ ${Number(s.likes||0)} likes • 👤 ${viewers.length} unique viewers • 💬 ${(s.replies||[]).length} replies</div>
+                    <div style="font-size:10px;color:#94a3b8;margin-bottom:8px">Expires: ${s.expiresAt ? new Date(s.expiresAt).toLocaleString() : '—'} ${s.isHighlight?'• Highlight':''}</div>
+                    <div style="font-size:10px;color:#64748b;margin-bottom:8px;word-break:break-word">Viewers: ${viewers.length ? viewers.slice(0,20).join(', ') : 'No views yet'}</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px">
+                      <button class="v-btn" data-story-share="${s.id}" style="background:#0e7490;color:white">↗ Share</button>
+                      <button class="v-btn" data-story-highlight="${s.id}" style="background:#1e293b;color:#fbbf24">${s.isHighlight?'★ Remove Highlight':'☆ Highlight'}</button>
+                      <button class="v-btn" data-story-archive="${s.id}" style="background:#1e293b;color:#38bdf8">${s.archived?'Restore':'Archive'}</button>
+                      <button class="v-btn" data-story-edit="${s.id}" style="background:#1e293b;color:#34d399">Edit Caption</button>
+                      <button class="v-btn" data-story-delete="${s.id}" style="background:#e11d48;color:white;margin-left:auto">Delete</button>
+                    </div>
+                </div>`;
+            }).join("");
+            box.querySelectorAll("[data-story-share]").forEach(b => b.onclick = async () => {
+                const url = location.origin + location.pathname.replace(/vault\.html?$/i, "index.html") + "?story=" + encodeURIComponent(b.dataset.storyShare);
+                try { if (navigator.share) await navigator.share({ title: "Nexus Official Story", url }); else { await navigator.clipboard.writeText(url); vToast("Story link copied!"); } } catch (e) { try { await navigator.clipboard.writeText(url); vToast("Story link copied!"); } catch (_) {} }
+            });
+            box.querySelectorAll("[data-story-highlight]").forEach(b => b.onclick = async () => { const s=allStories.find(x=>x.id===b.dataset.storyHighlight); if(!s)return; await db.collection("official_stories").doc(s.id).set({isHighlight:!s.isHighlight},{merge:true}); vToast("Story highlight updated."); });
+            box.querySelectorAll("[data-story-archive]").forEach(b => b.onclick = async () => { const s=allStories.find(x=>x.id===b.dataset.storyArchive); if(!s)return; await db.collection("official_stories").doc(s.id).set({archived:!s.archived},{merge:true}); vToast(s.archived?"Story restored.":"Story archived."); });
+            box.querySelectorAll("[data-story-edit]").forEach(b => b.onclick = async () => { const s=allStories.find(x=>x.id===b.dataset.storyEdit); if(!s)return; const caption=prompt("Edit story caption:",s.caption||""); if(caption===null)return; await db.collection("official_stories").doc(s.id).set({caption:caption.slice(0,700),desc:caption.slice(0,700)},{merge:true}); vToast("Story caption updated."); });
+            box.querySelectorAll("[data-story-delete]").forEach(b => b.onclick = async () => { if(!confirm("Delete this Nexus Official Story permanently?"))return; await db.collection("official_stories").doc(b.dataset.storyDelete).delete(); vToast("Story deleted."); });
         }
 
         document.getElementById("v-user-search").oninput = renderVaultUsersList;
