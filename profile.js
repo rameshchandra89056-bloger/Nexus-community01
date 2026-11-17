@@ -1763,12 +1763,20 @@
                     if (isVid) {
                         const cachedBlob = videoBlobCache[img] || "";
                         mediaHtml = `
-                            <div style="width:100%; background:#000; border-top:1px solid #1e293b; border-bottom:1px solid #1e293b;">
-                                <video data-stream-ref="${
+                            <div class="nx-official-video-player" style="position:relative;width:100%;background:#000;border-top:1px solid #1e293b;border-bottom:1px solid #1e293b;overflow:hidden;">
+                                <video class="nx-official-video" data-stream-ref="${
                                     String(img).startsWith("NX_VIDEO_STREAM:") ? img : ""
                                 }" src="${
                                     cachedBlob || (String(img).startsWith("NX_VIDEO_STREAM:") ? "" : img)
-                                }" controls playsinline preload="metadata" style="width:100%; max-height:460px; min-height:220px; display:block; object-fit:contain;"></video>
+                                }" playsinline webkit-playsinline muted autoplay preload="auto" disablepictureinpicture controlslist="nodownload noplaybackrate" style="width:100%;max-height:460px;min-height:220px;display:block;object-fit:contain;background:#000;"></video>
+                                <button type="button" data-nx-video-center-play aria-label="Play video" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:62px;height:62px;border:1px solid rgba(255,255,255,.35);border-radius:50%;background:rgba(15,23,42,.84);color:#fff;font-size:25px;font-weight:900;display:flex;align-items:center;justify-content:center;z-index:3;">▶</button>
+                                <div style="position:absolute;left:0;right:0;bottom:0;padding:34px 12px 10px;background:linear-gradient(transparent,rgba(0,0,0,.9));display:flex;align-items:center;gap:8px;z-index:4;">
+                                    <button type="button" data-nx-video-play aria-label="Play or pause" style="border:0;background:transparent;color:#fff;font-size:18px;font-weight:900;padding:5px;">▶</button>
+                                    <span data-nx-video-time style="color:#fff;font-size:11px;font-weight:700;min-width:68px;">0:00 / 0:00</span>
+                                    <input data-nx-video-seek aria-label="Seek video" type="range" min="0" max="1000" value="0" style="flex:1;min-width:24px;accent-color:#10b981;height:4px;">
+                                    <button type="button" data-nx-video-mute aria-label="Unmute video" style="border:0;background:transparent;color:#fff;font-size:17px;padding:5px;">🔇</button>
+                                    <button type="button" data-nx-video-fullscreen aria-label="Fullscreen" style="border:0;background:transparent;color:#fff;font-size:19px;padding:5px;">⛶</button>
+                                </div>
                             </div>
                         `;
                     } else {
@@ -1889,8 +1897,116 @@
             .join("");
     }
 
+    function bindNexusOfficialVideoControls(containerEl) {
+        if (!containerEl) return;
+        containerEl.querySelectorAll(".nx-official-video-player").forEach((player) => {
+            if (player.dataset.nxVideoControlsBound === "1") return;
+            player.dataset.nxVideoControlsBound = "1";
+
+            const video = player.querySelector("video.nx-official-video");
+            const playButtons = player.querySelectorAll("[data-nx-video-play], [data-nx-video-center-play]");
+            const centerButton = player.querySelector("[data-nx-video-center-play]");
+            const seek = player.querySelector("[data-nx-video-seek]");
+            const timeLabel = player.querySelector("[data-nx-video-time]");
+            const muteButton = player.querySelector("[data-nx-video-mute]");
+            const fullscreenButton = player.querySelector("[data-nx-video-fullscreen]");
+            if (!video) return;
+
+            const formatTime = (value) => {
+                if (!Number.isFinite(value)) return "0:00";
+                const seconds = Math.max(0, Math.floor(value));
+                return Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
+            };
+
+            const update = () => {
+                const duration = Number.isFinite(video.duration) ? video.duration : 0;
+                if (seek && duration > 0) seek.value = String(Math.round((video.currentTime / duration) * 1000));
+                if (timeLabel) timeLabel.textContent = formatTime(video.currentTime) + " / " + formatTime(duration);
+                player.querySelectorAll("[data-nx-video-play]").forEach((button) => {
+                    button.textContent = video.paused ? "▶" : "Ⅱ";
+                });
+                if (centerButton) centerButton.style.display = video.paused ? "flex" : "none";
+                if (muteButton) muteButton.textContent = video.muted ? "🔇" : "🔊";
+            };
+
+            const togglePlay = async (event) => {
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                if (video.paused) {
+                    try {
+                        await video.play();
+                    } catch (error) {
+                        console.warn("Nexus video playback:", error);
+                    }
+                } else {
+                    video.pause();
+                }
+                update();
+            };
+
+            playButtons.forEach((button) => button.addEventListener("click", togglePlay));
+            video.addEventListener("click", togglePlay);
+            video.addEventListener("play", update);
+            video.addEventListener("pause", update);
+            video.addEventListener("timeupdate", update);
+            video.addEventListener("loadedmetadata", update);
+            video.addEventListener("durationchange", update);
+            video.addEventListener("ended", update);
+            video.addEventListener("volumechange", update);
+
+            if (seek) {
+                seek.addEventListener("input", (event) => {
+                    event.stopPropagation();
+                    if (Number.isFinite(video.duration) && video.duration > 0) {
+                        video.currentTime = (Number(seek.value) / 1000) * video.duration;
+                    }
+                    update();
+                });
+                seek.addEventListener("click", (event) => event.stopPropagation());
+            }
+
+            if (muteButton) {
+                muteButton.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    video.muted = !video.muted;
+                    update();
+                });
+            }
+
+            if (fullscreenButton) {
+                fullscreenButton.addEventListener("click", async (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    try {
+                        if (document.fullscreenElement) await document.exitFullscreen();
+                        else if (player.requestFullscreen) await player.requestFullscreen();
+                    } catch (error) {
+                        console.warn("Nexus video fullscreen:", error);
+                    }
+                });
+            }
+
+            // Muted autoplay is permitted by most mobile browsers; sound is user-enabled.
+            const startMutedPlayback = () => {
+                if (video.paused) {
+                    const attempt = video.play();
+                    if (attempt && typeof attempt.catch === "function") {
+                        attempt.catch(() => { if (centerButton) centerButton.style.display = "flex"; });
+                    }
+                }
+            };
+            video.addEventListener("loadeddata", startMutedPlayback, { once: true });
+            if (video.readyState >= 2) startMutedPlayback();
+            update();
+        });
+    }
+
     function bindRealPostCardEvents(containerEl, postsArray, refreshViewFn) {
         if (!containerEl) return;
+        bindNexusOfficialVideoControls(containerEl);
 
         containerEl.querySelectorAll("video[data-stream-ref]").forEach((v) => {
             const ref = v.getAttribute("data-stream-ref");
