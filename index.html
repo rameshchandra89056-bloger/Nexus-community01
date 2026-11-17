@@ -3347,34 +3347,37 @@
 
     let liveStories=[];
     function installStoryRing(){
-      const bar=document.getElementById('nx-stories-bar'); if(!bar)return;
-
-      // Do not create a second Nexus profile card. Reuse the existing
-      // Nexus Official profile/story item already rendered by the app.
+      const bar=document.getElementById('nx-stories-bar');
+      if(!bar)return;
+      // Reuse the existing Nexus Official card rendered by profile.js.
+      // Never create or prepend another profile card.
       bar.querySelectorAll('.nx-official-story-entry').forEach(el=>el.remove());
-      const existing=Array.from(bar.children).find(el=>{
-        const label=(el.innerText||el.textContent||'').replace(/\\s+/g,' ').toLowerCase();
-        return label.includes('nexus') && label.includes('official');
-      });
-      if(!existing)return;
-
-      existing.style.display=liveStories.length?'':'';
-      if(!existing.dataset.nxOfficialStoryBound){
-        existing.dataset.nxOfficialStoryBound='1';
-        existing.style.cursor='pointer';
-        existing.addEventListener('click',function(e){
+      if(!bar.dataset.nxOfficialStoryClickBound){
+        bar.dataset.nxOfficialStoryClickBound='1';
+        bar.addEventListener('click',function(e){
           if(!liveStories.length)return;
-          e.preventDefault();
-          e.stopPropagation();
+          const path=typeof e.composedPath==='function'?e.composedPath():[];
+          const candidates=path.length?path.filter(el=>el&&el.nodeType===1):[];
+          if(!candidates.length){let node=e.target;while(node&&node!==bar){candidates.push(node);node=node.parentElement;}}
+          const card=candidates.find(el=>{
+            if(el===bar||!bar.contains(el))return false;
+            const label=(el.innerText||el.textContent||'').replace(/\s+/g,' ').toLowerCase();
+            return label.includes('nexus')&&label.includes('official')&&el.children&&el.children.length>=2&&el.clientWidth>0&&el.clientWidth<=140&&el.clientHeight>=55&&el.clientHeight<=180;
+          });
+          if(!card)return;
+          e.preventDefault();e.stopPropagation();
           if(e.stopImmediatePropagation)e.stopImmediatePropagation();
           window.openNexusOfficialStory();
         },true);
       }
+      const cards=Array.from(bar.querySelectorAll('div,button,a')).filter(el=>{
+        const label=(el.innerText||el.textContent||'').replace(/\s+/g,' ').toLowerCase();
+        return label.includes('nexus')&&label.includes('official')&&el.children&&el.children.length>=2&&el.clientWidth>0&&el.clientWidth<=140&&el.clientHeight>=55&&el.clientHeight<=180;
+      });
+      const existing=cards.sort((a,b)=>(a.clientWidth*a.clientHeight)-(b.clientWidth*b.clientHeight))[0];
+      if(!existing)return;
       const avatar=existing.querySelector('img');
-      if(avatar){
-        avatar.style.boxShadow=liveStories.length?'0 0 0 3px #10b981':'';
-        avatar.style.borderRadius='50%';
-      }
+      if(avatar){avatar.style.boxShadow=liveStories.length?'0 0 0 3px #10b981':'';avatar.style.borderRadius='50%';}
     }
     const barObserver=new MutationObserver(()=>installStoryRing());
     function startStoryFeed(){
