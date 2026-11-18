@@ -1,4 +1,4 @@
-// ================= DM.JS (100% CLEAN FINAL MASTER - ZERO OVERLAP): ORIGINAL WHATSAPP UI + ⋮ 3-DOT PRO MENU HOOK + STRICT ROOM-KEY ISOLATION + 🔍 IN-CHAT SEARCH + 📌 LIVE PINNED MESSAGE + 1️⃣ REAL VIEW-ONCE AUTO-BURN PHOTO + 👉 SWIPE-TO-REPLY & DOUBLE-TAP ❤️ =================
+// ================= DM.JS (100% ORIGINAL UI STRUCTURE + ALL INTERNAL BUG FIXES): EXACT ORIGINAL HEADER & COMPOSER LAYOUT + ZERO OVERLAPPING CODE AT BOTTOM + STRICT 1:1 ROOM-KEY LOCK + INSTANT DELETE FOR EVERYONE + VOICE NOTE HOOK =================
 
 (function() {
     let activeDmPartner = null;
@@ -14,8 +14,6 @@
     let lastDmTypingPing = 0;
     let currentStickerCat = 'trending';
     let savedScrollY = 0;
-    let isViewOnceModeActive = false;
-    let inChatSearchQuery = '';
 
     function normalizeUname(u) {
         return String(u || '').toLowerCase().replace(/^@/, '').trim();
@@ -84,8 +82,6 @@
         }
         .nx-dm-bubble-anim {
             animation: nxMsgSlideIn 0.1s ease-out forwards;
-            transition: transform 0.15s ease-out;
-            touch-action: pan-y;
         }
         .nx-live-message-enter { animation: nxMsgSlideIn 0.12s ease-out both; }
         .nx-dm-date-divider {
@@ -208,7 +204,7 @@
             background: #202c33;
             border: 1px solid #2a3942;
             color: #e9edef;
-            padding: 11px 14px;
+            padding: 12px 14px;
             border-radius: 12px;
             font-size: 13.5px;
             font-weight: 700;
@@ -216,7 +212,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            margin-bottom: 7px;
+            margin-bottom: 8px;
             cursor: pointer;
         }
         .nx-menu-opt-btn:active {
@@ -298,6 +294,7 @@
             msgBox.style.minHeight = '0';
             msgBox.style.flex = '1 1 0%';
             msgBox.style.overflowY = 'auto';
+            msgBox.scrollTop = msgBox.scrollHeight;
         }
 
         const composer = root.querySelector('#nx-dm-composer');
@@ -627,116 +624,6 @@
     window.NexusDM = {
         activePartner: null,
 
-        openChatMenu: function() {
-            if (window.NexusDotsMenu && typeof NexusDotsMenu.openDmMenu === 'function') {
-                NexusDotsMenu.openDmMenu();
-            } else if (window.NexusPower && typeof NexusPower.openDmHeaderMenu === 'function') {
-                NexusPower.openDmHeaderMenu();
-            }
-        },
-
-        toggleInChatSearch: function() {
-            const bar = document.getElementById('nx-dm-inchat-search-bar');
-            const inp = document.getElementById('nx-dm-inchat-search-inp');
-            if (!bar) return;
-            if (bar.style.display === 'none') {
-                bar.style.display = 'flex';
-                if (inp) inp.focus();
-            } else {
-                bar.style.display = 'none';
-                inChatSearchQuery = '';
-                if (inp) inp.value = '';
-                let me = Nexus.getCurrentUser();
-                if (me) this.renderMessagesList(dmMessagesCache, me.username);
-            }
-        },
-
-        filterChatBySearch: function(q) {
-            inChatSearchQuery = String(q || '').toLowerCase().trim();
-            let me = Nexus.getCurrentUser();
-            if (me) this.renderMessagesList(dmMessagesCache, me.username);
-        },
-
-        toggleViewOnceMode: function() {
-            isViewOnceModeActive = !isViewOnceModeActive;
-            const btn = document.getElementById('nx-dm-vo-toggle-btn');
-            if (btn) {
-                btn.style.background = isViewOnceModeActive ? '#00a884' : 'transparent';
-                btn.style.color = isViewOnceModeActive ? '#020617' : '#8696a0';
-                btn.style.borderColor = isViewOnceModeActive ? '#00a884' : 'rgba(134,150,160,0.4)';
-            }
-            if (window.Nexus && Nexus.toast) {
-                Nexus.toast(isViewOnceModeActive ? "1️⃣ View-Once Photo Mode ON! Select photo now." : "1️⃣ View-Once Mode OFF");
-            }
-        },
-
-        openViewOnceSecretModal: async function(msgId) {
-            const m = dmMessagesCache.find(x => x.id === msgId);
-            if (!m || m.viewed || (!m.imgUrl && (!m.imgUrls || !m.imgUrls.length))) {
-                if (window.Nexus && Nexus.toast) Nexus.toast("1️⃣ Yeh View-Once photo open hokar burn ho chuki hai!");
-                return;
-            }
-            const photoSrc = (Array.isArray(m.imgUrls) && m.imgUrls[0]) || m.imgUrl;
-
-            // Immediately burn in Firebase so it can NEVER be opened a second time!
-            m.viewed = true;
-            m.imgUrl = '';
-            m.imgUrls = [];
-            if (Nexus.db) {
-                await Nexus.db.collection("nexus_private_dms").doc(msgId).update({
-                    viewed: true,
-                    imgUrl: '',
-                    imgUrls: [],
-                    text: '1️⃣ Opened'
-                }).catch(() => {});
-            }
-
-            const voModal = document.createElement('div');
-            voModal.style.cssText = 'position:fixed;inset:0;background:rgba(2,6,23,0.98);z-index:250000;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:22px;user-select:none;';
-            voModal.innerHTML = `
-                <div style="background:rgba(0,168,132,0.18);border:1px solid #00a884;color:#5eead4;padding:6px 16px;border-radius:99px;font-size:12px;font-weight:800;">
-                    1️⃣ View-Once Secret Photo • Auto-Deletes on Close
-                </div>
-                <img src="${photoSrc}" style="max-width:94vw;max-height:74dvh;object-fit:contain;border-radius:14px;border:1.5px solid #00a884;pointer-events:none;">
-                <button type="button" id="nx-vo-burn-close" style="background:#ef4444;color:#fff;border:none;padding:11px 28px;border-radius:99px;font-weight:900;font-size:13px;cursor:pointer;">
-                    Close &amp; Burn Forever 🔥
-                </button>
-            `;
-            document.body.appendChild(voModal);
-            voModal.querySelector('#nx-vo-burn-close').onclick = () => {
-                voModal.remove();
-                let me = Nexus.getCurrentUser();
-                if (me) this.renderMessagesList(dmMessagesCache, me.username);
-            };
-        },
-
-        togglePinMessageInChat: async function(msgId) {
-            document.getElementById('nx-msg-action-modal').style.display = 'none';
-            const m = dmMessagesCache.find(x => x.id === msgId);
-            if (!m || !Nexus.db) return;
-            const nextState = !m.pinnedInChat;
-            await Nexus.db.collection("nexus_private_dms").doc(msgId).update({
-                pinnedInChat: nextState,
-                pinnedAt: nextState ? Date.now() : 0
-            }).catch(() => {});
-            if (window.Nexus && Nexus.toast) {
-                Nexus.toast(nextState ? "📌 Message Pinned to Top of Chat!" : "📌 Message Unpinned");
-            }
-        },
-
-        scrollToMessageById: function(msgId) {
-            const box = document.getElementById('nx-dm-msgs-box');
-            if (!box) return;
-            const target = box.querySelector(`[data-message-id="${msgId}"]`);
-            if (target) {
-                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                const bubble = target.querySelector('div[style*="border-radius:12px"]') || target;
-                const oldOutline = bubble.style.outline;
-                bubble.style.outline = '2px solid #00a884';
-                setTimeout(() => { bubble.style.outline = oldOutline; }, 1400);
-            }
-        },
-
         openInboxModal: function() {
             this.closeDM(true);
             if (Nexus.rebuildAllUsersMasterList) Nexus.rebuildAllUsersMasterList();
@@ -829,16 +716,12 @@
 
             dmReplyingTo = null;
             dmEditingId = null;
-            isViewOnceModeActive = false;
-            inChatSearchQuery = '';
 
             let partnerObj = (Nexus.users || []).find(u =>
                 u && u.username && normalizeUname(u.username) === cleanPartnerUname
             );
-
             const displayPartnerName = partnerName || (partnerObj && (partnerObj.name || partnerObj.username)) || cleanPartnerUname;
 
-            // STRICT PARTNER LOCK across all modules so photos/calls/messages NEVER leak to another user!
             activeDmPartner = {
                 username: cleanPartnerUname,
                 name: displayPartnerName
@@ -856,10 +739,11 @@
                 ? `<img src="${finalDp}" style="width:38px; height:38px; border-radius:50%; object-fit:cover; flex-shrink:0;">`
                 : `<div style="width:38px; height:38px; border-radius:50%; background:#00a884; color:#020617; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; flex-shrink:0;">${(displayPartnerName || 'U').charAt(0).toUpperCase()}</div>`;
 
+            // 100% ORIGINAL HEADER & COMPOSER STRUCTURE (So power.js / dmtools.js NEVER corrupts ← or + buttons!)
             root.innerHTML = `
                 <div style="height:56px; display:flex; align-items:center; justify-content:space-between; padding:0 12px; background:#202c33; border-bottom:1px solid #2a3942; flex-shrink:0; z-index:10;">
                     <div style="display:flex; align-items:center; gap:9px; min-width:0; flex:1;">
-                        <button type="button" onclick="NexusDM.closeDM()" style="background:none; border:none; color:#e9edef; font-size:20px; cursor:pointer; padding:4px 6px; flex-shrink:0;">←</button>
+                        <button onclick="NexusDM.openInboxModal()" style="background:none; border:none; color:#e9edef; font-size:20px; cursor:pointer; padding:4px 6px; flex-shrink:0;">←</button>
                         <div onclick="NexusDM.closeDM(); if(window.openPublicUserProfileModal) window.openPublicUserProfileModal('${safePartnerUname}'); else if(Nexus.openPublicProfile) Nexus.openPublicProfile('${safePartnerUname}');" style="display:flex; align-items:center; gap:9px; min-width:0; cursor:pointer; flex:1;">
                             ${avHTML}
                             <div style="min-width:0; flex:1;">
@@ -870,20 +754,8 @@
                             </div>
                         </div>
                     </div>
-                    <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
-                        <button type="button" onclick="NexusDM.toggleInChatSearch()" title="Search in Chat" style="background:#2a3942; border:none; color:#cbd5e1; width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center;">🔍</button>
-                        <button type="button" onclick="NexusDM.openChatMenu()" title="1:1 Pro Menu" style="background:#2a3942; border:none; color:#e9edef; width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:18px; font-weight:900; display:flex; align-items:center; justify-content:center;">⋮</button>
-                    </div>
+                    <button onclick="NexusDM.closeDM()" style="background:#2a3942; border:none; color:#e9edef; width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:14px; flex-shrink:0;">✕</button>
                 </div>
-
-                <!-- Optional In-Chat Search Bar (Hidden by default) -->
-                <div id="nx-dm-inchat-search-bar" style="display:none; padding:7px 12px; background:#111b21; border-bottom:1px solid #2a3942; align-items:center; gap:8px; flex-shrink:0;">
-                    <input type="text" id="nx-dm-inchat-search-inp" placeholder="🔍 Find message in this chat..." oninput="NexusDM.filterChatBySearch(this.value)" style="flex:1; padding:7px 12px; border-radius:14px; border:1px solid #2a3942; background:#202c33; color:#fff; font-size:12.5px; outline:none;">
-                    <button type="button" onclick="NexusDM.toggleInChatSearch()" style="background:none; border:none; color:#94a3b8; font-size:15px; cursor:pointer;">✕</button>
-                </div>
-
-                <!-- Pinned Message Banner (Auto-shows when a message is pinned in chat) -->
-                <div id="nx-dm-pinned-banner" style="display:none; padding:7px 12px; background:#182229; border-bottom:1px solid #2a3942; border-left:4px solid #00a884; align-items:center; justify-content:space-between; gap:8px; font-size:12px; color:#e9edef; cursor:pointer; flex-shrink:0;"></div>
 
                 <div id="nx-dm-msgs-box" style="flex:1 1 0%; min-height:0; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; background:#0b141a; position:relative;"></div>
 
@@ -894,8 +766,8 @@
 
                 <div id="nx-dm-sticker-drawer" style="display:none; background:#111b21; border-top:1px solid #2a3942; padding:8px 10px; flex-shrink:0;">
                     <div style="display:flex; align-items:center; gap:8px; margin-bottom:7px;">
-                        <input type="text" id="nx-stk-search-in" placeholder="🔍 Search Stickers..." oninput="NexusDM.renderStickerGrid(currentStickerCat, this.value)" autocomplete="off" style="flex:1; min-width:0; padding:7px 12px; border-radius:16px; border:1px solid #2a3942; background:#202c33; color:white; font-size:12px; outline:none;">
-                        <button type="button" onclick="document.getElementById('nx-dm-sticker-drawer').style.display='none'" style="background:#202c33; border:none; color:#cbd5e1; width:28px; height:28px; border-radius:50%; cursor:pointer; flex-shrink:0;">✕</button>
+                        <input type="text" id="nx-stk-search-in" placeholder="🔍 Search Stickers..." autocomplete="off" style="flex:1; min-width:0; padding:7px 12px; border-radius:16px; border:1px solid #2a3942; background:#202c33; color:white; font-size:12px; outline:none;">
+                        <button onclick="document.getElementById('nx-dm-sticker-drawer').style.display='none'" style="background:#202c33; border:none; color:#cbd5e1; width:28px; height:28px; border-radius:50%; cursor:pointer; flex-shrink:0;">✕</button>
                     </div>
                     <div style="display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; margin-bottom:7px;">
                         <span class="nx-stk-chip active" onclick="NexusDM.filterStickersByCat('trending', this)">🔥 Trending</span>
@@ -909,7 +781,7 @@
 
                 <div id="nx-dm-reply-bar" style="display:none; padding:7px 14px; background:#182229; border-left:4px solid #00a884; align-items:center; justify-content:space-between; font-size:12px; color:#e9edef; flex-shrink:0;">
                     <span id="nx-dm-reply-txt" style="white-space:pre-wrap; overflow:hidden; text-overflow:ellipsis; flex:1;">Replying...</span>
-                    <button type="button" onclick="NexusDM.cancelReply()" style="background:none; border:none; color:#ef4444; font-weight:bold; cursor:pointer; margin-left:10px;">✕</button>
+                    <button onclick="NexusDM.cancelReply()" style="background:none; border:none; color:#ef4444; font-weight:bold; cursor:pointer; margin-left:10px;">✕</button>
                 </div>
 
                 <div id="nx-dm-composer" style="width:100%; display:flex; align-items:center; gap:8px; padding:8px 10px; background:#111b21; border-top:1px solid #1e293b; flex:0 0 auto;">
@@ -917,9 +789,8 @@
                         <button type="button" onclick="NexusDM.toggleStickerDrawer()" style="background:none; border:none; font-size:20px; cursor:pointer; padding:2px; flex-shrink:0;">😊</button>
                         <textarea id="nx-dm-input" rows="1" placeholder="Message..." autocomplete="off" style="flex:1; width:100%; min-width:0; height:36px; min-height:36px; max-height:105px; box-sizing:border-box; padding:8px 2px; border:none; background:transparent; color:#e9edef; font-size:14.5px; line-height:20px; font-family:inherit; resize:none; overflow-y:hidden; outline:none;"></textarea>
                         <input type="file" id="nx-dm-file-in" accept="image/*" multiple style="display:none;">
-                        <button type="button" id="nx-dm-vo-toggle-btn" onclick="NexusDM.toggleViewOnceMode()" title="Toggle 1️⃣ View-Once Secret Photo" style="width:24px; height:24px; border-radius:50%; border:1.5px dashed rgba(134,150,160,0.4); background:transparent; color:#8696a0; font-size:11px; font-weight:900; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">1</button>
-                        <button type="button" onclick="document.getElementById('nx-dm-file-in').click()" title="Send Photo" style="background:none; border:none; font-size:18px; cursor:pointer; padding:2px; flex-shrink:0;">📷</button>
-                        <button type="button" onclick="NexusDM.startVoiceDM()" title="Record Voice Note" style="background:none; border:none; font-size:17px; cursor:pointer; padding:2px; flex-shrink:0;">🎙️</button>
+                        <button type="button" onclick="document.getElementById('nx-dm-file-in').click()" style="background:none; border:none; font-size:18px; cursor:pointer; padding:2px; flex-shrink:0;">📷</button>
+                        <button type="button" onclick="NexusDM.startVoiceDM()" style="background:none; border:none; font-size:17px; cursor:pointer; padding:2px; flex-shrink:0;">🎙️</button>
                     </div>
                     <button type="button" onclick="NexusDM.sendDM()" style="background:#00a884; color:#020617; border:none; width:42px; height:42px; border-radius:50%; font-size:18px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 2px 8px rgba(0,168,132,0.4);">➤</button>
                 </div>
@@ -932,76 +803,13 @@
             const dmMessageBox = document.getElementById('nx-dm-msgs-box');
             if (dmMessageBox && !dmMessageBox.__nxDmMenuDelegationBound) {
                 dmMessageBox.__nxDmMenuDelegationBound = true;
-
-                // 1. Click delegation for ⋯ menu & 1️⃣ View-Once opener
                 dmMessageBox.addEventListener('click', event => {
-                    const voBtn = event.target.closest('[data-nx-vo-open]');
-                    if (voBtn) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        NexusDM.openViewOnceSecretModal(voBtn.getAttribute('data-nx-vo-open'));
-                        return;
-                    }
                     const menuButton = event.target.closest('[data-nx-dm-menu]');
                     if (!menuButton || !dmMessageBox.contains(menuButton)) return;
                     event.preventDefault();
                     event.stopPropagation();
                     NexusDM.openMsgActionMenu(menuButton.getAttribute('data-nx-dm-menu'));
                 });
-
-                // 2. Double-Tap on any message bubble to instant Heart (❤️)
-                let lastTapTs = 0;
-                let lastTapId = '';
-                dmMessageBox.addEventListener('touchend', event => {
-                    const row = event.target.closest('.nx-dm-bubble-anim');
-                    if (!row || event.target.closest('button, a, img, video, audio')) return;
-                    const mid = row.getAttribute('data-message-id');
-                    const now = Date.now();
-                    if (mid && mid === lastTapId && (now - lastTapTs) < 300) {
-                        NexusDM.reactToDM(mid, '❤️');
-                        lastTapTs = 0;
-                    } else {
-                        lastTapTs = now;
-                        lastTapId = mid;
-                    }
-                }, { passive: true });
-
-                // 3. Swipe-Right on any message bubble to Instant Reply (↩️)
-                let touchStartX = 0, touchStartY = 0, activeSwipeRow = null, swipeDx = 0;
-                dmMessageBox.addEventListener('touchstart', e => {
-                    if (!e.touches || e.touches.length !== 1) return;
-                    const row = e.target.closest('.nx-dm-bubble-anim');
-                    if (!row) return;
-                    touchStartX = e.touches[0].clientX;
-                    touchStartY = e.touches[0].clientY;
-                    activeSwipeRow = row;
-                    swipeDx = 0;
-                }, { passive: true });
-
-                dmMessageBox.addEventListener('touchmove', e => {
-                    if (!activeSwipeRow || !e.touches || e.touches.length !== 1) return;
-                    const dx = e.touches[0].clientX - touchStartX;
-                    const dy = Math.abs(e.touches[0].clientY - touchStartY);
-                    if (dy > 30 && Math.abs(dx) < dy) return;
-                    if (dx > 12) {
-                        swipeDx = Math.min(68, dx);
-                        activeSwipeRow.style.transform = `translateX(${swipeDx}px)`;
-                    }
-                }, { passive: true });
-
-                const finishBubbleSwipe = () => {
-                    if (!activeSwipeRow) return;
-                    const row = activeSwipeRow;
-                    row.style.transform = 'translateX(0px)';
-                    if (swipeDx >= 46) {
-                        const mid = row.getAttribute('data-message-id');
-                        if (mid) NexusDM.triggerMenuAction('reply', mid);
-                    }
-                    activeSwipeRow = null;
-                    swipeDx = 0;
-                };
-                dmMessageBox.addEventListener('touchend', finishBubbleSwipe, { passive: true });
-                dmMessageBox.addEventListener('touchcancel', finishBubbleSwipe, { passive: true });
             }
 
             const inp = document.getElementById('nx-dm-input');
@@ -1027,7 +835,6 @@
                 });
             }
 
-            // Locked Photo Input Handler (Captures exact partner at click time so photo NEVER goes to wrong user!)
             const fileIn = document.getElementById('nx-dm-file-in');
             if (fileIn) {
                 fileIn.onchange = async e => {
@@ -1052,36 +859,12 @@
             const box = document.getElementById('nx-dm-msgs-box');
             if (!box) return;
 
-            // Update Pinned Message Banner at top of chat
-            const pinBanner = document.getElementById('nx-dm-pinned-banner');
-            if (pinBanner) {
-                const pinnedMsgs = (list || []).filter(m => m && m.pinnedInChat && !m.deleted);
-                const latestPin = pinnedMsgs[pinnedMsgs.length - 1];
-                if (latestPin) {
-                    pinBanner.style.display = 'flex';
-                    pinBanner.onclick = () => NexusDM.scrollToMessageById(latestPin.id);
-                    pinBanner.innerHTML = `
-                        <div style="min-width:0;flex:1;">
-                            <div style="font-size:10.5px;font-weight:900;color:#00a884;">📌 Pinned Message</div>
-                            <div style="font-size:12px;color:#cbd5e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${dmEscapeHTML(latestPin.text || '📷 Pinned Media')}</div>
-                        </div>
-                        <button type="button" onclick="event.stopPropagation(); NexusDM.togglePinMessageInChat('${dmEscapeHTML(latestPin.id)}')" style="background:none;border:none;color:#94a3b8;font-size:13px;cursor:pointer;">Unpin ✕</button>
-                    `;
-                } else {
-                    pinBanner.style.display = 'none';
-                }
-            }
-
-            const filteredList = inChatSearchQuery
-                ? (list || []).filter(m => m && !m.deleted && String(m.text || '').toLowerCase().includes(inChatSearchQuery))
-                : (list || []);
-
-            if (!Array.isArray(filteredList) || filteredList.length === 0) {
+            if (!Array.isArray(list) || list.length === 0) {
                 const partnerName = activeDmPartner ? activeDmPartner.name : 'this member';
                 patchLiveMessageDOM(box, `
                     <div data-render-key="empty-state" style="text-align:center; color:#8696a0; font-size:12px; margin:auto; padding:16px; background:#182229; border-radius:14px;">
-                        ${inChatSearchQuery ? `🔍 No messages matching "${dmEscapeHTML(inChatSearchQuery)}"` : `🔒 Private 1-on-1 Chat with <b>${dmEscapeHTML(partnerName)}</b>.<br>
-                        <button onclick="NexusDM.sendAnimatedSticker('https://fonts.gstatic.com/s/e/notoemoji/latest/1f44b/512.webp', 'Wave')" style="margin-top:10px; background:#00a884; color:#020617; border:none; padding:7px 14px; border-radius:16px; font-weight:800; font-size:12px; cursor:pointer;">👋 Tap to Wave Hi!</button>`}
+                        🔒 Private 1-on-1 Chat with <b>${dmEscapeHTML(partnerName)}</b>.<br>
+                        <button onclick="NexusDM.sendAnimatedSticker('https://fonts.gstatic.com/s/e/notoemoji/latest/1f44b/512.webp', 'Wave')" style="margin-top:10px; background:#00a884; color:#020617; border:none; padding:7px 14px; border-radius:16px; font-weight:800; font-size:12px; cursor:pointer;">👋 Tap to Wave Hi!</button>
                     </div>
                 `);
                 return;
@@ -1090,7 +873,7 @@
             const hiddenForMe = dmGetHiddenForMe(myUname);
             let previousDateKey = '';
 
-            const renderedHTML = filteredList.map(m => {
+            const renderedHTML = list.map(m => {
                 const msgId = String(m.id || '');
                 const dateInfo = dmDateGroupInfo(dmMessageDate(m));
                 const dateDivider = dateInfo.label && dateInfo.key !== previousDateKey
@@ -1142,30 +925,18 @@
                     `;
                 }
 
-                // 1️⃣ View-Once Photo Rendering
-                let imgHTML = '';
-                if (!isDeleted && m.viewOnce) {
-                    if (m.viewed) {
-                        imgHTML = `<div style="padding:8px 12px; margin-bottom:4px; border-radius:10px; background:#111b21; border:1px solid #2a3942; color:#8696a0; font-size:12px; font-weight:700; display:inline-flex; align-items:center; gap:6px;"><span>1️⃣</span> <span>Opened</span></div>`;
-                    } else {
-                        imgHTML = `<button type="button" data-nx-vo-open="${safeId}" style="padding:9px 14px; margin-bottom:4px; border-radius:11px; background:linear-gradient(135deg,#064e3b,#0f172a); border:1.5px solid #00a884; color:#5eead4; font-size:12.5px; font-weight:800; display:inline-flex; align-items:center; gap:8px; cursor:pointer;"><span style="width:20px;height:20px;border-radius:50%;background:#00a884;color:#020617;display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:11px;">1</span> <span>View-Once Photo • Tap to Open</span></button>`;
-                    }
-                } else {
-                    const messageImages = Array.isArray(m.imgUrls) && m.imgUrls.length
-                        ? m.imgUrls.filter(url => typeof url === 'string' && (/^data:image\//i.test(url) || /^https?:\/\//i.test(url)))
-                        : (typeof m.imgUrl === 'string' && m.imgUrl ? [m.imgUrl] : []);
-                    imgHTML = (!isDeleted && messageImages.length)
-                        ? `<div data-nx-dm-gallery="1" style="display:grid; grid-auto-flow:column; grid-auto-columns:180px; grid-template-rows:180px; gap:7px; width:min(100%, 260px); max-width:100%; overflow-x:auto; overflow-y:hidden; padding:4px 1px 8px; margin-bottom:4px;">${messageImages.map(url => `<img src="${url}" onclick="event.stopPropagation(); NexusDM.openPhotoPreview(this.src)" loading="lazy" style="display:block; width:180px; height:180px; object-fit:contain; border-radius:9px; background:#111b21; cursor:zoom-in;">`).join('')}</div>`
-                        : '';
-                }
-
-                const pinTag = (!isDeleted && m.pinnedInChat) ? `<span style="color:#00a884;font-size:10px;font-weight:900;margin-right:4px;">📌</span>` : '';
+                const messageImages = Array.isArray(m.imgUrls) && m.imgUrls.length
+                    ? m.imgUrls.filter(url => typeof url === 'string' && (/^data:image\//i.test(url) || /^https?:\/\//i.test(url)))
+                    : (typeof m.imgUrl === 'string' && m.imgUrl ? [m.imgUrl] : []);
+                const imgHTML = (!isDeleted && messageImages.length)
+                    ? `<div data-nx-dm-gallery="1" style="display:grid; grid-auto-flow:column; grid-auto-columns:180px; grid-template-rows:180px; gap:7px; width:min(100%, 260px); max-width:100%; overflow-x:auto; overflow-y:hidden; padding:4px 1px 8px; margin-bottom:4px;">${messageImages.map(url => `<img src="${url}" onclick="event.stopPropagation(); NexusDM.openPhotoPreview(this.src)" loading="lazy" style="display:block; width:180px; height:180px; object-fit:contain; border-radius:9px; background:#111b21; cursor:zoom-in;">`).join('')}</div>`
+                    : '';
 
                 const messageBodyHTML = isDeleted
                     ? dmDeletedInfo(m)
                     : `${replyHTML}
                         <div style="display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:8px; padding-right:25px;">
-                            ${formattedTxt ? `<span class="nx-dm-msg-text" style="padding-right:4px;">${pinTag}${formattedTxt}</span>` : `<span>${pinTag}</span>`}
+                            ${formattedTxt ? `<span class="nx-dm-msg-text" style="padding-right:4px;">${formattedTxt}</span>` : '<span></span>'}
                             <span style="font-size:10.5px; color:rgba(233,237,239,0.72); white-space:nowrap; margin-left:auto; display:inline-flex; align-items:center;">
                                 ${reactionBadge}
                                 <span>${dmEscapeHTML(m.time || '')} ${m.edited ? '(edited)' : ''}</span>
@@ -1212,10 +983,6 @@
 
                     <button type="button" class="nx-menu-opt-btn" onclick="NexusDM.triggerMenuAction('reply', '${m.id}')">
                         <span>↩️</span> <span>Reply to Message</span>
-                    </button>
-
-                    <button type="button" class="nx-menu-opt-btn" style="color:#5eead4;" onclick="NexusDM.togglePinMessageInChat('${m.id}')">
-                        <span>📌</span> <span>${m.pinnedInChat ? 'Unpin from Top of Chat' : 'Pin to Top of Chat'}</span>
                     </button>
 
                     ${m.text ? `
@@ -1472,14 +1239,12 @@
             dmUnsubscribe = Nexus.db.collection("nexus_private_dms")
                 .where("roomKey", "==", roomKey)
                 .onSnapshot(snap => {
-                    // Verify we are still in the exact same partner chat
                     if (!activeDmPartner || normalizeUname(activeDmPartner.username) !== cleanPartner) return;
 
                     let list = [];
                     snap.forEach(d => {
                         let m = d.data() || {};
                         m.id = d.id;
-                        // Double verify sender/receiver match this exact 1:1 pair
                         const fU = normalizeUname(m.fromUser);
                         const tU = normalizeUname(m.toUser);
                         if ((fU === cleanMy && tU === cleanPartner) || (fU === cleanPartner && tU === cleanMy) || (fU === cleanMy && cleanMy === cleanPartner)) {
@@ -1514,7 +1279,6 @@
             let roomKey = getRoomKey(cleanMyUname, cleanTargetUname);
             const editingIdAtSend = dmEditingId;
             const replyAtSend = dmReplyingTo ? { ...dmReplyingTo } : null;
-            const sendAsViewOnce = Boolean(isViewOnceModeActive && imageUrls.length > 0);
 
             try {
                 pingDmTyping('');
@@ -1534,11 +1298,9 @@
                     fromUser: cleanMyUname,
                     fromName: me.name || me.username,
                     toUser: cleanTargetUname,
-                    text: customStickerObj ? '' : (sendAsViewOnce && !text ? '1️⃣ View-Once Photo' : text),
+                    text: customStickerObj ? '' : text,
                     imgUrl: imageUrls.length === 1 ? imageUrls[0] : '',
                     imgUrls: imageUrls.length > 1 ? imageUrls : [],
-                    viewOnce: sendAsViewOnce,
-                    viewed: false,
                     sticker: customStickerObj || null,
                     replyTo: replyAtSend,
                     likes: [],
@@ -1547,10 +1309,6 @@
                     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                     createdAt: Date.now()
                 });
-
-                if (sendAsViewOnce) {
-                    this.toggleViewOnceMode();
-                }
 
                 if (inp && !customStickerObj) {
                     inp.value = '';
