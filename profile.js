@@ -3211,11 +3211,15 @@
     }, 350);
 })();
 /* ============================================================================
-   PASTE AT THE VERY BOTTOM OF profile.js
-   1. Instant Firebase REST + Live Firestore Connector (Fixes "Loading real community posts...")
-   2. Guaranteed Direct 1:1 DM Chat Opener on clicking "Message 💬" from ANY Profile!
+   REPLACE THE LAST PATCH AT THE BOTTOM OF profile.js WITH THIS CLEAN BLOCK
+   - Connects Firebase Posts & Users Instantly (No fake DM screen!)
+   - Opens ONLY your original dm.js / dminbox.js 1:1 Chat UI with ⋮ 3-dot menu
    ============================================================================ */
 (function () {
+    // Remove any fake DM screen or extra session bars immediately
+    document.getElementById("nx-guaranteed-dm-screen")?.remove();
+    document.getElementById("nx-official-session-bar")?.remove();
+
     const PROJECT_ID = "nexus-community-bf99c";
     const REST_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 
@@ -3238,12 +3242,9 @@
         return out;
     }
 
-    // 1. FORCE-CONNECT FIREBASE & POPULATE POSTS + USERS IMMEDIATELY AFTER core.js LOADS
     async function forceFetchFirebasePostsAndUsersNow() {
         try {
-            if (!window.Nexus) window.Nexus = { users: [], posts: [], listeners: { onUsers: [], onPosts: [] } };
-
-            // A. Instant REST Fetch (Bypasses any SDK hang or core.js overwrite!)
+            if (!window.Nexus) return;
             const [uRes, pRes] = await Promise.all([
                 fetch(`${REST_BASE}/nexus_accounts?pageSize=90`, { cache: "no-store" }),
                 fetch(`${REST_BASE}/nexus_real_posts?pageSize=80`, { cache: "no-store" })
@@ -3262,7 +3263,6 @@
                 if (users.length > 0) {
                     Nexus.cloudAccounts = users;
                     Nexus.users = users;
-                    localStorage.setItem("nx_master_users_v1", JSON.stringify(users));
                 }
             }
 
@@ -3287,16 +3287,11 @@
                         return p;
                     })
                     .filter((p) => p.username !== "member" && (p.image || (p.content && p.content !== ".")))
-                    .sort((a, b) => {
-                        if (a.pinned && !b.pinned) return -1;
-                        if (!a.pinned && b.pinned) return 1;
-                        return b.createdAt - a.createdAt;
-                    });
+                    .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.createdAt - a.createdAt);
 
                 if (posts.length > 0) {
                     Nexus.posts = posts;
                     window.__NX_INSTANT_POSTS__ = posts;
-                    // Clear the stuck "⏳ Loading real community posts..." box immediately so it re-renders!
                     const stuckBox = document.getElementById("nx-clean-home-feed-v31");
                     if (stuckBox && stuckBox.innerText.includes("Loading real community posts")) {
                         stuckBox.innerHTML = "";
@@ -3306,255 +3301,9 @@
 
             if (Nexus.rebuildAllUsersMasterList) Nexus.rebuildAllUsersMasterList();
             if (Nexus.notifyAll) Nexus.notifyAll();
-
-            // B. Also ensure live Firestore onSnapshot is attached if core.js overwrote Nexus.db
-            if (window.firebase && firebase.firestore) {
-                const db = firebase.firestore();
-                Nexus.db = db;
-                if (!window.__nxLiveFallbackBound) {
-                    window.__nxLiveFallbackBound = true;
-                    db.collection("nexus_real_posts").onSnapshot((snap) => {
-                        const live = [];
-                        snap.forEach((doc) => {
-                            const p = doc.data() || {};
-                            p.id = doc.id;
-                            p.username = String(p.username || p.author || "user").toLowerCase().replace(/^@/, "").trim();
-                            p.author = p.author || p.name || p.username;
-                            p.content = String(p.content !== undefined ? p.content : p.text || "").trim();
-                            p.text = p.content;
-                            p.image = String(p.image || p.videoUrl || "").trim();
-                            p.createdAt = Number(p.createdAt || p.timestamp || Date.now());
-                            if (p.username !== "member" && (p.image || p.content)) live.push(p);
-                        });
-                        if (live.length > 0) {
-                            live.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.createdAt - a.createdAt);
-                            Nexus.posts = live;
-                            const stuckBox = document.getElementById("nx-clean-home-feed-v31");
-                            if (stuckBox && stuckBox.innerText.includes("Loading real community posts")) {
-                                stuckBox.innerHTML = "";
-                            }
-                            if (Nexus.notifyAll) Nexus.notifyAll();
-                        }
-                    });
-                }
-            }
-        } catch (err) {
-            console.warn("Firebase Instant Sync:", err);
-        }
+        } catch (err) {}
     }
 
-    // Run immediately and after core.js finishes loading
     forceFetchFirebasePostsAndUsersNow();
-    setTimeout(forceFetchFirebasePostsAndUsersNow, 600);
-    setTimeout(forceFetchFirebasePostsAndUsersNow, 1800);
-
-    // =========================================================================
-    // 2. GUARANTEED DIRECT 1:1 DM OPENER WHEN CLICKING "Message 💬" ON ANY PROFILE
-    // =========================================================================
-    window.openDirect1to1ChatWithUser = function (targetIdentifier) {
-        const cleanUname =
-            typeof targetIdentifier === "object"
-                ? String(targetIdentifier.username || targetIdentifier.name || "").toLowerCase().replace(/^@/, "").trim()
-                : String(targetIdentifier || "").toLowerCase().replace(/^@/, "").trim();
-
-        if (!cleanUname) return;
-
-        const uObj =
-            (window.Nexus &&
-                Array.isArray(Nexus.users) &&
-                Nexus.users.find((u) => u && u.username && u.username.toLowerCase() === cleanUname)) ||
-            (typeof targetIdentifier === "object" ? targetIdentifier : { username: cleanUname, name: cleanUname });
-
-        // Close any open profile/connections modals
-        document.getElementById("nx-public-profile-modal")?.remove();
-        document.getElementById("nx-follow-list-modal")?.remove();
-        document.getElementById("nx-avatar-zoom-overlay")?.remove();
-        document.getElementById("nx-scrollable-profile-feed-modal")?.remove();
-
-        // Set global target partner variables used by dm.js / dminbox.js / index.html
-        window.currentChatUser = cleanUname;
-        window.activeDMUser = cleanUname;
-        window.CURRENT_NXS_PARTNER = cleanUname;
-
-        // 1. Switch to Community/Chat Tab first so DM container is visible
-        if (window.Nexus && Nexus.switchTab) {
-            Nexus.switchTab("tab-community");
-        }
-
-        // 2. Try native DM opener functions from dm.js / dminbox.js
-        const possibleFns = [
-            window.openDirectChat,
-            window.openDMChat,
-            window.openDM,
-            window.openChatWith,
-            window.startDMWith,
-            window.openPrivateChat,
-            window.openUserDM,
-            window.startDirectChat,
-            window.open1to1Chat,
-            window.Nexus && window.Nexus.openDM,
-            window.Nexus && window.Nexus.openDirectChat,
-            window.Nexus && window.Nexus.startChat
-        ];
-
-        for (const fn of possibleFns) {
-            if (typeof fn === "function") {
-                try {
-                    fn(cleanUname, uObj);
-                } catch (e) {}
-            }
-        }
-
-        // 3. Check if native DM input opened; if not, click the user row or open Instant Direct DM Window!
-        setTimeout(() => {
-            const msgInp =
-                document.getElementById("nx-dm-input") ||
-                document.getElementById("nx-chat-msg-in") ||
-                document.querySelector('input[placeholder*="Message"]');
-
-            if (msgInp && msgInp.offsetParent !== null) {
-                msgInp.focus();
-                return;
-            }
-
-            // Try clicking matching user row inside #tab-community
-            const commTab = document.getElementById("tab-community");
-            if (commTab) {
-                const rows = Array.from(commTab.querySelectorAll("[data-dm-user], [data-username], [data-user], button, div"));
-                for (const el of rows) {
-                    const txt = (el.innerText || "").toLowerCase();
-                    const attr = (el.getAttribute("data-dm-user") || el.getAttribute("data-username") || "").toLowerCase();
-                    if (attr === cleanUname || (txt.includes("@" + cleanUname) && el.clientHeight > 30 && el.clientHeight < 110)) {
-                        el.click();
-                        break;
-                    }
-                }
-            }
-
-            // 4. Fallback: If dm.js still didn't open the chat box after 200ms, open Full-Screen Live 1:1 DM Window directly!
-            setTimeout(() => {
-                const checkInp =
-                    document.getElementById("nx-dm-input") ||
-                    document.getElementById("nx-chat-msg-in") ||
-                    document.querySelector('input[placeholder*="Message"]');
-                if (!checkInp || checkInp.offsetParent === null) {
-                    openGuaranteedFullscreen1to1DM(uObj);
-                }
-            }, 200);
-        }, 80);
-    };
-
-    // Guaranteed Full-Screen 1:1 DM Chat Window (Works even if dm.js fails to find the user in inbox!)
-    function openGuaranteedFullscreen1to1DM(targetUser) {
-        document.getElementById("nx-guaranteed-dm-screen")?.remove();
-        const partnerUname = String(targetUser.username || "user").toLowerCase().trim();
-        const partnerDisplay = targetUser.name || partnerUname;
-        const meRaw = localStorage.getItem("nx_active_account");
-        const myUname = meRaw ? (JSON.parse(meRaw).username || "guest").toLowerCase().trim() : "guest";
-        const sessionId = window.getNexusOfficialSessionId
-            ? window.getNexusOfficialSessionId(myUname, partnerUname)
-            : "NXS-" + [myUname, partnerUname].sort().join("_").toUpperCase();
-        const roomKey = "dm_v6_" + [myUname, partnerUname].sort().join("__");
-
-        const screen = document.createElement("div");
-        screen.id = "nx-guaranteed-dm-screen";
-        screen.style.cssText =
-            "position:fixed; inset:0; background:#090d16; z-index:190000; display:flex; flex-direction:column; max-width:600px; margin:0 auto; color:#fff;";
-
-        const av = targetUser.dp
-            ? `<img src="${targetUser.dp}" style="width:38px; height:38px; border-radius:50%; object-fit:cover; border:1.5px solid #10b981;" />`
-            : `<div style="width:38px; height:38px; border-radius:50%; background:#10b981; color:#020617; font-weight:900; display:flex; align-items:center; justify-content:center;">${partnerDisplay[0].toUpperCase()}</div>`;
-
-        screen.innerHTML = `
-            <div style="background:#0b1120; border-bottom:1px solid #1e293b; padding:10px 14px; display:flex; align-items:center; justify-content:space-between;">
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <button type="button" id="nx-gdm-back" style="background:none; border:none; color:#fff; font-size:22px; font-weight:900; cursor:pointer;">←</button>
-                    ${av}
-                    <div style="cursor:pointer;" onclick="window.openPublicUserProfileModal('${partnerUname}')">
-                        <div style="font-size:14.5px; font-weight:900; color:#f8fafc;">${partnerDisplay} ✓</div>
-                        <div style="font-size:11px; color:#34d399;">@${partnerUname} • 🟢 Direct 1:1 Chat</div>
-                    </div>
-                </div>
-                <div style="display:flex; align-items:center; gap:6px;">
-                    <button type="button" onclick="window.openNexusYouTubeWatchParty && window.openNexusYouTubeWatchParty()" style="background:#e11d48; color:#fff; border:none; border-radius:8px; padding:5px 9px; font-size:11px; font-weight:900; cursor:pointer;">▶️ YT</button>
-                    <button type="button" onclick="window.startNexusRealCall && window.startNexusRealCall('audio')" style="background:#1e293b; color:#34d399; border:1px solid #10b981; border-radius:8px; padding:5px 8px; font-size:12px; cursor:pointer;">📞</button>
-                    <button type="button" onclick="window.startNexusRealCall && window.startNexusRealCall('video')" style="background:#1e293b; color:#38bdf8; border:1px solid #38bdf8; border-radius:8px; padding:5px 8px; font-size:12px; cursor:pointer;">📹</button>
-                </div>
-            </div>
-
-            <div style="background:#0b1324; border-bottom:1px solid #1e293b; padding:5px 12px; display:flex; justify-content:space-between; font-size:10.5px; color:#38bdf8; font-weight:800;">
-                <span>🔒 Encrypted 1:1 Session</span>
-                <code>${sessionId}</code>
-            </div>
-
-            <div id="nx-dm-messages" style="flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px;"></div>
-
-            <div style="background:#0b1120; border-top:1px solid #1e293b; padding:10px 12px; display:flex; align-items:center; gap:8px;">
-                <button type="button" style="width:38px; height:38px; border-radius:50%; background:#1e293b; border:1px solid #10b981; color:#34d399; font-size:20px; font-weight:900; cursor:pointer;">+</button>
-                <input type="text" id="nx-dm-input" placeholder="Message @${partnerUname}..." style="flex:1; padding:11px 14px; border-radius:999px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13.5px; outline:none;" />
-                <button type="button" id="nx-gdm-send" style="width:42px; height:42px; border-radius:50%; background:#10b981; border:none; color:#020617; font-size:18px; font-weight:900; cursor:pointer;">➤</button>
-            </div>
-        `;
-
-        document.body.appendChild(screen);
-
-        const msgBox = screen.querySelector("#nx-dm-messages");
-        const inp = screen.querySelector("#nx-dm-input");
-        const sendBtn = screen.querySelector("#nx-gdm-send");
-
-        const db = (window.Nexus && Nexus.db) || (window.firebase && firebase.firestore ? firebase.firestore() : null);
-        let unsubDm = null;
-
-        if (db) {
-            unsubDm = db
-                .collection("nexus_dms")
-                .doc(roomKey)
-                .collection("messages")
-                .orderBy("createdAt", "asc")
-                .limitToLast(80)
-                .onSnapshot((snap) => {
-                    msgBox.querySelectorAll(".nx-text-dm-bubble").forEach((el) => el.remove());
-                    snap.forEach((doc) => {
-                        const m = doc.data() || {};
-                        const isMe = (m.sender || "").toLowerCase() === myUname;
-                        const b = document.createElement("div");
-                        b.className = "nx-text-dm-bubble";
-                        b.style.cssText = `align-self:${isMe ? "flex-end" : "flex-start"}; background:${
-                            isMe ? "#064e3b" : "#1e293b"
-                        }; color:#fff; padding:9px 13px; border-radius:${
-                            isMe ? "16px 16px 4px 16px" : "16px 16px 16px 4px"
-                        }; max-width:78%; font-size:13.5px; border:1px solid ${isMe ? "#10b981" : "#334155"};`;
-                        const tStr = new Date(m.createdAt || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                        b.innerHTML = `<div>${m.text || ""}</div><div style="font-size:9.5px; color:#94a3b8; text-align:right; margin-top:3px;">${tStr} ✓✓</div>`;
-                        msgBox.appendChild(b);
-                    });
-                    msgBox.scrollTop = msgBox.scrollHeight;
-                });
-        }
-
-        const sendTextMsg = async () => {
-            const txt = (inp.value || "").trim();
-            if (!txt || !db) return;
-            inp.value = "";
-            await db.collection("nexus_dms").doc(roomKey).collection("messages").add({
-                roomKey,
-                sessionId,
-                sender: myUname,
-                receiver: partnerUname,
-                text: txt,
-                createdAt: Date.now()
-            });
-        };
-
-        sendBtn.onclick = sendTextMsg;
-        inp.onkeydown = (e) => {
-            if (e.key === "Enter") sendTextMsg();
-        };
-
-        screen.querySelector("#nx-gdm-back").onclick = () => {
-            if (unsubDm) unsubDm();
-            screen.remove();
-        };
-    }
+    setTimeout(forceFetchFirebasePostsAndUsersNow, 700);
 })();
-
