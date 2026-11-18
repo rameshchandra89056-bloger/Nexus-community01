@@ -1,4 +1,4 @@
-// ================= VOICE.JS (v45.0): 🎬 20MB–50MB HD VIDEO SENDER + 📸 1-10 PHOTO CAROUSEL + 🎙️ VOICE NOTES IN 1:1 DM & GROUP CHAT =================
+// ================= VOICE.JS (v46.0 DELETED VOICE NOTE CLEANUP FIX): 🎬 20MB–50MB HD VIDEO SENDER + 📸 1-10 PHOTO CAROUSEL + 🎙️ VOICE NOTES + 🗑️ INSTANT REMOVAL OF AUDIO/VIDEO PLAYER ON DELETED MESSAGES =================
 
 (function() {
     let mediaRec = null, chunks = [], startTs = 0, recTimer = null, recMode = 'dm';
@@ -7,21 +7,23 @@
 
     function getMe() {
         try { if (window.Nexus && Nexus.getCurrentUser) { let u = Nexus.getCurrentUser(); if (u) return u; } } catch (e) {}
-        try { let s = localStorage.getItem('nexus_current_user') || localStorage.getItem('nexus_user'); if (s) return JSON.parse(s); } catch (e) {}
+        try { let s = localStorage.getItem('nx_active_account') || localStorage.getItem('nexus_current_user') || localStorage.getItem('nexus_user'); if (s) return JSON.parse(s); } catch (e) {}
         return { username: 'mohiy', name: 'Mohit_01' };
     }
 
     function getPartner() {
-        if (window.NexusDM && NexusDM.activePartner) return NexusDM.activePartner;
-        let pName = (document.getElementById('nx-dm-partner-name')?.innerText || '').trim();
-        let u = (window.Nexus && Nexus.users || []).find(x => x && ((x.name && x.name.toLowerCase() === pName.toLowerCase()) || (x.username && x.username.toLowerCase() === pName.toLowerCase())));
-        return u ? u.username : pName.replace(/^@/, '');
+        const nameEl = document.getElementById('nx-dm-partner-name');
+        if (nameEl && nameEl.getAttribute('data-partner-username')) {
+            return nameEl.getAttribute('data-partner-username').toLowerCase().trim();
+        }
+        if (window.NexusDM && NexusDM.activePartner) return String(NexusDM.activePartner).toLowerCase().trim();
+        let pName = (nameEl?.innerText || '').replace(/✅|✓|🟢|Online Now/gi, '').trim();
+        let u = ((window.Nexus && Nexus.users) || []).find(x => x && ((x.name && x.name.toLowerCase() === pName.toLowerCase()) || (x.username && x.username.toLowerCase() === pName.toLowerCase())));
+        return u ? u.username.toLowerCase().trim() : pName.toLowerCase().replace(/^@/, '').trim();
     }
 
-    // Upload 20MB-50MB Video to Free Cloud Stream Host with Progress Bar
     function uploadLargeVideoFile(file, onProgress) {
         return new Promise((resolve, reject) => {
-            // If small video (< 750KB), can use direct dataURL instantly
             if (file.size <= 750 * 1024) {
                 const rd = new FileReader();
                 rd.onload = e => resolve(e.target.result);
@@ -75,11 +77,22 @@
         `;
     }
 
-    // Automatically render Videos, Photos & Voice Notes inside both 1:1 DM & Group Chat bubbles!
+    // FIXED: Removes deleted messages from dmMediaCache and strips <audio>/<video> from deleted bubbles!
     function syncMediaIntoBubbles() {
         if (window.Nexus && Nexus.db && !dmUnsub) {
             dmUnsub = Nexus.db.collection("nexus_private_dms").orderBy("createdAt", "desc").limit(80).onSnapshot(snap => {
-                snap.forEach(doc => { if (!doc.data().deleted) dmMediaCache[doc.id] = doc.data(); });
+                snap.forEach(doc => {
+                    const data = doc.data() || {};
+                    if (data.deleted) {
+                        delete dmMediaCache[doc.id];
+                        // Ensure audioData & videoUrl are wiped in Firestore if message was deleted
+                        if (data.audioData || data.videoUrl) {
+                            doc.ref.update({ audioData: '', videoUrl: '' }).catch(() => {});
+                        }
+                    } else {
+                        dmMediaCache[doc.id] = data;
+                    }
+                });
                 mountAllMediaDOM();
             }, () => {});
         }
@@ -87,12 +100,29 @@
     }
 
     function mountAllMediaDOM() {
+        // 1. Strip any lingering audio/video/img from deleted message bubbles (Fixes 1000077399.jpg!)
+        document.querySelectorAll('#nx-dm-msgs-box div, #nx-dm-messages div').forEach(el => {
+            const txt = (el.innerText || '');
+            if (txt.includes('This message was deleted') || txt.includes('You deleted this message')) {
+                el.querySelectorAll('audio, video, .nx-v45-video-wrap, .nx-v45-photo-wrap').forEach(mediaEl => {
+                    try { if (mediaEl.pause) mediaEl.pause(); } catch (e) {}
+                    mediaEl.remove();
+                });
+            }
+        });
+
+        // 2. Mount active media on non-deleted bubbles
         document.querySelectorAll('#nx-dm-msgs-box .nx-dm-bubble-anim').forEach(row => {
-            let id = row.getAttribute('data-message-id') || '', d = id ? dmMediaCache[id] : null;
+            let id = row.getAttribute('data-message-id') || '';
+            if ((row.innerText || '').includes('This message was deleted')) {
+                delete dmMediaCache[id];
+                row.querySelectorAll('audio, video, .nx-v45-video-wrap, .nx-v45-photo-wrap').forEach(m => m.remove());
+                return;
+            }
+            let d = id ? dmMediaCache[id] : null;
             if (!d || d.deleted) return;
             let bubble = row.querySelector('div') || row;
 
-            // Render Video Player if videoUrl exists
             if (d.videoUrl && !row.querySelector('.nx-v45-video-wrap')) {
                 let vWrap = document.createElement('div');
                 vWrap.className = 'nx-v45-video-wrap';
@@ -102,10 +132,9 @@
                 bubble.insertBefore(vWrap, bubble.firstChild);
             }
 
-            // Render Photos if missing
             let pics = (Array.isArray(d.imgUrls) && d.imgUrls.length) ? d.imgUrls : (d.imgUrl ? [d.imgUrl] : []);
             let validPics = pics.filter(u => typeof u === 'string' && u.length > 24);
-            if (validPics.length && !row.querySelector('[data-nx-dm-gallery]') && !row.querySelector('.nx-v45-photo-wrap')) {
+            if (validPics.length && !d.viewOnce && !row.querySelector('[data-nx-dm-gallery]') && !row.querySelector('.nx-v45-photo-wrap')) {
                 let pWrap = document.createElement('div');
                 pWrap.className = 'nx-v45-photo-wrap';
                 pWrap.onclick = e => e.stopPropagation();
@@ -114,12 +143,14 @@
                 bubble.insertBefore(pWrap, bubble.firstChild);
             }
 
-            // Render Voice Note if missing
             if (d.audioData && !row.querySelector('audio')) {
                 let aWrap = document.createElement('div');
                 aWrap.onclick = e => e.stopPropagation();
-                aWrap.style.margin = '4px 0';
-                aWrap.innerHTML = `<audio src="${d.audioData}" controls style="height:34px; max-width:210px;"></audio>`;
+                aWrap.style.cssText = 'margin:4px 0; display:flex; align-items:center; gap:6px;';
+                aWrap.innerHTML = `
+                    <audio src="${d.audioData}" controls style="height:32px; max-width:185px;"></audio>
+                    <button type="button" onclick="const a=this.previousElementSibling; const r=[1,1.5,2]; a.playbackRate=r[(r.indexOf(a.playbackRate)+1)%r.length]; this.innerText=a.playbackRate+'x';" style="background:#090d16;color:#10b981;border:1px solid #10b981;border-radius:8px;padding:3px 6px;font-size:10px;font-weight:900;cursor:pointer;">1x</button>
+                `;
                 bubble.insertBefore(aWrap, bubble.firstChild);
             }
         });
@@ -147,7 +178,6 @@
     }
 
     window.NexusVoice = {
-        // Supports BOTH Photos (1-10) AND Large Videos (20MB-50MB)!
         pickPhotos: function(mode) {
             let inp = document.getElementById('nx-v45-media-in');
             if (!inp) {
@@ -160,10 +190,12 @@
                 document.body.appendChild(inp);
             }
             inp.value = '';
+            const lockedPartner = getPartner();
             inp.onchange = async ev => {
                 const files = Array.from(ev.target.files || []).slice(0, 10);
                 if (!files.length || !window.Nexus || !Nexus.db) return;
                 let me = getMe();
+                let myU = String(me.username || '').toLowerCase().trim();
 
                 const videoFile = files.find(f => f.type && f.type.startsWith('video/'));
                 if (videoFile) {
@@ -180,12 +212,12 @@
                         showUploadProgressBanner('', null);
 
                         if (mode === 'dm') {
-                            let pU = getPartner();
+                            let pU = lockedPartner || getPartner();
                             if (!pU) return;
                             let ref = await Nexus.db.collection("nexus_private_dms").add({
-                                roomKey: rKey(me.username, pU),
-                                participants: [me.username.toLowerCase(), pU.toLowerCase()],
-                                fromUser: me.username,
+                                roomKey: rKey(myU, pU),
+                                participants: [myU, pU],
+                                fromUser: myU,
                                 fromName: me.name || me.username,
                                 toUser: pU,
                                 text: `🎬 Video (${sizeMB} MB)`,
@@ -201,7 +233,7 @@
                             await Nexus.db.collection("nexus_real_msgs").add({
                                 roomId: rId,
                                 sender: me.name || me.username,
-                                username: me.username,
+                                username: myU,
                                 text: `🎬 Video (${sizeMB} MB)`,
                                 videoUrl: videoUrl,
                                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -211,12 +243,11 @@
                         if (Nexus.toast) Nexus.toast(`✅ Video (${sizeMB} MB) Sent!`);
                     } catch (err) {
                         showUploadProgressBanner('', null);
-                        if (Nexus.toast) Nexus.toast("⚠️ Video upload interrupted. Please check internet & retry.");
+                        if (Nexus.toast) Nexus.toast("⚠️ Video upload interrupted.");
                     }
                     return;
                 }
 
-                // Otherwise handle 1-10 Photos
                 const imgFiles = files.filter(f => f.type && f.type.startsWith('image/'));
                 if (!imgFiles.length) return;
                 if (Nexus.toast) Nexus.toast(`📸 Sending ${imgFiles.length} photo(s)...`);
@@ -224,11 +255,11 @@
                     let urls = [];
                     for (let f of imgFiles) urls.push(await compressPhoto(f, imgFiles.length > 3 ? 520 : 680, imgFiles.length > 3 ? 0.56 : 0.70));
                     if (mode === 'dm') {
-                        let pU = getPartner(); if (!pU) return;
+                        let pU = lockedPartner || getPartner(); if (!pU) return;
                         let ref = await Nexus.db.collection("nexus_private_dms").add({
-                            roomKey: rKey(me.username, pU),
-                            participants: [me.username.toLowerCase(), pU.toLowerCase()],
-                            fromUser: me.username,
+                            roomKey: rKey(myU, pU),
+                            participants: [myU, pU],
+                            fromUser: myU,
                             fromName: me.name || me.username,
                             toUser: pU,
                             text: '',
@@ -243,7 +274,7 @@
                     } else {
                         let rId = (window.NexusChat && NexusChat.getActiveRoomId && NexusChat.getActiveRoomId()) || 'casual_chat';
                         await Nexus.db.collection("nexus_real_msgs").add({
-                            roomId: rId, sender: me.name || me.username, username: me.username,
+                            roomId: rId, sender: me.name || me.username, username: myU,
                             text: '', imgUrl: urls[0], imgUrls: urls,
                             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                             createdAt: Date.now()
@@ -257,13 +288,6 @@
 
         pickVideo: function(mode) {
             this.pickPhotos(mode);
-        },
-
-        uploadCustomMediaFile: async function(file, onProg) {
-            if (file.type && file.type.startsWith('video/')) {
-                return { type: 'video', url: await uploadLargeVideoFile(file, onProg) };
-            }
-            return { type: 'image', url: await compressPhoto(file, 720, 0.74) };
         },
 
         startRec: async function(mode) {
@@ -294,6 +318,10 @@
             } catch (e) { if (window.Nexus && Nexus.toast) Nexus.toast("⚠️ Allow Microphone permission!"); }
         },
 
+        startRecording: function(mode) {
+            return this.startRec(mode);
+        },
+
         stopRec: function(sendIt) {
             clearInterval(recTimer);
             const bar = document.getElementById('nx-v45-rec-bar'), el = document.getElementById('nx-v45-tm');
@@ -301,26 +329,36 @@
             if (bar) bar.style.display = 'none';
             if (!mediaRec) return;
             const rec = mediaRec; mediaRec = null;
+            const lockedPartner = getPartner();
             rec.onstop = () => {
-                try { rec.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+                try { rec.stream.getTracks().forEach(t => { t.enabled = false; t.stop(); }); } catch (e) {}
                 if (!sendIt) return;
                 const rd = new FileReader();
                 rd.onloadend = async () => {
                     let me = getMe();
+                    let myU = String(me.username || '').toLowerCase().trim();
                     if (!window.Nexus || !Nexus.db) return;
                     if (recMode === 'dm') {
-                        let pU = getPartner(); if (!pU) return;
+                        let pU = lockedPartner || getPartner(); if (!pU) return;
                         let ref = await Nexus.db.collection("nexus_private_dms").add({
-                            roomKey: rKey(me.username, pU), fromUser: me.username, fromName: me.name || me.username,
-                            toUser: pU, text: `🎤 Voice Note (${dur})`, audioData: rd.result, voiceDuration: dur,
-                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), createdAt: Date.now(), seen: false
+                            roomKey: rKey(myU, pU),
+                            participants: [myU, pU],
+                            fromUser: myU,
+                            fromName: me.name || me.username,
+                            toUser: pU,
+                            text: `🎤 Voice Note (${dur})`,
+                            audioData: rd.result,
+                            voiceDuration: dur,
+                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            createdAt: Date.now(),
+                            seen: false
                         });
                         dmMediaCache[ref.id] = { audioData: rd.result, voiceDuration: dur };
                         setTimeout(mountAllMediaDOM, 80);
                     } else {
                         let rId = (window.NexusChat && NexusChat.getActiveRoomId && NexusChat.getActiveRoomId()) || 'casual_chat';
                         await Nexus.db.collection("nexus_real_msgs").add({
-                            roomId: rId, sender: me.name || me.username, username: me.username,
+                            roomId: rId, sender: me.name || me.username, username: myU,
                             text: `🎤 Voice Note (${dur})`, audioData: rd.result, voiceDuration: dur,
                             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), createdAt: Date.now()
                         });
