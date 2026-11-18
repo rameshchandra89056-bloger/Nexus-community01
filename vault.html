@@ -928,5 +928,177 @@
         document.getElementById("v-user-search").oninput = renderVaultUsersList;
     })();
     </script>
+    <!-- ============================================================================
+     PASTE RIGHT BEFORE </body> IN vault.html
+     Adds a 100% Real 60FPS Canvas "Jumpo / Bouncing" Video Generator inside Stories Tab!
+     ============================================================================ -->
+<script>
+(function () {
+    const storiesSec = document.getElementById("sec-stories");
+    if (!storiesSec) return;
+
+    const studioCard = document.createElement("div");
+    studioCard.className = "v-card";
+    studioCard.style.borderColor = "#38bdf8";
+    studioCard.innerHTML = `
+        <h3 style="font-size:15px;font-weight:900;color:#38bdf8;margin-bottom:6px;">🎬 100% Real Code-Driven "Jumpo" Feature Video Maker</h3>
+        <p style="font-size:11px;color:#94a3b8;margin-bottom:10px;">Yahan kisi bhi naye feature ke Bouncing Icons aur Simulated Chat likhein — yeh code 60FPS par <b>Asli Video File (.webm)</b> bana kar Story ya Download ke liye taiyar kar dega!</p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+            <input id="jv-badge" class="v-inp" value="✨ NEW FEATURE" placeholder="Top Badge" />
+            <input id="jv-icons" class="v-inp" value="📺, 🔥, 🎵" placeholder="3 Jumping Icons" />
+        </div>
+        <input id="jv-title" class="v-inp" value="YouTube Watch-Party TV" placeholder="Feature Title" style="margin-bottom:8px;" />
+        <input id="jv-msg1" class="v-inp" value="Chalo aao saath me song sunte hain 🎵" placeholder="Chat Bubble 1 (Left)" style="margin-bottom:8px;" />
+        <input id="jv-msg2" class="v-inp" value="Upar ▶️ YT Party pe click karo aur search karo! 🔥" placeholder="Chat Bubble 2 (Right Green)" style="margin-bottom:8px;" />
+        <input id="jv-cta" class="v-inp" value="🟢 Live Sync • Search Any Video" placeholder="Bottom Highlight Pill" style="margin-bottom:10px;" />
+
+        <div style="text-align:center;background:#050811;padding:10px;border-radius:14px;border:1px solid #1e293b;margin-bottom:10px;">
+            <canvas id="jv-canvas" width="540" height="960" style="width:210px;height:373px;border-radius:14px;border:1.5px solid #10b981;"></canvas>
+        </div>
+
+        <div id="jv-status" style="font-size:11.5px;color:#34d399;font-weight:800;margin-bottom:8px;">Ready to record real 60FPS video.</div>
+        <div style="display:flex;gap:8px;">
+            <button type="button" id="jv-record-btn" class="v-btn" style="flex:1;background:linear-gradient(90deg,#38bdf8,#6366f1);color:#fff;padding:12px;">🎥 Record & Download Real Video (6s)</button>
+        </div>
+    `;
+    storiesSec.insertBefore(studioCard, storiesSec.firstElementChild);
+
+    const cvs = document.getElementById("jv-canvas");
+    const ctx = cvs.getContext("2d");
+    let startTs = performance.now();
+
+    function spring(t) {
+        if (t <= 0) return 0;
+        if (t >= 1) return 1;
+        return Math.pow(2, -9 * t) * Math.sin((t * 10 - 0.75) * ((2 * Math.PI) / 3)) + 1;
+    }
+
+    function rRect(x, y, w, h, r, fill, stroke) {
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, r);
+        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+        if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 3; ctx.stroke(); }
+    }
+
+    function drawLoop(now) {
+        const t = ((now - startTs) / 1000) % 6.0;
+        const badge = document.getElementById("jv-badge").value;
+        const icons = (document.getElementById("jv-icons").value || "📺,🔥,🎵").split(",").map(s => s.trim());
+        const title = document.getElementById("jv-title").value;
+        const m1 = document.getElementById("jv-msg1").value;
+        const m2 = document.getElementById("jv-msg2").value;
+        const cta = document.getElementById("jv-cta").value;
+
+        ctx.fillStyle = "#090d16";
+        ctx.fillRect(0, 0, 540, 960);
+
+        // Top Nexus Header
+        rRect(40, 40, 460, 70, 20, "#0f172a", "#1e293b");
+        ctx.fillStyle = "#10b981";
+        ctx.font = "900 24px sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText("🛡️ Nexus Official ✓", 65, 84);
+
+        // Jumping Icons with Spring Physics
+        icons.slice(0, 3).forEach((ic, i) => {
+            const sc = spring((t - i * 0.18) * 1.4);
+            const jumpY = Math.sin(t * 4 + i) * 14;
+            ctx.save();
+            ctx.translate(150 + i * 120, 210 + jumpY);
+            ctx.scale(sc, sc);
+            rRect(-42, -42, 84, 84, 42, "#0f172a", "#10b981");
+            ctx.font = "40px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(ic, 0, 14);
+            ctx.restore();
+        });
+
+        // Simulated Phone Chat Stage
+        rRect(40, 290, 460, 340, 26, "#0f172a", "#334155");
+
+        if (t > 0.5) {
+            const s1 = spring((t - 0.5) * 1.5);
+            ctx.save();
+            ctx.translate(65, 330);
+            ctx.scale(s1, s1);
+            rRect(0, 0, 360, 70, 18, "#1e293b", "#38bdf8");
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 18px sans-serif";
+            ctx.textAlign = "left";
+            ctx.fillText(m1.slice(0, 36), 18, 42);
+            ctx.restore();
+        }
+
+        if (t > 1.3) {
+            const s2 = spring((t - 1.3) * 1.5);
+            ctx.save();
+            ctx.translate(475, 430);
+            ctx.scale(s2, s2);
+            rRect(-370, 0, 370, 70, 18, "#064e3b", "#10b981");
+            ctx.fillStyle = "#ecfdf5";
+            ctx.font = "bold 18px sans-serif";
+            ctx.textAlign = "left";
+            ctx.fillText(m2.slice(0, 36), -352, 42);
+            ctx.restore();
+        }
+
+        if (t > 2.1) {
+            const s3 = spring((t - 2.1) * 1.5) * (1 + Math.sin(t * 6) * 0.04);
+            ctx.save();
+            ctx.translate(270, 565);
+            ctx.scale(s3, s3);
+            rRect(-190, -28, 380, 56, 28, "#e11d48", "#fda4af");
+            ctx.fillStyle = "#fff";
+            ctx.font = "900 20px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(cta, 0, 8);
+            ctx.restore();
+        }
+
+        // Bottom Feature Title & Badge
+        rRect(150, 680, 240, 40, 20, "rgba(16,185,129,0.18)", "#10b981");
+        ctx.fillStyle = "#34d399";
+        ctx.font = "900 17px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(badge, 270, 706);
+
+        ctx.fillStyle = "#f8fafc";
+        ctx.font = "900 34px sans-serif";
+        ctx.fillText(title, 270, 775);
+
+        ctx.fillStyle = "#38bdf8";
+        ctx.font = "900 22px sans-serif";
+        ctx.fillText("N E X U S   C O M M U N I T Y", 270, 880);
+
+        requestAnimationFrame(drawLoop);
+    }
+    requestAnimationFrame(drawLoop);
+
+    document.getElementById("jv-record-btn").onclick = function () {
+        const st = document.getElementById("jv-status");
+        this.disabled = true;
+        startTs = performance.now();
+        st.textContent = "🔴 Recording 6-second 60FPS HD Video...";
+
+        const stream = cvs.captureStream(60);
+        const rec = new MediaRecorder(stream, { mimeType: "video/webm" });
+        const chunks = [];
+        rec.ondataavailable = e => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+        rec.onstop = () => {
+            const blob = new Blob(chunks, { type: "video/webm" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `Nexus_Feature_${Date.now()}.webm`;
+            a.click();
+            st.textContent = "✅ Real Video Downloaded! Ab ise upar 'STORY PHOTO / VIDEO' mein select karke Publish kar dein!";
+            this.disabled = false;
+        };
+        rec.start();
+        setTimeout(() => rec.stop(), 6000);
+    };
+})();
+</script>
 </body>
 </html>
