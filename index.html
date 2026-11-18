@@ -71,11 +71,10 @@
             caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => {});
         }
 
-        // Purge any polluted local cache from V29 that had dummy 'member' posts!
-        if (!localStorage.getItem("nx_purged_dummy_member_v30")) {
+        if (!localStorage.getItem("nx_purged_dummy_member_v32")) {
             localStorage.removeItem("nx_light_posts_v1");
             localStorage.removeItem("nx_master_users_v1");
-            localStorage.setItem("nx_purged_dummy_member_v30", "1");
+            localStorage.setItem("nx_purged_dummy_member_v32", "1");
         }
 
         const PROJECT_ID = "nexus-community-bf99c";
@@ -89,13 +88,11 @@
             }
         }
 
-        // STRICT REAL POST VALIDATOR: Rejects any post without a real username/author or with dummy 'member' / single '.'!
         window.__nxValidateAndCleanRealPost = function (p, docId) {
             if (!p || typeof p !== "object") return null;
             const uname = String(p.username || "").toLowerCase().replace(/^@/, "").trim();
             const author = String(p.author || p.name || "").trim();
 
-            // NEVER allow dummy 'member' or nameless documents!
             if ((!uname && !author) || uname === "member" || author.toLowerCase() === "member") {
                 return null;
             }
@@ -103,7 +100,6 @@
             const rawText = String(p.content !== undefined ? p.content : p.text !== undefined ? p.text : "").trim();
             const rawImg = String(p.image || p.videoUrl || "").trim();
 
-            // Reject empty posts or accidental single-dot ('.') test posts without media!
             if (!rawImg && (!rawText || rawText === "." || rawText === "..")) {
                 return null;
             }
@@ -235,13 +231,20 @@
                 if (pRes.ok) {
                     const pJson = await pRes.json();
                     const docs = pJson.documents || [];
+                    const seenSigs = new Set();
                     const posts = docs
                         .map((d) => {
                             const docId = d.name.split("/").pop();
                             const rawObj = parseFirestoreFields(d.fields);
                             return window.__nxValidateAndCleanRealPost(rawObj, docId);
                         })
-                        .filter((p) => p && !window.__nxIsRefreshSpamPost(p))
+                        .filter((p) => {
+                            if (!p || window.__nxIsRefreshSpamPost(p)) return false;
+                            const sig = `${p.username}::${(p.content || "").slice(0, 40)}::${(p.image || "").slice(0, 80)}`;
+                            if (seenSigs.has(sig)) return false;
+                            seenSigs.add(sig);
+                            return true;
+                        })
                         .sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0));
 
                     window.__NX_INSTANT_POSTS__ = posts;
@@ -1027,8 +1030,6 @@
                     }
                 });
 
-                // FIXED: Queries ONLY `nexus_real_posts` ordered by `createdAt desc` (up to 75 real posts!)
-                // Automatically assembles `NX_VIDEO_STREAM:` into playable `blob:` URLs so video posts NEVER show a broken icon (1000076976.jpg)!
                 this.db.collection("nexus_real_posts").orderBy("createdAt", "desc").limit(75).onSnapshot(snap => {
                     snap.docChanges().forEach(change => {
                         if (change.type === "removed" && window.__nxMarkPostDeletedLocally) {
@@ -1037,6 +1038,7 @@
                     });
 
                     const livePosts = [];
+                    const seenSigs = new Set();
                     snap.forEach(d => {
                         let p = window.__nxValidateAndCleanRealPost(d.data(), d.id);
                         if (!p) return;
@@ -1045,7 +1047,11 @@
                             return;
                         }
 
-                        // If post is a chunked video (`NX_VIDEO_STREAM:`), assemble its chunks into a playable `blob:` URL!
+                        // Deduplicate identical double-submitted video/photo posts
+                        const sig = `${p.username}::${(p.content || "").slice(0, 40)}::${(p.image || "").slice(0, 80)}`;
+                        if (seenSigs.has(sig)) return;
+                        seenSigs.add(sig);
+
                         if (String(p.image || "").startsWith("NX_VIDEO_STREAM:")) {
                             const streamKey = p.image;
                             if (assembledVideoBlobMap[streamKey]) {
@@ -1220,22 +1226,22 @@
     <script src="watchparty.js" charset="UTF-8"></script>
     <script src="ytparty.js" charset="UTF-8"></script>
 
-    <!-- MASTER UPGRADED MODULES LOADED LAST WITH ?v=30 CACHE-BUSTER -->
-    <script src="settings.js?v=30" charset="UTF-8"></script>
-    <script src="profile.js?v=30" charset="UTF-8"></script>
-    <script src="post.js?v=30" charset="UTF-8"></script>
-
+    <!-- MASTER UPGRADED MODULES LOADED LAST WITH ?v=32 CACHE-BUSTER -->
+    <script src="settings.js?v=32" charset="UTF-8"></script>
+    <script src="profile.js?v=32" charset="UTF-8"></script>
+    <script src="post.js?v=32" charset="UTF-8"></script>
     <!-- ============================================================================
-         NEXUS V30 COMPLETE UNCUT MASTER ENGINE:
-         1. Clickable '👁️' (Eye / Views) Button on Home Feed & Profile Posts -> Opens
-            Real '👁️ Viewed by' Users Modal (Fixes 1000076975.jpg)!
-         2. Strict Owner-Only Post Delete/Edit Security & 0.01s Live Delete
-         3. Left/Right Swipe-to-Reply on Photos/Videos + View-Once + Whiteboard
+         NEXUS V32 COMPLETE UNCUT MASTER ENGINE (PART 2 OF index.html):
+         1. Real 1x / 1.5x / 2x Speed Control on Voice Notes + Protected 1️⃣ View-Once
+         2. Auto Nexus Official 1:1 Session ID (🔒 NXS-...) for Isolated Chat/Pic/Call
+         3. Separate Real Voice Call UI (Mic Only) vs Full-Screen HD Video Call UI
+         4. Real YouTube Watch-Party TV with Built-In Live Search Bar
+         5. Fixed Official Story Viewer (Converts Chunked Video to Blob -> Zero Black Screen!)
          ============================================================================ -->
     <script>
     (function () {
-        if (window.__NEXUS_V30_COMPLETE_MASTER__) return;
-        window.__NEXUS_V30_COMPLETE_MASTER__ = true;
+        if (window.__NEXUS_V32_COMPLETE_MASTER__) return;
+        window.__NEXUS_V32_COMPLETE_MASTER__ = true;
 
         const NEXUS_OFFICIAL_LOGO_SVG =
             "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2310b981'/%3E%3Cstop offset='50%25' stop-color='%2306b6d4'/%3E%3Cstop offset='100%25' stop-color='%233b82f6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='120' height='120' rx='32' fill='%23090d16'/%3E%3Crect x='5' y='5' width='110' height='110' rx='28' fill='none' stroke='url(%23g)' stroke-width='6'/%3E%3Cpath d='M32 86V34h14l28 36V34h14v52H74L46 50v36H32z' fill='url(%23g)'/%3E%3Ccircle cx='94' cy='26' r='8' fill='%2310b981'/%3E%3C/svg%3E";
@@ -1325,7 +1331,6 @@
 
         // =========================================================================
         // 1. CLICKABLE '👁️' (VIEWS) BUTTON & '⋮' (3-DOT) MENU ON HOME FEED
-        //    (Fixes 1000076975.jpg: Tapping Eye icon opens '👁️ Viewed by' modal!)
         // =========================================================================
         document.addEventListener(
             "click",
@@ -1338,7 +1343,6 @@
 
                 const txt = (btn.innerText || "").trim();
 
-                // A. Check if user tapped the '👁️' (Eye / Views) pill on Home Feed
                 if (
                     (txt.startsWith("👁️") || (btn.querySelector("svg") && /^\d+$/.test(txt))) &&
                     btn.clientWidth < 110 &&
@@ -1369,7 +1373,6 @@
                     }
                 }
 
-                // B. Check if user tapped '⋮' (3-Dot) on Home Feed
                 if (txt !== "⋮" && txt !== "•••") return;
 
                 let card = btn.parentElement;
@@ -2065,7 +2068,7 @@
         };
 
         // =========================================================================
-        // 6. GUARANTEED CROSS-PHONE PARTNER ROOM MATCHING
+        // 6. GUARANTEED CROSS-PHONE PARTNER ROOM MATCHING & SESSION ISOLATION
         // =========================================================================
         function getStrictOpenChatMessagesBox() {
             const msgInput =
@@ -2144,7 +2147,7 @@
 
             const allEls = chatRoot.querySelectorAll("div, span, p, strong, b, h1, h2, h3, h4");
             for (const el of allEls) {
-                if (chatBox.contains(el)) continue;
+                if (chatBox.contains(el) || el.closest("#nx-official-session-bar")) continue;
                 const r = el.getBoundingClientRect();
                 if (r.bottom <= boxRect.top + 25 && r.width > 30) {
                     const rawLines = (el.innerText || "")
@@ -2161,6 +2164,8 @@
                                 !l.includes("Offline") &&
                                 !l.includes("Live Room") &&
                                 !l.includes("Nexus") &&
+                                !l.includes("Session:") &&
+                                !l.includes("NXS-") &&
                                 !l.includes("Chat →")
                         );
                     if (rawLines.length > 0 && rawLines[0].length < 48) {
@@ -2450,12 +2455,28 @@
         }
 
         // =========================================================================
-        // 7. PROTECTED <canvas> VIEW-ONCE (1️⃣) & SLEEK '•••' MENU
+        // 7. PROTECTED <canvas> VIEW-ONCE (1️⃣), REAL 1x/1.5x/2x VOICE SPEED & '•••'
         // =========================================================================
         document.addEventListener(
             "click",
             async (e) => {
                 if (!isGoogleVerifiedAccount()) return;
+
+                // Real 1x / 1.5x / 2x Voice Note Speed Cycling
+                const spdBtn = e.target.closest(".nx-real-vn-speed-btn");
+                if (spdBtn) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    const bubble = spdBtn.closest(".nx-ig-media-bubble");
+                    const aud = bubble && bubble.querySelector("audio");
+                    if (aud) {
+                        const rates = [1, 1.5, 2];
+                        const nextRate = rates[(rates.indexOf(aud.playbackRate) + 1) % rates.length];
+                        aud.playbackRate = nextRate;
+                        spdBtn.textContent = nextRate + "x";
+                    }
+                    return;
+                }
 
                 const voBtn = e.target.closest(".nx-open-viewonce");
                 if (voBtn) {
@@ -2754,7 +2775,11 @@
             } else if (msg.mediaType === "video") {
                 mediaSlotHtml = `<video src="${displayUrl}" controls playsinline style="width:220px; max-width:100%; max-height:220px; border-radius:12px; border:1px solid rgba(255,255,255,0.14); background:#000; display:block; object-fit:cover;"></video>`;
             } else if (msg.mediaType === "audio") {
-                mediaSlotHtml = `<audio src="${displayUrl}" controls style="width:215px; height:36px; display:block; margin-top:2px;"></audio>`;
+                mediaSlotHtml = `
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <audio src="${displayUrl}" controls style="width:190px; height:36px; display:block;"></audio>
+                        <button type="button" class="nx-real-vn-speed-btn" style="background:#090d16; color:#34d399; border:1px solid #10b981; border-radius:8px; padding:4px 7px; font-size:11px; font-weight:900; cursor:pointer;" title="Change Playback Speed">1x</button>
+                    </div>`;
             } else if (msg.mediaType === "pdf") {
                 mediaSlotHtml = `<a href="${displayUrl}" target="_blank" download="${
                     msg.fileName || "notes.pdf"
@@ -3059,9 +3084,10 @@
         );
 
         async function startCleanAudioCall(withVideo) {
-            if (window.startNexusProCall) {
-                const partner = getExactPartnerOrRoomTitle() || "partner";
-                window.startNexusProCall(partner, Boolean(withVideo));
+            const partner = getExactPartnerOrRoomTitle() || "Member";
+            window.CURRENT_NXS_PARTNER = partner;
+            if (window.startNexusRealCall) {
+                window.startNexusRealCall(withVideo ? "video" : "audio");
             }
         }
 
@@ -3158,6 +3184,9 @@
                         <label for="nx-inp-video" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#38bdf8; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer; margin:0;">
                             <span>🎬</span> <span>Video (50MB)</span>
                         </label>
+                        <button type="button" data-act="yt-party" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #e11d48; color:#fb7185; font-weight:800; display:flex; align-items:center; gap:7px; cursor:pointer;">
+                            <span>▶️</span> <span>YT Watch Party</span>
+                        </button>
                         <button type="button" data-act="whiteboard" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #10b981; color:#34d399; font-weight:800; display:flex; align-items:center; gap:7px; cursor:pointer;">
                             <span>✏️</span> <span>Whiteboard</span>
                         </button>
@@ -3173,8 +3202,8 @@
                         <label for="nx-inp-pdf" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#fbbf24; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer; margin:0;">
                             <span>📄</span> <span>Send PDF</span>
                         </label>
-                        <button type="button" data-act="block-partner" style="grid-column:span 2; padding:9px; border-radius:12px; background:rgba(244,63,94,0.14); border:1px solid rgba(244,63,94,0.4); color:#fb7185; font-weight:800; display:flex; align-items:center; justify-content:center; gap:7px; cursor:pointer;">
-                            <span>🚫</span> <span>Block / Unblock This User</span>
+                        <button type="button" data-act="block-partner" style="padding:10px; border-radius:12px; background:rgba(244,63,94,0.14); border:1px solid rgba(244,63,94,0.4); color:#fb7185; font-weight:800; display:flex; align-items:center; justify-content:center; gap:7px; cursor:pointer;">
+                            <span>🚫</span> <span>Block User</span>
                         </button>
                     </div>
                 `;
@@ -3188,6 +3217,7 @@
                     menu.style.display = "none";
                     const act = b.getAttribute("data-act");
                     if (act === "voice") toggleVoiceNote();
+                    else if (act === "yt-party") window.openNexusYouTubeWatchParty();
                     else if (act === "whiteboard") window.openSharedWhiteboardModal();
                     else if (act === "audio-call") startCleanAudioCall(false);
                     else if (act === "video-call") startCleanAudioCall(true);
@@ -3271,6 +3301,10 @@
                         if ((data.sender || "").toLowerCase() === getMyUsername() && Date.now() - lastBroadcastTime < 1200) {
                             return;
                         }
+                        if (data.videoId && !document.getElementById("nx-yt-party-search-sheet")) {
+                            window.launchNexusSyncedVideo(data.videoId, data.title || "Watch Party", true);
+                            return;
+                        }
                         isPartnerSyncing = true;
                         const target = Number(data.currentTime) || 0;
                         currentMovieTime = target;
@@ -3306,897 +3340,739 @@
         }
     })();
     </script>
+
     <script>
-(function () {
-    if (window.__NX_OFFICIAL_STORY_V2__) return;
-    window.__NX_OFFICIAL_STORY_V2__ = true;
+    (function () {
+        if (window.__NX_CLEAN_PRODUCTION_V32__) return;
+        window.__NX_CLEAN_PRODUCTION_V32__ = true;
 
-    const LOGO = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Crect width='120' height='120' rx='30' fill='%23090d16'/%3E%3Cpath d='M30 88V32h15l30 38V32h15v56H75L45 50v38z' fill='%2310b981'/%3E%3C/svg%3E";
-    const STYLE = `
-      #nx-real-video-story-modal{position:fixed;inset:0;background:#000;z-index:999999;display:flex;flex-direction:column;justify-content:space-between;color:#fff;font-family:system-ui,sans-serif;}
-      #nx-real-video-story-modal .nxsv-stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#000;}
-      #nx-real-video-story-modal .nxsv-stage img,#nx-real-video-story-modal .nxsv-stage video{width:100%;height:100%;object-fit:contain;background:#000;}
-      #nx-real-video-story-modal .nxsv-top{position:relative;z-index:5;padding:14px 14px 34px;background:linear-gradient(#000b,transparent);}
-      #nx-real-video-story-modal .nxsv-bottom{position:relative;z-index:5;padding:44px 16px 28px;background:linear-gradient(transparent,#000d);}
-      #nx-real-video-story-modal button{border:0;cursor:pointer;color:#fff;background:#ffffff22;border-radius:20px;padding:8px 12px;font-weight:800;}
-      #nx-real-video-story-modal .nxsv-bars{display:flex;gap:4px;margin-bottom:14px;}
-      #nx-real-video-story-modal .nxsv-bars span{height:3px;background:#ffffff55;flex:1;border-radius:5px;overflow:hidden;}
-      #nx-real-video-story-modal .nxsv-bars i{display:block;height:100%;width:0;background:#fff;}
-      #nx-real-video-story-modal .nxsv-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;margin-top:12px;}
-      .nx-official-story-entry{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:flex-start!important;gap:5px!important;min-width:66px!important;max-width:76px!important;padding:2px!important;border:0!important;background:transparent!important;color:inherit!important;cursor:pointer!important;}
-      .nx-official-story-entry .nxsv-ring{width:58px;height:58px;border-radius:50%;padding:3px;background:conic-gradient(#10b981,#38bdf8,#6366f1,#10b981);display:grid;place-items:center;}
-      .nx-official-story-entry img{width:100%;height:100%;border-radius:50%;object-fit:cover;border:2px solid #090d16;background:#090d16;}
-      .nx-official-story-entry small{font-size:10px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:72px;}
-    `;
-    const style=document.createElement('style'); style.textContent=STYLE; document.head.appendChild(style);
+        const LOGO = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Crect width='120' height='120' rx='30' fill='%23090d16'/%3E%3Cpath d='M30 88V32h15l30 38V32h15v56H75L45 50v38z' fill='%2310b981'/%3E%3C/svg%3E";
 
-    function dbRef(){ return window.Nexus && Nexus.db && typeof Nexus.db.collection==='function' ? Nexus.db : (window.firebase && firebase.firestore ? firebase.firestore() : null); }
-    function viewerId(){ const uname=getUser(); if(uname && uname!=='guest') return String(uname).toLowerCase(); let id=localStorage.getItem('nx_story_viewer_id'); if(!id){id='nxv_'+Math.random().toString(36).slice(2)+Date.now().toString(36);localStorage.setItem('nx_story_viewer_id',id);} return id; }
-    function getUser(){ try{const a=JSON.parse(localStorage.getItem('nx_active_account')||'null');return (a&&a.username)||'guest';}catch(e){return 'guest';} }
-    function activeStory(s){const now=Date.now();return s&&s.isOfficial===true&&!s.archived&&(Number(s.scheduledAt||0)<=now)&&(Number(s.expiresAt||0)>now||s.isHighlight===true);}
-    async function getStories(){const db=dbRef();if(!db)throw new Error('Nexus database is not ready.');const snap=await db.collection('official_stories').orderBy('timestamp','desc').limit(100).get();const out=[];snap.forEach(d=>{const x=d.data()||{};x.id=d.id;if(activeStory(x))out.push(x);});return out.sort((a,b)=>(Number(a.timestamp||0)-Number(b.timestamp||0)));}
-    async function loadAsset(item,prefix){
-      const inline=item[prefix+'Inline']; if(inline)return inline;
-      const direct=item[prefix+'Url']; if(direct)return direct;
-      const sid=item[prefix+'StreamId'], total=Number(item[prefix+'TotalChunks']||0); if(!sid||!total)return '';
-      const db=dbRef(); if(!db)throw new Error('Database not ready.');
-      const parts=[]; for(let i=0;i<total;i++){const d=await db.collection('nexus_media_chunks').doc(sid+'_'+i).get();if(!d.exists||!d.data().data)throw new Error('Story media is incomplete.');parts.push(d.data().data);}
-      return parts.join('');
-    }
-    function escapeText(v){return String(v||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-
-    let liveStories=[];
-    function installStoryRing(){
-      const bar=document.getElementById('nx-stories-bar');
-      if(!bar)return;
-      // Reuse the existing Nexus Official card rendered by profile.js.
-      // Never create or prepend another profile card.
-      bar.querySelectorAll('.nx-official-story-entry').forEach(el=>el.remove());
-      if(!bar.dataset.nxOfficialStoryClickBound){
-        bar.dataset.nxOfficialStoryClickBound='1';
-        bar.addEventListener('click',function(e){
-          if(!liveStories.length)return;
-          const path=typeof e.composedPath==='function'?e.composedPath():[];
-          const candidates=path.length?path.filter(el=>el&&el.nodeType===1):[];
-          if(!candidates.length){let node=e.target;while(node&&node!==bar){candidates.push(node);node=node.parentElement;}}
-          const card=candidates.find(el=>{
-            if(el===bar||!bar.contains(el))return false;
-            const label=(el.innerText||el.textContent||'').replace(/\s+/g,' ').toLowerCase();
-            return label.includes('nexus')&&label.includes('official')&&el.children&&el.children.length>=2&&el.clientWidth>0&&el.clientWidth<=140&&el.clientHeight>=55&&el.clientHeight<=180;
-          });
-          if(!card)return;
-          e.preventDefault();e.stopPropagation();
-          if(e.stopImmediatePropagation)e.stopImmediatePropagation();
-          window.openNexusOfficialStory();
-        },true);
-      }
-      const cards=Array.from(bar.querySelectorAll('div,button,a')).filter(el=>{
-        const label=(el.innerText||el.textContent||'').replace(/\s+/g,' ').toLowerCase();
-        return label.includes('nexus')&&label.includes('official')&&el.children&&el.children.length>=2&&el.clientWidth>0&&el.clientWidth<=140&&el.clientHeight>=55&&el.clientHeight<=180;
-      });
-      const existing=cards.sort((a,b)=>(a.clientWidth*a.clientHeight)-(b.clientWidth*b.clientHeight))[0];
-      if(!existing)return;
-      const avatar=existing.querySelector('img');
-      if(avatar){avatar.style.boxShadow=liveStories.length?'0 0 0 3px #10b981':'';avatar.style.borderRadius='50%';}
-    }
-    const barObserver=new MutationObserver(()=>installStoryRing());
-    function startStoryFeed(){
-      const db=dbRef(); if(!db)return;
-      try{db.collection('official_stories').orderBy('timestamp','desc').limit(100).onSnapshot(snap=>{liveStories=[];snap.forEach(d=>{const x=d.data()||{};x.id=d.id;if(activeStory(x))liveStories.push(x);});installStoryRing();},err=>console.warn('Official story feed:',err));}catch(e){console.warn(e);}
-      barObserver.observe(document.body,{childList:true,subtree:true}); installStoryRing();
-    }
-    window.addEventListener('load',()=>{let n=0;const t=setInterval(()=>{if(dbRef()){clearInterval(t);startStoryFeed();}if(++n>40)clearInterval(t);},500);});
-
-    window.openNexusOfficialStory=async function(targetId){
-      const old=document.getElementById('nx-real-video-story-modal');if(old)old.remove();
-      let stories;try{stories=await getStories();}catch(e){alert(e.message||'Stories load nahi ho sakin.');return;}
-      if(!stories.length){if(window.Nexus&&Nexus.toast)Nexus.toast('Abhi koi active Nexus Official Story nahi hai.');return;}
-      let index=targetId?Math.max(0,stories.findIndex(s=>s.id===targetId)):0;if(index<0)index=0;
-      const modal=document.createElement('div');modal.id='nx-real-video-story-modal';
-      modal.innerHTML=`<div class="nxsv-stage" id="nxsv-stage"></div><div class="nxsv-top"><div class="nxsv-bars" id="nxsv-bars">${stories.map((s,i)=>`<span><i id="nxsv-progress-${i}"></i></span>`).join('')}</div><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><div style="display:flex;align-items:center;gap:9px"><img src="${LOGO}" style="width:38px;height:38px;border-radius:50%;border:2px solid #10b981"/><div><b>Nexus Official ✓</b><div style="font-size:11px;color:#cbd5e1" id="nxsv-time"></div></div></div><div style="display:flex;gap:6px"><button id="nxsv-pause">Ⅱ</button><button id="nxsv-mute">🔊</button><button id="nxsv-close">✕</button></div></div></div><div class="nxsv-bottom"><div id="nxsv-caption" style="text-align:center"></div><div class="nxsv-actions"><button id="nxsv-like">♡ Like</button><button id="nxsv-share">↗ Share</button><button id="nxsv-reply">↩ Reply</button></div><div id="nxsv-poll" style="text-align:center;margin-top:10px"></div></div>`;
-      document.body.appendChild(modal);
-      let timer=null,paused=false,muted=true,currentMedia=null;
-      const db=dbRef(), uid=viewerId();
-      const close=()=>{clearTimeout(timer);if(currentMedia&&currentMedia.pause)currentMedia.pause();modal.remove();};
-      modal.querySelector('#nxsv-close').onclick=close;
-      modal.querySelector('#nxsv-pause').onclick=()=>{paused=!paused;const v=modal.querySelector('video');const a=modal.querySelector('audio');if(v){if(paused)v.pause();else v.play().catch(()=>{});}if(a){if(paused)a.pause();else a.play().catch(()=>{});}modal.querySelector('#nxsv-pause').textContent=paused?'▶':'Ⅱ';};
-      modal.querySelector('#nxsv-mute').onclick=()=>{muted=!muted;const v=modal.querySelector('video');if(v)v.muted=muted;const a=modal.querySelector('audio');if(a)a.muted=muted;modal.querySelector('#nxsv-mute').textContent=muted?'🔇':'🔊';};
-      async function shareStory(s){const url=location.origin+location.pathname+'?story='+encodeURIComponent(s.id);const data={title:'Nexus Official Story',text:s.title||'Nexus Community Story',url};try{if(navigator.share)await navigator.share(data);else{await navigator.clipboard.writeText(url);if(window.Nexus&&Nexus.toast)Nexus.toast('Story link copied!');}}catch(e){try{await navigator.clipboard.writeText(url);if(window.Nexus&&Nexus.toast)Nexus.toast('Story link copied!');}catch(_){}}}
-      async function show(i){clearTimeout(timer);if(i<0)i=0;if(i>=stories.length){close();return;}index=i;const s=stories[index];
-        stories.forEach((_,j)=>{const p=modal.querySelector('#nxsv-progress-'+j);if(p)p.style.width=j<index?'100%':'0%';});
-        modal.querySelector('#nxsv-time').textContent=new Date(Number(s.timestamp||s.createdAt||Date.now())).toLocaleString();
-        const stage=modal.querySelector('#nxsv-stage');stage.innerHTML='';currentMedia=null;
-        const cap=modal.querySelector('#nxsv-caption');cap.innerHTML=`<div style="font-weight:900;font-size:20px;margin-bottom:5px">${escapeText(s.title||'Nexus Official')}</div><div style="font-size:14px;color:#e2e8f0;white-space:pre-wrap">${escapeText(s.caption||s.desc||'')}</div>${s.stickerText?`<div style="display:inline-block;margin-top:9px;padding:8px 13px;border-radius:20px;background:#10b981;color:#052e2b;font-weight:900">${escapeText(s.stickerText)}</div>`:''}`;
-        const likeBtn=modal.querySelector('#nxsv-like');let liked=Array.isArray(s.likedBy)&&s.likedBy.includes(uid);likeBtn.textContent=(liked?'♥':'♡')+' Like · '+Number(s.likes||0);
-        likeBtn.onclick=async()=>{try{const ref=db.collection('official_stories').doc(s.id);await ref.update({likedBy:liked?firebase.firestore.FieldValue.arrayRemove(uid):firebase.firestore.FieldValue.arrayUnion(uid),likes:firebase.firestore.FieldValue.increment(liked?-1:1)});s.likedBy=s.likedBy||[];s.likedBy=liked?s.likedBy.filter(x=>x!==uid):s.likedBy.concat(uid);s.likes=Math.max(0,Number(s.likes||0)+(liked?-1:1));liked=!liked;likeBtn.textContent=(liked?'♥':'♡')+' Like · '+s.likes;}catch(e){alert('Like save nahi hua: '+e.message);}};
-        modal.querySelector('#nxsv-share').onclick=()=>shareStory(s);
-        modal.querySelector('#nxsv-reply').onclick=async()=>{const msg=prompt('Nexus Official ko reply bhejein:');if(!msg||!msg.trim())return;try{await db.collection('official_stories').doc(s.id).set({replies:firebase.firestore.FieldValue.arrayUnion({username:getUser(),text:msg.trim().slice(0,500),createdAt:Date.now()})},{merge:true});if(window.Nexus&&Nexus.toast)Nexus.toast('Reply sent!');}catch(e){alert('Reply save nahi hua: '+e.message);}};
-        const poll=modal.querySelector('#nxsv-poll');poll.innerHTML='';
-        if(s.pollQuestion&&Array.isArray(s.pollOptions)&&s.pollOptions.length){if(Array.isArray(s.pollVoters)&&s.pollVoters.includes(uid)){poll.innerHTML='<small>✓ You already voted</small>';}else{poll.innerHTML='<div style="font-weight:900;margin-bottom:7px">'+escapeText(s.pollQuestion)+'</div>'+s.pollOptions.map((o,j)=>'<button data-poll="'+j+'" style="margin:3px">'+escapeText(o)+'</button>').join('');poll.querySelectorAll('[data-poll]').forEach(b=>b.onclick=async()=>{try{const n=Number(b.dataset.poll);await db.collection('official_stories').doc(s.id).update({['pollVotes.'+n]:firebase.firestore.FieldValue.increment(1),pollVoters:firebase.firestore.FieldValue.arrayUnion(uid)});s.pollVoters=(s.pollVoters||[]).concat(uid);poll.innerHTML='<small>✓ Your vote was recorded</small>';}catch(e){alert('Vote save nahi hua: '+e.message);}});}}
-        try{const seen=Array.isArray(s.viewedBy)&&s.viewedBy.includes(uid);if(!seen){await db.collection('official_stories').doc(s.id).update({viewedBy:firebase.firestore.FieldValue.arrayUnion(uid),views:firebase.firestore.FieldValue.increment(1)});s.viewedBy=(s.viewedBy||[]).concat(uid);s.views=Number(s.views||0)+1;}}catch(e){console.warn('Story view tracking:',e);}
-        const media=await loadAsset(s,'media');
-        if(s.mediaType==='video'){const v=document.createElement('video');v.src=media;v.autoplay=true;v.playsInline=true;v.controls=true;v.muted=muted;v.style.cssText='width:100%;height:100%;object-fit:contain';stage.appendChild(v);currentMedia=v;v.onended=()=>show(index+1);v.play().catch(()=>{});}
-        else if(s.mediaType==='image'){const im=document.createElement('img');im.src=media;im.alt='Nexus Official Story';stage.appendChild(im);}
-        else {stage.innerHTML='<div style="padding:30px;text-align:center;font-size:24px;font-weight:900">'+escapeText(s.caption||s.title||'Nexus Official')+'</div>';}
-        if(s.musicInline||s.musicUrl||s.musicStreamId){try{const src=await loadAsset(s,'music');const a=document.createElement('audio');a.src=src;a.loop=true;a.autoplay=true;a.controls=true;a.style.cssText='position:absolute;bottom:18px;left:12%;width:76%;z-index:4';stage.appendChild(a);currentMedia=a;a.play().catch(()=>{});}catch(e){console.warn('Story music:',e);}}
-        const duration=s.mediaType==='video'?null:7000;const prog=modal.querySelector('#nxsv-progress-'+index);const videoEl=stage.querySelector('video');if(videoEl){videoEl.ontimeupdate=()=>{if(videoEl.duration&&prog)prog.style.width=(videoEl.currentTime/videoEl.duration*100)+'%';};}if(duration){let start=Date.now();const tick=()=>{if(!modal.isConnected)return;if(paused){timer=setTimeout(tick,100);return;}const pct=Math.min(100,(Date.now()-start)/duration*100);if(prog)prog.style.width=pct+'%';if(pct>=100){show(index+1);return;}timer=setTimeout(tick,100);};tick();}else if(videoEl){videoEl.onended=()=>show(index+1);}else{timer=setTimeout(()=>show(index+1),7000);}
-      }
-      let startX=0;modal.addEventListener('touchstart',e=>{startX=e.touches[0].clientX;},{passive:true});modal.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-startX;if(Math.abs(dx)>60)show(index+(dx<0?1:-1));},{passive:true});
-      modal.querySelector('#nxsv-stage').addEventListener('click',e=>{if(e.target.closest('video'))return;const x=e.clientX;if(x<window.innerWidth/2)show(index-1);else show(index+1);});
-      await show(index);
-    };
-    const queryStory=new URLSearchParams(location.search).get('story');if(queryStory){let tries=0;const t=setInterval(()=>{if(dbRef()){clearInterval(t);window.openNexusOfficialStory(queryStory);}if(++tries>30)clearInterval(t);},500);}
-})();
-    </script>
-    <script>
-// ============================================================================
-// NEXUS COMMUNITY — ALL-IN-ONE MASTER ENGINE (FIXES ALL REPORTED ISSUES)
-// 1. Stop 5-People Message/Call Leak (Strict Single-Target Lock)
-// 2. Kill "Member Full Profile" Popup -> Force Chanchal-Style Full Profile
-// 3. Fix 0:00/0:00 Video Player + Custom Voice Note Player (No Chrome Embed)
-// 4. Post Music/Song Attachment & Auto-Play on Feed
-// 5. Nexus Official Exclusive Story + Spinning Green Ring + Auto-Promo Video
-// ============================================================================
-
-(function() {
-    // ------------------------------------------------------------------------
-    // PART A: MASTER CSS (Spinning Green Story Ring, Clean Video, Audio & UI)
-    // ------------------------------------------------------------------------
-    if (!document.getElementById('nexus-pro-master-styles')) {
-        const style = document.createElement('style');
-        style.id = 'nexus-pro-master-styles';
-        style.innerHTML = `
-            /* 1. Kill Chrome Native Video & Audio Controls completely */
-            video::-webkit-media-controls,
-            video::-webkit-media-controls-enclosure,
-            video::-webkit-media-controls-panel,
-            audio::-webkit-media-controls,
-            audio::-webkit-media-controls-enclosure {
-                display: none !important;
-                opacity: 0 !important;
-                pointer-events: none !important;
+        const masterCss = document.createElement("style");
+        masterCss.textContent = `
+            .nx-active-story-ring {
+                position: relative !important;
+                border-radius: 50% !important;
+                padding: 3px !important;
+                background: conic-gradient(#10b981, #38bdf8, #00e676, #10b981) !important;
+                box-shadow: 0 0 16px rgba(16, 185, 129, 0.55) !important;
             }
-
-            /* 2. Spinning Neon Green Ring ONLY for Nexus Official Story */
-            @keyframes nexusSpinRing {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
+            #nx-real-video-story-modal {
+                position: fixed; inset: 0; background: #050811; z-index: 999999;
+                display: flex; flex-direction: column; justify-content: space-between;
+                color: #fff; font-family: system-ui, sans-serif; user-select: none;
             }
-            .nexus-official-ring-wrap {
-                position: relative;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                padding: 3px;
-                border-radius: 50%;
+            #nx-real-video-story-modal .nxsv-stage {
+                position: absolute; inset: 0; display: flex; align-items: center;
+                justify-content: center; overflow: hidden; background: #050811; z-index: 1;
             }
-            .nexus-official-ring-wrap::before {
-                content: "";
-                position: absolute;
-                inset: -3px;
-                border-radius: 50%;
-                background: conic-gradient(#00e676, #00bfa5, #10b981, transparent 30%, #00e676);
-                animation: nexusSpinRing 2.2s linear infinite;
-                z-index: 0;
+            #nx-real-video-story-modal .nxsv-stage img,
+            #nx-real-video-story-modal .nxsv-stage video {
+                width: 100%; height: 100%; max-height: 100dvh; object-fit: contain;
+                background: #050811; display: block;
             }
-            .nexus-official-ring-wrap > * {
-                position: relative;
-                z-index: 1;
+            #nx-real-video-story-modal .nxsv-top {
+                position: relative; z-index: 10; padding: 14px 14px 28px;
+                background: linear-gradient(to bottom, rgba(0,0,0,0.85), transparent);
             }
-
-            /* 3. Nexus Pro Reels-Style Video Player (Fixes 0:00 / 0:00 ugly bar) */
-            .nx-pro-video-box {
-                position: relative;
-                width: 100%;
-                border-radius: 14px;
-                overflow: hidden;
-                background: #070a0f;
-                user-select: none;
-                cursor: pointer;
-                margin-top: 8px;
-                border: 1px solid #1e2636;
+            #nx-real-video-story-modal .nxsv-bottom {
+                position: relative; z-index: 10; padding: 28px 16px 24px;
+                background: linear-gradient(to top, rgba(0,0,0,0.92), transparent);
             }
-            .nx-pro-video-box video {
-                width: 100%;
-                max-height: 480px;
-                object-fit: cover;
-                display: block;
-                pointer-events: none;
+            #nx-real-video-story-modal .nxsv-bars {
+                display: flex; gap: 5px; margin-bottom: 12px;
             }
-            .nx-pro-play-btn {
-                position: absolute;
-                top: 50%; left: 50%;
-                transform: translate(-50%, -50%) scale(1);
-                width: 58px; height: 58px;
-                border-radius: 50%;
-                background: rgba(11, 20, 26, 0.78);
-                border: 2px solid #00e676;
-                color: #00e676;
-                display: flex; align-items: center; justify-content: center;
-                font-size: 22px;
-                box-shadow: 0 8px 25px rgba(0, 230, 118, 0.35);
-                transition: all 0.22s ease;
-                pointer-events: none;
+            #nx-real-video-story-modal .nxsv-bars span {
+                height: 3.5px; background: rgba(255,255,255,0.28); flex: 1;
+                border-radius: 4px; overflow: hidden;
             }
-            .nx-pro-play-btn.playing {
-                opacity: 0;
-                transform: translate(-50%, -50%) scale(0.6);
+            #nx-real-video-story-modal .nxsv-bars i {
+                display: block; height: 100%; width: 0%; background: #10b981;
+                transition: width 0.15s linear;
             }
-
-            /* 4. Custom Nexus Official Voice Note Player (Replaces Chrome Embed) */
-            .nx-voice-note-card {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                background: linear-gradient(135deg, #112229, #192f38);
-                border: 1px solid #00a884;
-                padding: 8px 12px;
-                border-radius: 16px;
-                min-width: 220px;
-                max-width: 280px;
-                margin: 4px 0;
-                color: #fff;
+            .nxsv-btn {
+                border: 1px solid rgba(255,255,255,0.2); cursor: pointer; color: #fff;
+                background: rgba(15,23,42,0.75); border-radius: 999px; padding: 8px 14px;
+                font-weight: 800; font-size: 12.5px; backdrop-filter: blur(6px);
             }
-            .nx-vn-play {
-                width: 36px; height: 36px;
-                border-radius: 50%;
-                background: #00e676;
-                color: #000;
-                border: none;
-                font-weight: 900;
-                font-size: 15px;
-                cursor: pointer;
-                flex-shrink: 0;
-                display: flex; align-items: center; justify-content: center;
-            }
-            .nx-vn-waves {
-                flex: 1;
-                display: flex;
-                align-items: center;
-                gap: 3px;
-                height: 22px;
-            }
-            .nx-vn-bar {
-                flex: 1;
-                background: rgba(0, 230, 118, 0.4);
-                height: 35%;
-                border-radius: 2px;
-                transition: height 0.15s ease, background 0.15s ease;
-            }
-            .nx-vn-bar.active {
-                background: #00e676;
-                height: 95%;
-            }
-            .nx-vn-speed {
-                background: #0b141a;
-                color: #00e676;
-                border: 1px solid #00a884;
-                border-radius: 10px;
-                padding: 3px 7px;
-                font-size: 11px;
-                font-weight: 800;
-                cursor: pointer;
-            }
-
-            /* 5. Post Music Pill (Instagram Style Song on Post) */
-            .nx-post-music-bar {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                background: rgba(0, 168, 132, 0.12);
-                border: 1px solid rgba(0, 230, 118, 0.35);
-                border-radius: 10px;
-                padding: 7px 12px;
-                margin: 8px 0;
-                font-size: 12px;
-                color: #e2e8f0;
-                cursor: pointer;
+            @keyframes nxCallPulse {
+                0%, 100% { transform: scale(1); opacity: 0.7; }
+                50% { transform: scale(1.18); opacity: 0.2; }
             }
         `;
-        document.head.appendChild(style);
-    }
+        document.head.appendChild(masterCss);
 
-    // ------------------------------------------------------------------------
-    // PART B: FIX CHANCHAL'S BUG — STOP MESSAGES & CALLS GOING TO 5 PEOPLE!
-    // ------------------------------------------------------------------------
-    window.CURRENT_LOCKED_CHAT_UID = null;
-    window.CURRENT_LOCKED_ROOM_ID = null;
-
-    window.getStrictSortedRoomId = function(uidA, uidB) {
-        if (!uidA || !uidB) return null;
-        return [String(uidA).trim().toLowerCase(), String(uidB).trim().toLowerCase()].sort().join('_');
-    };
-
-    // Call this whenever opening ANY 1:1 chat so old listeners are 100% wiped!
-    window.lockActiveChatPartner = function(targetUid, targetUsername) {
-        const myUid = window.currentUser?.uid || window.currentUser?.username || localStorage.getItem('nexus_uid');
-        window.CURRENT_LOCKED_CHAT_UID = targetUid;
-        window.CURRENT_LOCKED_ROOM_ID = window.getStrictSortedRoomId(myUid, targetUid);
-
-        // Clone & replace Send button and Call button to destroy all stacked listeners!
-        const sendBtn = document.querySelector('#send-msg-btn, .send-btn, #dm-send-btn');
-        if (sendBtn && sendBtn.parentNode) {
-            const cleanSend = sendBtn.cloneNode(true);
-            sendBtn.parentNode.replaceChild(cleanSend, sendBtn);
-            cleanSend.onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (typeof window.sendLocked1v1Message === 'function') {
-                    window.sendLocked1v1Message();
-                }
-            };
+        function dbRef() {
+            return window.Nexus && Nexus.db ? Nexus.db : (window.firebase && firebase.firestore ? firebase.firestore() : null);
         }
 
-        const callBtn = document.querySelector('#dm-call-btn, .call-btn, [title="Call"]');
-        if (callBtn && callBtn.parentNode) {
-            const cleanCall = callBtn.cloneNode(true);
-            callBtn.parentNode.replaceChild(cleanCall, callBtn);
-            cleanCall.onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (typeof window.startStrict1v1Call === 'function') {
-                    window.startStrict1v1Call(window.CURRENT_LOCKED_CHAT_UID, targetUsername);
-                }
-            };
-        }
-    };
-
-    // Hard Block / Device Ban Check (For toxic users like Sidra if blocked from Vault)
-    window.checkHardBanStatus = async function() {
-        const myName = (window.currentUser?.username || localStorage.getItem('nexus_username') || '').toLowerCase();
-        const bannedList = JSON.parse(localStorage.getItem('nexus_hard_banned_users') || '[]');
-        if (bannedList.includes(myName) || localStorage.getItem('nexus_device_banned') === 'true') {
-            document.body.innerHTML = `
-                <div style="position:fixed;inset:0;background:#070a0e;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;font-family:sans-serif;z-index:9999999;">
-                    <div style="font-size:54px;margin-bottom:12px;">🚫</div>
-                    <h2 style="color:#ff3b30;margin-bottom:8px;">Access Permanently Restricted</h2>
-                    <p style="color:#94a3b8;font-size:14px;max-width:300px;line-height:1.5;">Your account and device have been permanently blocked from Nexus Community for violating community guidelines.</p>
-                </div>
-            `;
-        }
-    };
-    window.checkHardBanStatus();
-
-    // ------------------------------------------------------------------------
-    // PART C: KILL "MEMBER FULL PROFILE" POPUP -> FORCE CHANCHAL FULL PROFILE
-    // ------------------------------------------------------------------------
-    function enforceChanchalStyleFullProfileEverywhere() {
-        // 1. Detect if the ugly "Member Full Profile" modal pops up and immediately convert it!
-        document.querySelectorAll('div, section').forEach(el => {
-            if (el.textContent && el.textContent.includes('Member Full Profile') && el.offsetHeight > 100 && el.offsetWidth < window.innerWidth) {
-                // Find the @username inside this popup
-                const match = el.innerText.match(/@([a-zA-Z0-9_.\-]+)/);
-                const extractedUsername = match ? match[1] : null;
-                const modalRoot = el.closest('[style*="fixed"], .modal, .popup') || el;
-                modalRoot.remove(); // Destroy the small popup!
-
-                if (extractedUsername && typeof window.openChanchalStyleFullProfile === 'function') {
-                    window.openChanchalStyleFullProfile(extractedUsername);
-                }
-            }
-        });
-    }
-
-    // Unified Chanchal-Style Full-Screen Profile Renderer (If native full profile isn't triggered)
-    window.openChanchalStyleFullProfile = async function(usernameOrUid) {
-        // First try calling your existing full-screen profile page function if it exists
-        if (typeof window.openFullPageProfile === 'function') {
-            return window.openFullPageProfile(usernameOrUid);
-        }
-
-        const cleanHandle = String(usernameOrUid || 'user').replace('@', '').trim();
-        document.getElementById('nx-chanchal-full-profile')?.remove();
-
-        let userDoc = {
-            username: cleanHandle,
-            displayName: cleanHandle.toUpperCase(),
-            bio: "Nexus Community Member ✨",
-            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanHandle)}&background=00a884&color=fff`,
-            verified: true,
-            songTitle: "Mann Jogiya",
-            songArtist: "Arijit Singh & Ishita Vishwakarma",
-            songUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-            postsCount: 0,
-            followersCount: 1,
-            followingCount: 1
-        };
-
-        const userPosts = [];
-
-        if (typeof db !== 'undefined' && db.collection) {
+        function getMyUser() {
             try {
-                const uSnap = await db.collection('users').get();
-                uSnap.forEach(doc => {
-                    const d = doc.data();
-                    if ((d.username || '').toLowerCase() === cleanHandle.toLowerCase() || doc.id === cleanHandle) {
-                        userDoc = { ...userDoc, ...d, uid: doc.id };
-                    }
-                });
-                const pSnap = await db.collection('posts').get();
-                pSnap.forEach(doc => {
-                    const p = doc.data();
-                    if ((p.username || p.authorName || '').toLowerCase() === cleanHandle.toLowerCase()) {
-                        userPosts.push({ id: doc.id, ...p });
-                    }
-                });
-                userDoc.postsCount = userPosts.length;
-            } catch (e) {}
+                const a = JSON.parse(localStorage.getItem("nx_active_account") || "null");
+                return (a && a.username) ? a.username.toLowerCase().trim() : "guest";
+            } catch (e) { return "guest"; }
         }
 
-        const page = document.createElement('div');
-        page.id = 'nx-chanchal-full-profile';
-        page.style.cssText = 'position:fixed;inset:0;background:#0b0f17;z-index:99999;overflow-y:auto;color:#fff;font-family:sans-serif;padding-bottom:60px;';
-        page.innerHTML = `
-            <!-- Top Header Bar (Exact @chanchal style) -->
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#0e141f;border-bottom:1px solid #1e293b;position:sticky;top:0;z-index:20;">
-                <div style="display:flex;align-items:center;gap:12px;">
-                    <button onclick="document.getElementById('nx-chanchal-full-profile').remove(); if(window.profileSongAudio) window.profileSongAudio.pause();" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;">←</button>
-                    <div>
-                        <div style="font-weight:800;font-size:17px;display:flex;align-items:center;gap:6px;">
-                            @${userDoc.username} <span style="background:#00e676;color:#000;border-radius:4px;padding:1px 5px;font-size:11px;">✔</span>
-                        </div>
-                        <div style="font-size:11px;color:#94a3b8;">🟢 Active on Nexus</div>
-                    </div>
-                </div>
-                <div style="display:flex;gap:8px;">
-                    <button onclick="window.openDirectChatWithUser('${userDoc.uid || userDoc.username}', '${userDoc.username}')" style="background:#1e293b;color:#fff;border:1px solid #334155;border-radius:18px;padding:6px 12px;font-size:12px;cursor:pointer;">📞</button>
-                    <button style="background:#1e293b;color:#fff;border:1px solid #334155;border-radius:18px;padding:6px 12px;font-size:12px;font-weight:bold;">QR</button>
-                </div>
-            </div>
+        function escapeText(v) {
+            return String(v || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+        }
 
-            <!-- Avatar + Stats + Bio -->
-            <div style="padding:18px 16px;">
-                <div style="display:flex;align-items:center;gap:16px;">
-                    <div style="text-align:center;">
-                        <img src="${userDoc.avatar || userDoc.profilePic}" style="width:86px;height:86px;border-radius:50%;object-fit:cover;border:3px solid #0ea5e9;padding:2px;">
-                        <div style="font-weight:800;font-size:14px;margin-top:6px;">${userDoc.displayName || userDoc.username}</div>
-                    </div>
-                    <div style="flex:1;">
-                        <div style="display:flex;justify-content:space-around;background:#131b2b;border:1px solid #1e293b;border-radius:14px;padding:10px;margin-bottom:10px;text-align:center;">
-                            <div><div style="font-weight:800;font-size:17px;">${userDoc.postsCount}</div><div style="font-size:11px;color:#94a3b8;">posts</div></div>
-                            <div><div style="font-weight:800;font-size:17px;">${userDoc.followersCount || 2}</div><div style="font-size:11px;color:#94a3b8;">followers</div></div>
-                            <div><div style="font-weight:800;font-size:17px;">${userDoc.followingCount || 1}</div><div style="font-size:11px;color:#94a3b8;">following</div></div>
-                        </div>
-                        <div style="background:#131b2b;border:1px solid #1e293b;border-radius:14px;padding:10px 12px;font-size:13px;">
-                            <span style="background:#0ea5e922;color:#38bdf8;padding:2px 8px;border-radius:8px;font-size:11px;">🛡️ @${userDoc.username}</span>
-                            <div style="margin-top:6px;color:#e2e8f0;">${userDoc.bio || 'Focused on goals 🚀'}</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Profile Song Anthem Bar (Just like @chanchal's Mann Jogiya bar!) -->
-                <div style="display:flex;align-items:center;justify-content:space-between;background:#0f1d22;border:1px solid #00a884;border-radius:16px;padding:10px 14px;margin:16px 0;">
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <div style="width:38px;height:38px;border-radius:8px;background:#00a884;color:#000;display:flex;align-items:center;justify-content:center;font-weight:900;">🎵</div>
-                        <div>
-                            <div style="font-weight:800;font-size:14px;color:#fff;">${userDoc.songTitle || 'Mann Jogiya'}</div>
-                            <div style="font-size:11px;color:#00e676;">${userDoc.songArtist || 'Profile Anthem • Nexus Music'}</div>
-                        </div>
-                    </div>
-                    <button id="prof-song-play-btn" style="background:#00e676;color:#000;border:none;padding:7px 16px;border-radius:20px;font-weight:800;font-size:12px;cursor:pointer;">▶ Play</button>
-                </div>
-
-                <!-- Follow / Message / Share Buttons (Fixes Chanchal's "DM option nahi aa raha" bug!) -->
-                <div style="display:flex;gap:10px;margin-bottom:16px;">
-                    <button onclick="this.textContent = this.textContent === 'Following ✔' ? 'Follow' : 'Following ✔'" style="flex:1;background:#00c853;color:#000;border:none;padding:12px;border-radius:14px;font-weight:800;font-size:14px;cursor:pointer;">Follow</button>
-                    <button onclick="document.getElementById('nx-chanchal-full-profile').remove(); window.openDirectChatWithUser('${userDoc.uid || userDoc.username}', '${userDoc.username}')" style="flex:1;background:#1e293b;color:#fff;border:1px solid #334155;padding:12px;border-radius:14px;font-weight:800;font-size:14px;cursor:pointer;">Message 💬</button>
-                    <button onclick="navigator.share && navigator.share({title:'@${userDoc.username} on Nexus', url:location.href})" style="background:#1e293b;color:#38bdf8;border:1px solid #334155;padding:12px 16px;border-radius:14px;font-weight:800;font-size:14px;cursor:pointer;">Share 🔗</button>
-                </div>
-
-                <!-- Grid / Scroll Posts / Videos Tabs -->
-                <div style="display:flex;border-bottom:1px solid #1e293b;margin-bottom:10px;text-align:center;font-size:13px;font-weight:700;">
-                    <div style="flex:1;padding:10px;border-bottom:2px solid #00e676;color:#fff;">⊞ Grid (${userPosts.length})</div>
-                    <div style="flex:1;padding:10px;color:#94a3b8;">📱 Scroll Posts (${userPosts.length})</div>
-                    <div style="flex:1;padding:10px;color:#94a3b8;">🎬 Videos</div>
-                </div>
-
-                <!-- 3-Column Post Grid -->
-                <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:4px;">
-                    ${userPosts.length > 0 ? userPosts.map(p => `
-                        <div style="aspect-ratio:1/1;background:#131b2b;overflow:hidden;position:relative;border-radius:4px;">
-                            ${p.imageUrl || p.mediaUrl ? `<img src="${p.imageUrl || p.mediaUrl}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="padding:8px;font-size:11px;color:#cbd5e1;display:flex;align-items:center;justify-content:center;height:100%;text-align:center;">${(p.text || '').substring(0, 45)}</div>`}
-                        </div>
-                    `).join('') : `<div style="grid-column:span 3;text-align:center;padding:32px;color:#64748b;font-size:13px;">No posts shared yet.</div>`}
-                </div>
-            </div>
-        `;
-        document.body.appendChild(page);
-
-        // Profile Song Play/Pause Logic
-        const songBtn = document.getElementById('prof-song-play-btn');
-        songBtn.onclick = () => {
-            if (!window.profileSongAudio) {
-                window.profileSongAudio = new Audio(userDoc.songUrl);
+        // 1. AUTO NEXUS OFFICIAL 1:1 SESSION ID
+        window.getNexusOfficialSessionId = function (u1, u2) {
+            const a = String(u1 || "").toLowerCase().replace(/^@/, "").trim();
+            const b = String(u2 || "").toLowerCase().replace(/^@/, "").trim();
+            if (!a || !b) return "NXS-SAVED";
+            const pair = [a, b].sort().join("::");
+            let h = 2166136261;
+            for (let i = 0; i < pair.length; i++) {
+                h ^= pair.charCodeAt(i);
+                h = Math.imul(h, 16777619);
             }
-            if (window.profileSongAudio.paused) {
-                window.profileSongAudio.play().catch(()=>{});
-                songBtn.textContent = '⏸ Pause';
-            } else {
-                window.profileSongAudio.pause();
-                songBtn.textContent = '▶ Play';
-            }
+            return "NXS-" + (h >>> 0).toString(16).toUpperCase().padStart(8, "0");
         };
-    };
 
-    // Helper to open 1:1 DM directly from any profile
-    window.openDirectChatWithUser = function(uid, username) {
-        window.lockActiveChatPartner(uid, username);
-        if (typeof window.openChat === 'function') window.openChat(uid, username);
-        else if (typeof window.startDM === 'function') window.startDM(uid, username);
-    };
+        function syncChatHeaderSessionAndTools() {
+            const msgInput = document.getElementById("nx-dm-input") || document.getElementById("nx-chat-msg-in") || document.querySelector('input[placeholder*="Message"]');
+            if (!msgInput || msgInput.offsetParent === null) return;
 
-    // ------------------------------------------------------------------------
-    // PART D: FIX BROKEN 0:00/0:00 VIDEO PLAYER & CHROME AUDIO EMBED
-    // ------------------------------------------------------------------------
-    const mediaScrollObserver = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            const el = entry.target;
-            if (!entry.isIntersecting && !el.paused) {
-                el.pause();
-            }
-        });
-    }, { threshold: 0.35 });
-
-    window.upgradeVideosAndVoiceNotes = function() {
-        // 1. Fix All Feed & Chat Videos (Removes 0:00 / 0:00 ugly bar)
-        document.querySelectorAll('video').forEach(vid => {
-            if (vid.dataset.nxProUpgraded === "true" || vid.closest('#nx-official-story-viewer')) return;
-            vid.dataset.nxProUpgraded = "true";
-
-            vid.removeAttribute('controls');
-            vid.controls = false;
-            vid.preload = "metadata";
-            vid.setAttribute('playsinline', '');
-            vid.setAttribute('webkit-playsinline', '');
-            vid.oncontextmenu = e => e.preventDefault();
-
-            // Force load first frame so video isn't a dead black box!
-            if (vid.src && !vid.src.includes('#t=')) {
-                vid.src = vid.src + '#t=0.1';
-            }
-
-            // Hide any old broken custom control bars next to the video (like the 0:00/0:00 bar in Screenshot 6!)
-            const parentCard = vid.parentElement;
-            if (parentCard) {
-                parentCard.querySelectorAll('div, span').forEach(sibling => {
-                    if (sibling !== vid && sibling.textContent && sibling.textContent.includes('0:00 / 0:00')) {
-                        sibling.style.display = 'none';
+            const chatRoot = msgInput.closest("section, main, div[style*='fixed']") || document.body;
+            let partnerHandle = window.currentChatUser || window.activeDMUser || "";
+            if (!partnerHandle) {
+                const headerEls = chatRoot.querySelectorAll("b, strong, h3, h4, span");
+                for (const el of headerEls) {
+                    const t = (el.innerText || "").trim();
+                    if (t.length > 1 && t.length < 30 && !t.includes("Nexus") && !t.includes("Online") && !t.includes("Last seen") && !t.includes("NXS-")) {
+                        partnerHandle = t.replace(/^@/, "").trim();
+                        break;
                     }
+                }
+            }
+            if (!partnerHandle) return;
+
+            const myUname = getMyUser();
+            const sessionId = window.getNexusOfficialSessionId(myUname, partnerHandle);
+            window.CURRENT_NXS_SESSION_ID = sessionId;
+            window.CURRENT_NXS_PARTNER = partnerHandle;
+
+            const chatBox = document.getElementById("nx-dm-messages") || document.getElementById("nx-chat-messages") || document.getElementById("chat-messages");
+            if (chatBox && chatBox.parentElement && !document.getElementById("nx-official-session-bar")) {
+                const sBar = document.createElement("div");
+                sBar.id = "nx-official-session-bar";
+                sBar.style.cssText = "background:#0b1324; border-bottom:1px solid #1e293b; padding:6px 12px; display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px; color:#94a3b8; z-index:40;";
+                sBar.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="color:#10b981; font-weight:900;">🔒 Session:</span>
+                        <code id="nx-sess-code-lbl" style="background:#090d16; color:#38bdf8; padding:2px 7px; border-radius:6px; border:1px solid #1e293b; font-weight:800;">${sessionId}</code>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <button type="button" onclick="window.openNexusYouTubeWatchParty()" style="background:#e11d48; color:#fff; border:none; border-radius:8px; padding:4px 9px; font-size:11px; font-weight:900; cursor:pointer;">▶️ YT Party</button>
+                        <button type="button" onclick="window.startNexusRealCall('audio')" style="background:#1e293b; color:#34d399; border:1px solid #10b981; border-radius:8px; padding:4px 8px; font-size:11px; font-weight:800; cursor:pointer;">📞 Audio</button>
+                        <button type="button" onclick="window.startNexusRealCall('video')" style="background:#1e293b; color:#38bdf8; border:1px solid #38bdf8; border-radius:8px; padding:4px 8px; font-size:11px; font-weight:800; cursor:pointer;">📹 Video</button>
+                    </div>
+                `;
+                chatBox.parentElement.insertBefore(sBar, chatBox);
+            } else if (document.getElementById("nx-sess-code-lbl")) {
+                document.getElementById("nx-sess-code-lbl").textContent = sessionId;
+            }
+        }
+        setInterval(syncChatHeaderSessionAndTools, 600);
+
+        // 2. SEPARATE REAL AUDIO CALL (📞) vs FULL-SCREEN VIDEO CALL (📹)
+        let localCallStream = null;
+        let peerConn = null;
+        let callClockTimer = null;
+        let currentFacingMode = "user";
+
+        window.startNexusProCall = function (partner, isVideo) {
+            window.CURRENT_NXS_PARTNER = partner || window.CURRENT_NXS_PARTNER || "Member";
+            window.startNexusRealCall(isVideo ? "video" : "audio");
+        };
+
+        window.startNexusRealCall = async function (mode = "audio", isIncoming = false, remoteCallDocId = null) {
+            const partner = window.CURRENT_NXS_PARTNER || "Member";
+            const myUname = getMyUser();
+            const sessionId = window.getNexusOfficialSessionId(myUname, partner);
+            const callDocId = remoteCallDocId || `${sessionId}_call`;
+
+            document.getElementById("nx-real-call-modal")?.remove();
+
+            try {
+                localCallStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { echoCancellation: true, noiseSuppression: true },
+                    video: mode === "video" ? { facingMode: currentFacingMode, width: { ideal: 1280 }, height: { ideal: 720 } } : false
                 });
+            } catch (err) {
+                alert(mode === "video" ? "⚠️ Video Call ke liye Camera aur Mic permission allow karein!" : "⚠️ Audio Call ke liye Microphone permission allow karein!");
+                return;
             }
 
-            const box = document.createElement('div');
-            box.className = 'nx-pro-video-box';
-            vid.parentNode.insertBefore(box, vid);
-            box.appendChild(vid);
+            const partnerObj = (window.Nexus && Array.isArray(Nexus.users))
+                ? Nexus.users.find(u => u && (u.username || "").toLowerCase() === partner.toLowerCase().replace(/^@/, ""))
+                : null;
+            const partnerDp = (partnerObj && partnerObj.dp) || "";
 
-            const playBadge = document.createElement('div');
-            playBadge.className = 'nx-pro-play-btn';
-            playBadge.innerHTML = '▶';
-            box.appendChild(playBadge);
+            const modal = document.createElement("div");
+            modal.id = "nx-real-call-modal";
+            modal.style.cssText = "position:fixed; inset:0; background:radial-gradient(circle at top,#0f172a,#050811); z-index:200200; display:flex; flex-direction:column; justify-content:space-between; align-items:center; padding:32px 20px; color:#fff; font-family:system-ui,sans-serif; user-select:none;";
 
-            const mutePill = document.createElement('button');
-            mutePill.style.cssText = 'position:absolute;bottom:12px;right:12px;background:rgba(11,20,26,0.8);color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:20px;padding:5px 10px;font-size:12px;cursor:pointer;z-index:5;';
-            mutePill.innerHTML = vid.muted ? '🔇 Muted' : '🔊 Sound';
-            mutePill.onclick = (e) => {
-                e.stopPropagation();
-                vid.muted = !vid.muted;
-                mutePill.innerHTML = vid.muted ? '🔇 Muted' : '🔊 Sound';
-            };
-            box.appendChild(mutePill);
-
-            const progBar = document.createElement('div');
-            progBar.style.cssText = 'position:absolute;bottom:0;left:0;height:3px;background:#00e676;width:0%;transition:width 0.1s linear;';
-            box.appendChild(progBar);
-
-            vid.addEventListener('timeupdate', () => {
-                if (vid.duration) progBar.style.width = ((vid.currentTime / vid.duration) * 100) + '%';
-            });
-
-            box.onclick = () => {
-                if (vid.paused) {
-                    document.querySelectorAll('video, audio').forEach(m => { if (m !== vid) m.pause(); });
-                    vid.play().catch(()=>{});
-                    playBadge.classList.add('playing');
-                } else {
-                    vid.pause();
-                    playBadge.classList.remove('playing');
-                }
-            };
-
-            vid.addEventListener('pause', () => playBadge.classList.remove('playing'));
-            vid.addEventListener('play', () => playBadge.classList.add('playing'));
-            mediaScrollObserver.observe(vid);
-        });
-
-        // 2. Replace Chrome's Ugly <audio controls> Embed with Nexus Official Voice Note Player!
-        document.querySelectorAll('audio').forEach(aud => {
-            if (aud.dataset.nxVoiceUpgraded === "true") return;
-            aud.dataset.nxVoiceUpgraded = "true";
-            aud.removeAttribute('controls');
-            aud.style.display = 'none';
-
-            const vnCard = document.createElement('div');
-            vnCard.className = 'nx-voice-note-card';
-            vnCard.innerHTML = `
-                <button class="nx-vn-play">▶</button>
-                <div class="nx-vn-waves">
-                    ${Array.from({length: 14}).map((_, i) => `<div class="nx-vn-bar" style="height:${25 + ((i*17)%65)}%"></div>`).join('')}
-                </div>
-                <span class="nx-vn-time" style="font-size:11px;color:#cbd5e1;min-width:32px;">0:00</span>
-                <button class="nx-vn-speed">1x</button>
-            `;
-            aud.parentNode.insertBefore(vnCard, aud);
-
-            const playBtn = vnCard.querySelector('.nx-vn-play');
-            const bars = vnCard.querySelectorAll('.nx-vn-bar');
-            const timeEl = vnCard.querySelector('.nx-vn-time');
-            const speedBtn = vnCard.querySelector('.nx-vn-speed');
-
-            playBtn.onclick = (e) => {
-                e.stopPropagation();
-                if (aud.paused) {
-                    document.querySelectorAll('video, audio').forEach(m => { if (m !== aud) m.pause(); });
-                    aud.play().catch(()=>{});
-                    playBtn.textContent = '⏸';
-                } else {
-                    aud.pause();
-                    playBtn.textContent = '▶';
-                }
-            };
-
-            speedBtn.onclick = (e) => {
-                e.stopPropagation();
-                const speeds = [1, 1.5, 2];
-                const next = speeds[(speeds.indexOf(aud.playbackRate) + 1) % speeds.length];
-                aud.playbackRate = next;
-                speedBtn.textContent = next + 'x';
-            };
-
-            aud.addEventListener('timeupdate', () => {
-                const cur = Math.floor(aud.currentTime || 0);
-                timeEl.textContent = `0:${cur < 10 ? '0'+cur : cur}`;
-                const pct = aud.duration ? (aud.currentTime / aud.duration) : 0;
-                const activeCount = Math.floor(pct * bars.length);
-                bars.forEach((b, idx) => b.classList.toggle('active', idx <= activeCount));
-            });
-
-            aud.addEventListener('ended', () => {
-                playBtn.textContent = '▶';
-                bars.forEach(b => b.classList.remove('active'));
-            });
-        });
-    };
-
-    // ------------------------------------------------------------------------
-    // PART E: POST SONG / MUSIC ATTACHMENT & AUTO-PLAY ON FEED
-    // ------------------------------------------------------------------------
-    const NEXUS_SONGS_LIBRARY = [
-        { title: "Mann Jogiya", artist: "Arijit Singh", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
-        { title: "Kesariya Vibes", artist: "Bollywood Lo-Fi", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
-        { title: "Unstoppable Motivation", artist: "Study & Goal Beats", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" }
-    ];
-
-    // Attach song player bar to any post that has post.songUrl or song attribute
-    window.attachSongsToFeedPosts = function() {
-        document.querySelectorAll('.post-card, [id^="post-"]').forEach(card => {
-            if (card.dataset.songAttached === "true") return;
-            const songTitle = card.dataset.songTitle || card.getAttribute('data-song');
-            const songUrl = card.dataset.songUrl;
-            if (!songTitle && !songUrl) return;
-
-            card.dataset.songAttached = "true";
-            const musicBar = document.createElement('div');
-            musicBar.className = 'nx-post-music-bar';
-            musicBar.innerHTML = `
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <span>🎵</span>
-                    <marquee scrollamount="3" style="max-width:190px;font-weight:700;color:#00e676;">${songTitle || 'Original Audio • Nexus Music'}</marquee>
-                </div>
-                <span class="song-state-pill" style="background:#00e676;color:#000;padding:3px 10px;border-radius:12px;font-weight:800;font-size:11px;">▶ Listen</span>
-            `;
-
-            const audio = new Audio(songUrl || NEXUS_SONGS_LIBRARY[0].url);
-            audio.loop = true;
-
-            musicBar.onclick = (e) => {
-                e.stopPropagation();
-                if (audio.paused) {
-                    document.querySelectorAll('video, audio').forEach(m => m.pause());
-                    if (window.activePostSong && window.activePostSong !== audio) window.activePostSong.pause();
-                    window.activePostSong = audio;
-                    audio.play().catch(()=>{});
-                    musicBar.querySelector('.song-state-pill').textContent = '⏸ Playing';
-                } else {
-                    audio.pause();
-                    musicBar.querySelector('.song-state-pill').textContent = '▶ Listen';
-                }
-            };
-
-            card.insertBefore(musicBar, card.children[1] || null);
-        });
-    };
-
-    // ------------------------------------------------------------------------
-    // PART F: NEXUS OFFICIAL EXCLUSIVE STORY + SPINNING GREEN RING +
-    //         VIDEO_1.MP4 STYLE AUTOMATED WALKTHROUGH ENGINE!
-    // ------------------------------------------------------------------------
-    window.lockStoryBarToNexusOfficialOnly = function() {
-        document.querySelectorAll('div, span').forEach(el => {
-            const txt = (el.textContent || '').trim();
-            // 1. Add Spinning Green Ring ONLY to Nexus Official Circle
-            if (txt === 'Official' && !el.dataset.nxOfficialRing) {
-                el.dataset.nxOfficialRing = "true";
-                const parentCircle = el.parentElement;
-                if (parentCircle) {
-                    const avatarCircle = parentCircle.querySelector('div, img');
-                    if (avatarCircle && !avatarCircle.parentElement.classList.contains('nexus-official-ring-wrap')) {
-                        const ringWrap = document.createElement('div');
-                        ringWrap.className = 'nexus-official-ring-wrap';
-                        avatarCircle.parentNode.insertBefore(ringWrap, avatarCircle);
-                        ringWrap.appendChild(avatarCircle);
-                    }
-                    parentCircle.style.cursor = 'pointer';
-                    parentCircle.onclick = (e) => {
-                        e.stopPropagation();
-                        window.openNexusOfficialProStory();
-                    };
-                }
-            }
-        });
-    };
-
-    // Full-Screen Instagram/WhatsApp Pro Story Viewer with video_1.mp4 Auto-Walkthrough!
-    window.openNexusOfficialProStory = function() {
-        document.getElementById('nx-official-story-viewer')?.remove();
-
-        const viewer = document.createElement('div');
-        viewer.id = 'nx-official-story-viewer';
-        viewer.style.cssText = 'position:fixed;inset:0;background:#070c10;z-index:9999999;display:flex;flex-direction:column;justify-content:space-between;color:#fff;font-family:sans-serif;user-select:none;';
-
-        viewer.innerHTML = `
-            <!-- TOP INSTAGRAM/WHATSAPP OFFICIAL BAR -->
-            <div style="padding:14px 16px;background:linear-gradient(to bottom,rgba(0,0,0,0.85),transparent);z-index:20;">
-                <div style="display:flex;gap:5px;margin-bottom:12px;">
-                    <div style="flex:1;height:3px;background:rgba(255,255,255,0.25);border-radius:3px;overflow:hidden;">
-                        <div id="nx-st-prog-fill" style="width:0%;height:100%;background:#00e676;transition:width 12s linear;"></div>
-                    </div>
-                </div>
-                <div style="display:flex;align-items:center;justify-content:space-between;">
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#00e676);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;">N</div>
-                        <div>
-                            <div style="font-weight:800;font-size:14px;display:flex;align-items:center;gap:5px;">
-                                Nexus Official <span style="background:#00e676;color:#000;border-radius:50%;width:15px;height:15px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;">✔</span>
-                            </div>
-                            <div style="font-size:11px;color:#00e676;">Verified System Update • Live Demo</div>
+            if (mode === "audio") {
+                modal.innerHTML = `
+                    <div style="text-align:center;">
+                        <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(16,185,129,0.14); border:1px solid rgba(16,185,129,0.4); color:#34d399; padding:4px 12px; border-radius:999px; font-size:11px; font-weight:800;">
+                            🔒 End-to-End Encrypted Voice Call • ${sessionId}
                         </div>
                     </div>
-                    <button onclick="document.getElementById('nx-official-story-viewer').remove()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer;">✖</button>
-                </div>
-            </div>
 
-            <!-- CENTER STAGE: EXACT video_1.mp4 AUTO-SIMULATED WALKTHROUGH -->
-            <div id="nx-director-stage" style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:14px;max-width:400px;width:100%;margin:0 auto;position:relative;overflow:hidden;"></div>
-
-            <!-- BOTTOM OFFICIAL INSTAGRAM-STYLE BAR (Reactions + CTA + Views) -->
-            <div style="padding:14px 16px 24px;background:linear-gradient(to top,rgba(0,0,0,0.92),transparent);z-index:20;">
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-                    <div style="display:flex;gap:8px;background:#162029;border:1px solid #263847;padding:8px 14px;border-radius:24px;">
-                        <span onclick="this.style.transform='scale(1.3)'" style="font-size:18px;cursor:pointer;transition:0.2s;">🔥</span>
-                        <span onclick="this.style.transform='scale(1.3)'" style="font-size:18px;cursor:pointer;transition:0.2s;">❤️</span>
-                        <span onclick="this.style.transform='scale(1.3)'" style="font-size:18px;cursor:pointer;transition:0.2s;">👏</span>
-                        <span onclick="this.style.transform='scale(1.3)'" style="font-size:18px;cursor:pointer;transition:0.2s;">🚀</span>
+                    <div style="text-align:center; margin:auto 0;">
+                        <div style="position:relative; width:136px; height:136px; margin:0 auto 18px; display:flex; align-items:center; justify-content:center;">
+                            <div style="position:absolute; inset:-14px; border-radius:50%; border:2px solid #10b981; animation:nxCallPulse 1.6s infinite;"></div>
+                            ${partnerDp
+                                ? `<img src="${partnerDp}" style="width:130px; height:130px; border-radius:50%; object-fit:cover; border:3px solid #10b981; position:relative; z-index:2;" />`
+                                : `<div style="width:130px; height:130px; border-radius:50%; background:linear-gradient(135deg,#10b981,#0284c7); color:#020617; font-size:52px; font-weight:900; display:flex; align-items:center; justify-content:center; border:3px solid #fff; position:relative; z-index:2;">${partner[0].toUpperCase()}</div>`
+                            }
+                        </div>
+                        <h2 style="font-size:24px; font-weight:900; color:#f8fafc;">${escapeText(partner)}</h2>
+                        <div id="nx-call-state-txt" style="font-size:14px; color:#34d399; font-weight:700; margin-top:6px;">📞 Calling (Audio Only)...</div>
+                        <audio id="nx-remote-audio-el" autoplay></audio>
                     </div>
-                    <button onclick="document.getElementById('nx-official-story-viewer').remove()" style="flex:1;background:#00e676;color:#000;border:none;padding:11px 16px;border-radius:24px;font-weight:900;font-size:13px;cursor:pointer;">Try Feature Now ↗</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(viewer);
 
-        setTimeout(() => {
-            const bar = document.getElementById('nx-st-prog-fill');
-            if (bar) bar.style.width = '100%';
-        }, 80);
-
-        // Run the 12-Second Automated Scene (Exact replica of video_1.mp4!)
-        const stage = document.getElementById('nx-director-stage');
-        // Step 1 (0s): Simulated Chat Screen + Messages popping in
-        stage.innerHTML = `
-            <div style="background:#0e1621;border:1px solid #1e293b;border-radius:20px;padding:14px;box-shadow:0 15px 40px rgba(0,0,0,0.7);">
-                <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:1px solid #1e293b;margin-bottom:12px;">
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <div style="width:32px;height:32px;border-radius:50%;background:#10b981;display:flex;align-items:center;justify-content:center;font-weight:bold;">K</div>
-                        <div><div style="font-size:13px;font-weight:bold;">Kajupiee</div><div style="font-size:10px;color:#00e676;">● Online Now</div></div>
+                    <div style="display:flex; align-items:center; gap:20px; background:#0f172a; border:1px solid #1e293b; padding:14px 28px; border-radius:999px; box-shadow:0 12px 35px rgba(0,0,0,0.8);">
+                        <button type="button" id="nx-call-spk-btn" style="width:52px; height:52px; border-radius:50%; background:#1e293b; border:1px solid #334155; color:#fff; font-size:20px; cursor:pointer;" title="Speaker">🔊</button>
+                        <button type="button" id="nx-call-mic-btn" style="width:52px; height:52px; border-radius:50%; background:#1e293b; border:1px solid #334155; color:#fff; font-size:20px; cursor:pointer;" title="Mute Mic">🎙️</button>
+                        <button type="button" id="nx-call-end-btn" style="width:62px; height:62px; border-radius:50%; background:#e11d48; border:none; color:#fff; font-size:24px; cursor:pointer; box-shadow:0 6px 20px rgba(225,29,72,0.5);" title="End Call">☎️</button>
                     </div>
-                    <div id="demo-3dot" style="width:32px;height:32px;border-radius:50%;background:#1e293b;display:flex;align-items:center;justify-content:center;font-weight:bold;transition:0.3s;">⋮</div>
-                </div>
-                <div id="demo-chat-box" style="display:flex;flex-direction:column;gap:8px;min-height:210px;font-size:12px;"></div>
-            </div>
-        `;
+                `;
+            } else {
+                modal.innerHTML = `
+                    <video id="nx-remote-video-el" autoplay playsinline style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#000; z-index:1;"></video>
+                    <video id="nx-local-video-el" autoplay muted playsinline style="position:absolute; top:74px; right:16px; width:112px; height:164px; object-fit:cover; border-radius:16px; border:2px solid #10b981; background:#111; z-index:10; box-shadow:0 10px 30px rgba(0,0,0,0.85);"></video>
 
-        const chatBox = document.getElementById('demo-chat-box');
-        const addDemoMsg = (text, isRight) => {
-            if (!chatBox) return;
-            const b = document.createElement('div');
-            b.style.cssText = `align-self:${isRight ? 'flex-end' : 'flex-start'};background:${isRight ? '#056162' : '#1e293b'};color:#fff;padding:8px 12px;border-radius:12px;max-width:82%;animation:waSpringPop 0.35s ease;`;
-            b.textContent = text;
-            chatBox.appendChild(b);
+                    <div style="position:relative; z-index:10; text-align:center; background:rgba(9,13,22,0.75); border:1px solid rgba(255,255,255,0.15); padding:8px 18px; border-radius:999px; backdrop-filter:blur(8px);">
+                        <div style="font-size:15px; font-weight:900;">${escapeText(partner)} • <span style="color:#38bdf8;">HD Video</span></div>
+                        <div id="nx-call-state-txt" style="font-size:11.5px; color:#34d399; font-weight:700;">🔒 ${sessionId} • Ringing...</div>
+                    </div>
+
+                    <div style="position:relative; z-index:10; display:flex; align-items:center; gap:14px; background:rgba(15,23,42,0.88); border:1px solid rgba(255,255,255,0.18); padding:12px 22px; border-radius:999px; backdrop-filter:blur(10px);">
+                        <button type="button" id="nx-call-flip-btn" style="width:48px; height:48px; border-radius:50%; background:#1e293b; border:1px solid #334155; color:#fff; font-size:18px; cursor:pointer;" title="Switch Front/Back Camera">🔄</button>
+                        <button type="button" id="nx-call-cam-btn" style="width:48px; height:48px; border-radius:50%; background:#1e293b; border:1px solid #334155; color:#fff; font-size:18px; cursor:pointer;" title="Camera On/Off">📷</button>
+                        <button type="button" id="nx-call-mic-btn" style="width:48px; height:48px; border-radius:50%; background:#1e293b; border:1px solid #334155; color:#fff; font-size:18px; cursor:pointer;" title="Mute Mic">🎙️</button>
+                        <button type="button" id="nx-call-end-btn" style="width:58px; height:58px; border-radius:50%; background:#e11d48; border:none; color:#fff; font-size:22px; cursor:pointer;" title="End Call">☎️</button>
+                    </div>
+                `;
+            }
+
+            document.body.appendChild(modal);
+
+            if (mode === "video") {
+                const locVid = document.getElementById("nx-local-video-el");
+                if (locVid) locVid.srcObject = localCallStream;
+            }
+
+            let sec = 0;
+            clearInterval(callClockTimer);
+            callClockTimer = setInterval(() => {
+                sec++;
+                const m = String(Math.floor(sec / 60)).padStart(2, "0");
+                const s = String(sec % 60).padStart(2, "0");
+                const lbl = document.getElementById("nx-call-state-txt");
+                if (lbl) lbl.textContent = `${mode === "video" ? "📹" : "📞"} ${m}:${s} • Encrypted`;
+            }, 1000);
+
+            const db = dbRef();
+            if (db) {
+                try {
+                    peerConn = new RTCPeerConnection({
+                        iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }]
+                    });
+                    localCallStream.getTracks().forEach(t => peerConn.addTrack(t, localCallStream));
+                    peerConn.ontrack = (ev) => {
+                        const remEl = document.getElementById(mode === "video" ? "nx-remote-video-el" : "nx-remote-audio-el");
+                        if (remEl && ev.streams[0]) remEl.srcObject = ev.streams[0];
+                    };
+                    if (!isIncoming) {
+                        const offer = await peerConn.createOffer();
+                        await peerConn.setLocalDescription(offer);
+                        await db.collection("nexus_calls").doc(callDocId).set({
+                            sessionId, caller: myUname, receiver: partner.toLowerCase(),
+                            mode, offer: { type: offer.type, sdp: offer.sdp }, status: "ringing", updatedAt: Date.now()
+                        });
+                    }
+                } catch (e) {}
+            }
+
+            modal.querySelector("#nx-call-mic-btn").onclick = function () {
+                const track = localCallStream && localCallStream.getAudioTracks()[0];
+                if (track) {
+                    track.enabled = !track.enabled;
+                    this.style.background = track.enabled ? "#1e293b" : "#e11d48";
+                    this.textContent = track.enabled ? "🎙️" : "🔇";
+                }
+            };
+
+            const camBtn = modal.querySelector("#nx-call-cam-btn");
+            if (camBtn) {
+                camBtn.onclick = function () {
+                    const track = localCallStream && localCallStream.getVideoTracks()[0];
+                    if (track) {
+                        track.enabled = !track.enabled;
+                        this.style.background = track.enabled ? "#1e293b" : "#e11d48";
+                    }
+                };
+            }
+
+            const flipBtn = modal.querySelector("#nx-call-flip-btn");
+            if (flipBtn) {
+                flipBtn.onclick = async function () {
+                    currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
+                    if (localCallStream) localCallStream.getVideoTracks().forEach(t => t.stop());
+                    try {
+                        const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode }, audio: true });
+                        localCallStream = newStream;
+                        const locVid = document.getElementById("nx-local-video-el");
+                        if (locVid) locVid.srcObject = newStream;
+                    } catch (e) {}
+                };
+            }
+
+            modal.querySelector("#nx-call-end-btn").onclick = async () => {
+                clearInterval(callClockTimer);
+                if (localCallStream) { localCallStream.getTracks().forEach(t => t.stop()); localCallStream = null; }
+                if (peerConn) { peerConn.close(); peerConn = null; }
+                if (db) await db.collection("nexus_calls").doc(callDocId).set({ status: "ended" }, { merge: true }).catch(() => {});
+                modal.remove();
+            };
         };
 
-        setTimeout(() => addDemoMsg("Chalo aao song sunte hain 🎵", false), 200);
-        setTimeout(() => addDemoMsg("Kaise? Dono log saath me kaise sunenge?", true), 900);
-        setTimeout(() => addDemoMsg("Upar 3-dot pe click karo aur YouTube Watch-Party TV chuno!", false), 1700);
-        setTimeout(() => addDemoMsg("Ok karta hu, try karte hain 👍", true), 2400);
+        // 3. YOUTUBE WATCH PARTY WITH LIVE SEARCH
+        window.openNexusYouTubeWatchParty = function () {
+            const existing = document.getElementById("nx-yt-party-search-sheet");
+            if (existing) { existing.remove(); return; }
 
-        // Step 2 (3.2s): Highlight 3-dot & Show 1:1 Pro Menu with Red Spotlight on Watch Party TV
-        setTimeout(() => {
-            const dot = document.getElementById('demo-3dot');
-            if (dot) dot.style.background = '#7c3aed';
-            if (!stage) return;
-            stage.innerHTML = `
-                <div style="background:#111827;border:1px solid #374151;border-radius:20px;padding:16px;">
-                    <div style="font-weight:800;font-size:14px;color:#a78bfa;margin-bottom:12px;">✨ 1:1 Pro Menu • Live Features</div>
-                    <div style="opacity:0.3;padding:10px;border-radius:12px;background:#1f2937;margin-bottom:8px;font-size:12px;">📹 Live Face-to-Face Video Call</div>
-                    <div style="padding:12px;border-radius:14px;background:#1f2937;border:2px solid #ff3b30;box-shadow:0 0 20px rgba(255,59,48,0.4);margin-bottom:8px;">
-                        <div style="font-weight:800;font-size:14px;color:#fff;">📺 YouTube Watch-Party TV</div>
-                        <div style="font-size:11px;color:#9ca3af;">Watch YouTube videos together live in sync</div>
+            const sessId = window.CURRENT_NXS_SESSION_ID || "NXS-PARTY";
+            const box = document.createElement("div");
+            box.id = "nx-yt-party-search-sheet";
+            box.style.cssText = "position:fixed; top:58px; left:50%; transform:translateX(-50%); width:96%; max-width:560px; background:#0f172a; border:1.5px solid #e11d48; border-radius:20px; padding:12px; z-index:200150; color:#fff; box-shadow:0 18px 50px rgba(0,0,0,0.92);";
+
+            box.innerHTML = `
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="font-size:14px; font-weight:900; color:#fb7185;">📺 YouTube Watch-Party TV</span>
+                        <span style="background:rgba(16,185,129,0.16); color:#34d399; border:1px solid #10b981; padding:1px 7px; border-radius:99px; font-size:10px; font-weight:800;">🔒 ${sessId}</span>
                     </div>
-                    <div style="opacity:0.3;padding:10px;border-radius:12px;background:#1f2937;font-size:12px;">🎙️ Record Audio Voice Note (1x/1.5x/2x)</div>
+                    <button type="button" onclick="document.getElementById('nx-yt-party-search-sheet').remove()" style="background:#1e293b; border:none; color:#fff; width:28px; height:28px; border-radius:50%; font-weight:900; cursor:pointer;">✕</button>
                 </div>
-            `;
-        }, 3300);
 
-        // Step 3 (6.5s): Show Live Synced YouTube Player
-        setTimeout(() => {
-            if (!stage) return;
-            stage.innerHTML = `
-                <div style="background:#0f172a;border:2px solid #ff3b30;border-radius:20px;padding:14px;text-align:center;">
-                    <div style="font-weight:800;font-size:13px;color:#ff3b30;margin-bottom:8px;">📺 YouTube Watch-Party TV • Live Sync</div>
-                    <div style="background:#000;height:150px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid #334155;margin-bottom:10px;">
-                        <div style="font-size:20px;font-weight:900;letter-spacing:2px;color:#e2e8f0;">VDJ ANKIT VISUALS</div>
-                        <div style="font-size:11px;color:#00e676;margin-top:6px;">● Playing in Real-Time Sync with Partner</div>
-                    </div>
-                    <div style="display:flex;justify-content:center;gap:8px;font-size:11px;">
-                        <span style="background:#064e3b;color:#34d399;padding:4px 10px;border-radius:12px;">🟢 Live Sync Active</span>
-                        <span style="background:#1e293b;color:#fff;padding:4px 10px;border-radius:12px;">🔒 Private 1-on-1 Chat</span>
-                    </div>
+                <div style="display:flex; gap:6px; margin-bottom:8px;">
+                    <input type="text" id="nx-yt-search-inp" placeholder="Search any song, movie, PW lecture or paste YouTube link..." style="flex:1; padding:10px 12px; border-radius:12px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; outline:none;" />
+                    <button type="button" id="nx-yt-search-go" style="padding:10px 15px; border-radius:12px; background:#e11d48; color:#fff; font-weight:900; font-size:12.5px; border:none; cursor:pointer;">Search 🔍</button>
                 </div>
-            `;
-        }, 6500);
 
-        // Step 4 (9.5s): NEXUS Official Outro Bumper (Exact end screen of video_1.mp4!)
-        setTimeout(() => {
-            if (!stage) return;
-            stage.innerHTML = `
-                <div style="text-align:center;">
-                    <div style="background:#161b26;border:1px solid #2d3748;border-radius:22px;padding:22px;margin-bottom:24px;">
-                        <div style="font-size:36px;margin-bottom:8px;">📺</div>
-                        <h3 style="color:#ff4d4d;font-size:20px;margin-bottom:8px;">YouTube Watch-Party TV</h3>
-                        <p style="font-size:13px;color:#cbd5e1;line-height:1.5;margin-bottom:14px;">Ab dono ek saath, ek hi waqt pe ek hi YouTube video dekh sakte ho. Koi bhi link daalo, Sync me chalega.</p>
-                        <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;font-size:11px;font-weight:bold;">
-                            <span style="background:#00c853;color:#000;padding:5px 12px;border-radius:14px;">● Live Sync</span>
-                            <span style="background:#ff3b30;color:#fff;padding:5px 12px;border-radius:14px;">▶ YouTube TV</span>
-                            <span style="background:#334155;color:#fff;padding:5px 12px;border-radius:14px;">🎵 Full Songs</span>
+                <div id="nx-yt-search-results" style="max-height:210px; overflow-y:auto; display:none; background:#090d16; border-radius:12px; padding:6px; margin-bottom:8px; border:1px solid #1e293b;"></div>
+                <div id="nx-yt-sync-stage" style="width:100%; aspect-ratio:16/9; background:#000; border-radius:12px; overflow:hidden; display:none; border:1px solid #334155;"></div>
+            `;
+
+            document.body.appendChild(box);
+
+            const inp = box.querySelector("#nx-yt-search-inp");
+            const btn = box.querySelector("#nx-yt-search-go");
+            const resBox = box.querySelector("#nx-yt-search-results");
+
+            const runYouTubeSearch = async () => {
+                const q = (inp.value || "").trim();
+                if (!q) return;
+
+                const linkMatch = q.match(/(?:youtu\.be\/|youtube\.com\/(?:.*v=|.*\/|.*embed\/|.*shorts\/))([^&?/\s]+)/);
+                if (linkMatch && linkMatch[1]) {
+                    window.launchNexusSyncedVideo(linkMatch[1], "Shared YouTube Video", false);
+                    return;
+                }
+
+                resBox.style.display = "block";
+                resBox.innerHTML = `<div style="padding:14px; text-align:center; color:#38bdf8; font-size:12.5px; font-weight:800;">🔍 Searching YouTube for "${escapeText(q)}"...</div>`;
+
+                let items = [];
+                const apiKey = (window.Nexus && Nexus.config && Nexus.config.apiKey) || "";
+
+                if (apiKey) {
+                    try {
+                        const r = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=10&q=${encodeURIComponent(q)}&key=${apiKey}`);
+                        const j = await r.json();
+                        if (j && Array.isArray(j.items) && j.items.length > 0) {
+                            items = j.items.map(x => ({
+                                videoId: x.id && x.id.videoId,
+                                title: x.snippet && x.snippet.title,
+                                channel: x.snippet && x.snippet.channelTitle,
+                                thumb: x.snippet && x.snippet.thumbnails && (x.snippet.thumbnails.medium || x.snippet.thumbnails.default)?.url
+                            })).filter(x => x.videoId);
+                        }
+                    } catch (e) {}
+                }
+
+                if (items.length === 0) {
+                    const mirrors = [
+                        `https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(q)}&filter=videos`,
+                        `https://api.piped.private.coffee/search?q=${encodeURIComponent(q)}&filter=videos`,
+                        `https://inv.nadeko.net/api/v1/search?q=${encodeURIComponent(q)}&type=video`,
+                        `https://invidious.nerdvpn.de/api/v1/search?q=${encodeURIComponent(q)}&type=video`
+                    ];
+                    for (const url of mirrors) {
+                        try {
+                            const r = await fetch(url);
+                            const data = await r.json();
+                            const arr = data.items || data;
+                            if (Array.isArray(arr) && arr.length > 0) {
+                                items = arr.slice(0, 10).map(v => ({
+                                    videoId: v.videoId || (v.url ? v.url.split("v=")[1] : ""),
+                                    title: v.title || "YouTube Video",
+                                    channel: v.uploaderName || v.author || "YouTube",
+                                    thumb: v.thumbnail || (v.videoThumbnails && v.videoThumbnails[0] ? v.videoThumbnails[0].url : "")
+                                })).filter(x => x.videoId);
+                                if (items.length > 0) break;
+                            }
+                        } catch (e) {}
+                    }
+                }
+
+                if (items.length === 0) {
+                    resBox.innerHTML = `<div style="padding:12px; font-size:12px; color:#fda4af; line-height:1.5;">
+                        ⚠️ Google Cloud Console mein <b>YouTube Data API v3</b> enable karein ya seedhe YouTube link paste karke Search dabayein!
+                    </div>`;
+                    return;
+                }
+
+                resBox.innerHTML = items.map(v => `
+                    <div data-yt-vid="${v.videoId}" data-yt-title="${escapeText(v.title || "")}" style="display:flex; align-items:center; gap:10px; padding:7px; border-bottom:1px solid #1e293b; cursor:pointer; border-radius:8px;">
+                        <img src="${v.thumb}" style="width:76px; height:44px; border-radius:6px; object-fit:cover; flex-shrink:0; background:#111;" />
+                        <div style="min-width:0; flex:1;">
+                            <div style="font-size:12.5px; font-weight:800; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeText(v.title)}</div>
+                            <div style="font-size:10.5px; color:#34d399;">${escapeText(v.channel)} • Tap to Play in Sync ▶️</div>
                         </div>
                     </div>
-                    <div style="width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,#6366f1,#10b981);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:900;margin:0 auto 10px;">N</div>
-                    <div style="font-weight:900;letter-spacing:6px;font-size:18px;color:#e2e8f0;">N E X U S</div>
+                `).join("");
+
+                resBox.querySelectorAll("[data-yt-vid]").forEach(row => {
+                    row.onclick = () => {
+                        window.launchNexusSyncedVideo(row.getAttribute("data-yt-vid"), row.getAttribute("data-yt-title"), false);
+                    };
+                });
+            };
+
+            btn.onclick = runYouTubeSearch;
+            inp.onkeydown = (e) => { if (e.key === "Enter") runYouTubeSearch(); };
+        };
+
+        window.launchNexusSyncedVideo = function (videoId, title, isRemoteTrigger) {
+            if (!document.getElementById("nx-yt-party-search-sheet")) {
+                window.openNexusYouTubeWatchParty();
+            }
+            const resBox = document.getElementById("nx-yt-search-results");
+            const stage = document.getElementById("nx-yt-sync-stage");
+            if (resBox) resBox.style.display = "none";
+            if (stage) {
+                stage.style.display = "block";
+                stage.innerHTML = `<iframe width="100%" height="100%" src="https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&enablejsapi=1" frameborder="0" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>`;
+            }
+            const db = dbRef();
+            const rk = window.CURRENT_NXS_SESSION_ID || "NXS-PARTY";
+            if (!isRemoteTrigger && db && rk) {
+                db.collection("nexus_watch_sync").doc(rk).set({
+                    videoId, title: title || "YouTube Watch Party", sender: getMyUser(), action: "play", currentTime: 0, updatedAt: Date.now()
+                }, { merge: true }).catch(() => {});
+            }
+        };
+
+        // 4. FIXED NEXUS OFFICIAL STORY VIEWER (CONVERTS CHUNKS TO BLOB -> ZERO BLACK SCREEN!)
+        const storyBlobCache = {};
+
+        function isStoryActive(s) {
+            const now = Date.now();
+            return s && s.isOfficial === true && !s.archived && (Number(s.scheduledAt || 0) <= now) && (Number(s.expiresAt || 0) > now || s.isHighlight === true);
+        }
+
+        async function loadStoryMediaAsPlayableUrl(item, prefix) {
+            const cacheKey = `${item.id}_${prefix}`;
+            if (storyBlobCache[cacheKey]) return storyBlobCache[cacheKey];
+
+            let rawData = item[prefix + "Inline"] || item[prefix + "Url"] || "";
+            const sid = item[prefix + "StreamId"];
+            const total = Number(item[prefix + "TotalChunks"] || 0);
+
+            if (!rawData && sid && total > 0) {
+                const db = dbRef();
+                if (!db) return "";
+                const parts = [];
+                for (let i = 0; i < total; i++) {
+                    const d = await db.collection("nexus_media_chunks").doc(`${sid}_${i}`).get();
+                    if (d.exists && d.data() && d.data().data) parts.push(d.data().data);
+                }
+                rawData = parts.join("");
+            }
+
+            if (rawData && rawData.startsWith("data:")) {
+                try {
+                    const res = await fetch(rawData);
+                    const blob = await res.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    storyBlobCache[cacheKey] = blobUrl;
+                    return blobUrl;
+                } catch (e) {
+                    return rawData;
+                }
+            }
+            return rawData;
+        }
+
+        let liveStories = [];
+
+        function updateOfficialStoryRing() {
+            const bar = document.getElementById("nx-stories-bar");
+            if (!bar) return;
+            const cards = Array.from(bar.querySelectorAll("div, button, a")).filter(el => {
+                const label = (el.innerText || el.textContent || "").replace(/\s+/g, " ").toLowerCase();
+                return label.includes("nexus") && label.includes("official") && el.clientWidth > 0 && el.clientWidth <= 140;
+            });
+            const officialCard = cards.sort((a, b) => (a.clientWidth * a.clientHeight) - (b.clientWidth * b.clientHeight))[0];
+            if (!officialCard) return;
+
+            const avatar = officialCard.querySelector("img, svg") || officialCard.firstElementChild;
+            if (avatar) {
+                if (liveStories.length > 0) avatar.classList.add("nx-active-story-ring");
+                else avatar.classList.remove("nx-active-story-ring");
+            }
+
+            if (!officialCard.dataset.nxStoryBoundV32) {
+                officialCard.dataset.nxStoryBoundV32 = "1";
+                officialCard.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (liveStories.length > 0) {
+                        window.openNexusOfficialStory();
+                    } else if (window.openOfficialNexusProfileModal) {
+                        window.openOfficialNexusProfileModal();
+                    }
+                }, true);
+            }
+        }
+
+        function initOfficialStoryListener() {
+            const db = dbRef();
+            if (!db) return;
+            db.collection("official_stories").orderBy("timestamp", "desc").limit(50).onSnapshot(snap => {
+                liveStories = [];
+                snap.forEach(d => {
+                    const x = d.data() || {};
+                    x.id = d.id;
+                    if (isStoryActive(x)) liveStories.push(x);
+                });
+                liveStories.sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+                updateOfficialStoryRing();
+            });
+            setInterval(updateOfficialStoryRing, 900);
+        }
+
+        window.openNexusOfficialStory = async function (targetId) {
+            document.getElementById("nx-real-video-story-modal")?.remove();
+            if (!liveStories.length) {
+                if (window.Nexus && Nexus.toast) Nexus.toast("Abhi koi active Nexus Official Story nahi hai.");
+                return;
+            }
+
+            let index = targetId ? Math.max(0, liveStories.findIndex(s => s.id === targetId)) : 0;
+            if (index < 0) index = 0;
+
+            const modal = document.createElement("div");
+            modal.id = "nx-real-video-story-modal";
+            modal.innerHTML = `
+                <div class="nxsv-stage" id="nxsv-stage"></div>
+                <div class="nxsv-top">
+                    <div class="nxsv-bars">${liveStories.map((_, i) => `<span><i id="nxsv-prog-${i}"></i></span>`).join("")}</div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <img src="${LOGO}" style="width:38px;height:38px;border-radius:50%;border:2px solid #10b981;" />
+                            <div>
+                                <div style="font-weight:900;font-size:14px;">Nexus Official ✓</div>
+                                <div id="nxsv-time" style="font-size:11px;color:#cbd5e1;"></div>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:6px;">
+                            <button type="button" class="nxsv-btn" id="nxsv-pause">Ⅱ</button>
+                            <button type="button" class="nxsv-btn" id="nxsv-mute">🔊</button>
+                            <button type="button" class="nxsv-btn" id="nxsv-close">✕</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="nxsv-bottom">
+                    <div id="nxsv-caption" style="text-align:center;margin-bottom:12px;"></div>
+                    <div style="display:flex;gap:8px;justify-content:center;">
+                        <button type="button" class="nxsv-btn" id="nxsv-like">♡ Like</button>
+                        <button type="button" class="nxsv-btn" id="nxsv-share">↗ Share</button>
+                        <button type="button" class="nxsv-btn" id="nxsv-reply">↩ Reply</button>
+                    </div>
+                    <div id="nxsv-poll" style="text-align:center;margin-top:10px;"></div>
                 </div>
             `;
-        }, 9500);
+            document.body.appendChild(modal);
 
-        setTimeout(() => viewer.remove(), 12300);
-    };
+            let timer = null, paused = false, muted = false, activeVideo = null, activeAudio = null;
+            const db = dbRef(), uid = getMyUser();
 
-    // Run continuous observer every 800ms to keep all UI upgraded
-    setInterval(() => {
-        enforceChanchalStyleFullProfileEverywhere();
-        window.upgradeVideosAndVoiceNotes();
-        window.attachSongsToFeedPosts();
-        window.lockStoryBarToNexusOfficialOnly();
-    }, 800);
-})();
-</script>
+            const closeStory = () => {
+                clearTimeout(timer);
+                if (activeVideo) activeVideo.pause();
+                if (activeAudio) activeAudio.pause();
+                modal.remove();
+            };
+
+            modal.querySelector("#nxsv-close").onclick = closeStory;
+            modal.querySelector("#nxsv-pause").onclick = (e) => {
+                e.stopPropagation();
+                paused = !paused;
+                if (activeVideo) { if (paused) activeVideo.pause(); else activeVideo.play().catch(() => {}); }
+                if (activeAudio) { if (paused) activeAudio.pause(); else activeAudio.play().catch(() => {}); }
+                modal.querySelector("#nxsv-pause").textContent = paused ? "▶" : "Ⅱ";
+            };
+            modal.querySelector("#nxsv-mute").onclick = (e) => {
+                e.stopPropagation();
+                muted = !muted;
+                if (activeVideo) activeVideo.muted = muted;
+                if (activeAudio) activeAudio.muted = muted;
+                modal.querySelector("#nxsv-mute").textContent = muted ? "🔇" : "🔊";
+            };
+
+            async function showSlide(i) {
+                clearTimeout(timer);
+                if (activeVideo) { activeVideo.pause(); activeVideo = null; }
+                if (activeAudio) { activeAudio.pause(); activeAudio = null; }
+                if (i < 0) i = 0;
+                if (i >= liveStories.length) { closeStory(); return; }
+                index = i;
+                const s = liveStories[index];
+
+                liveStories.forEach((_, j) => {
+                    const bar = modal.querySelector(`#nxsv-prog-${j}`);
+                    if (bar) bar.style.width = j < index ? "100%" : "0%";
+                });
+
+                modal.querySelector("#nxsv-time").textContent = new Date(Number(s.timestamp || Date.now())).toLocaleString();
+                modal.querySelector("#nxsv-caption").innerHTML = `
+                    <div style="font-weight:900;font-size:19px;color:#fff;text-shadow:0 2px 10px #000;">${escapeText(s.title || "")}</div>
+                    <div style="font-size:13.5px;color:#e2e8f0;margin-top:4px;white-space:pre-wrap;">${escapeText(s.caption || s.desc || "")}</div>
+                    ${s.stickerText ? `<div style="display:inline-block;margin-top:8px;padding:6px 13px;border-radius:20px;background:#10b981;color:#052e2b;font-weight:900;font-size:12px;">${escapeText(s.stickerText)}</div>` : ""}
+                `;
+
+                const likeBtn = modal.querySelector("#nxsv-like");
+                let liked = Array.isArray(s.likedBy) && s.likedBy.includes(uid);
+                likeBtn.textContent = `${liked ? "♥" : "♡"} Like · ${Number(s.likes || 0)}`;
+                likeBtn.onclick = async (ev) => {
+                    ev.stopPropagation();
+                    if (!db) return;
+                    try {
+                        await db.collection("official_stories").doc(s.id).update({
+                            likedBy: liked ? firebase.firestore.FieldValue.arrayRemove(uid) : firebase.firestore.FieldValue.arrayUnion(uid),
+                            likes: firebase.firestore.FieldValue.increment(liked ? -1 : 1)
+                        });
+                        liked = !liked;
+                        s.likes = Math.max(0, Number(s.likes || 0) + (liked ? 1 : -1));
+                        likeBtn.textContent = `${liked ? "♥" : "♡"} Like · ${s.likes}`;
+                    } catch (e) {}
+                };
+
+                modal.querySelector("#nxsv-share").onclick = async (ev) => {
+                    ev.stopPropagation();
+                    const url = `${location.origin}${location.pathname}?story=${encodeURIComponent(s.id)}`;
+                    if (navigator.share) navigator.share({ title: s.title || "Nexus Official Story", url }).catch(() => {});
+                    else { navigator.clipboard?.writeText(url); if (window.Nexus && Nexus.toast) Nexus.toast("🔗 Story Link Copied!"); }
+                };
+
+                modal.querySelector("#nxsv-reply").onclick = async (ev) => {
+                    ev.stopPropagation();
+                    const msg = prompt("Reply to Nexus Official Story:");
+                    if (!msg || !msg.trim() || !db) return;
+                    await db.collection("official_stories").doc(s.id).set({
+                        replies: firebase.firestore.FieldValue.arrayUnion({ username: uid, text: msg.trim().slice(0, 400), createdAt: Date.now() })
+                    }, { merge: true }).catch(() => {});
+                    if (window.Nexus && Nexus.toast) Nexus.toast("✅ Reply sent to Nexus Official!");
+                };
+
+                const stage = modal.querySelector("#nxsv-stage");
+                stage.innerHTML = `<div style="color:#34d399;font-size:13px;font-weight:800;">⏳ Loading Official Story...</div>`;
+
+                const playableUrl = await loadStoryMediaAsPlayableUrl(s, "media");
+                stage.innerHTML = "";
+                const progBar = modal.querySelector(`#nxsv-prog-${index}`);
+
+                if (s.mediaType === "video" && playableUrl) {
+                    const v = document.createElement("video");
+                    v.src = playableUrl;
+                    v.playsInline = true;
+                    v.setAttribute("playsinline", "");
+                    v.setAttribute("webkit-playsinline", "");
+                    v.autoplay = true;
+                    v.muted = muted;
+                    stage.appendChild(v);
+                    activeVideo = v;
+
+                    v.ontimeupdate = () => {
+                        if (v.duration && progBar) {
+                            progBar.style.width = ((v.currentTime / v.duration) * 100) + "%";
+                        }
+                    };
+                    v.onended = () => showSlide(index + 1);
+                    v.play().catch(() => {
+                        v.muted = true;
+                        muted = true;
+                        modal.querySelector("#nxsv-mute").textContent = "🔇";
+                        v.play().catch(() => {});
+                    });
+                } else if (playableUrl) {
+                    const im = document.createElement("img");
+                    im.src = playableUrl;
+                    stage.appendChild(im);
+                    let start = Date.now();
+                    const tick = () => {
+                        if (!modal.isConnected) return;
+                        if (!paused) {
+                            const pct = Math.min(100, ((Date.now() - start) / 6000) * 100);
+                            if (progBar) progBar.style.width = pct + "%";
+                            if (pct >= 100) { showSlide(index + 1); return; }
+                        }
+                        timer = setTimeout(tick, 100);
+                    };
+                    tick();
+                }
+
+                if (s.musicInline || s.musicUrl || s.musicStreamId) {
+                    loadStoryMediaAsPlayableUrl(s, "music").then(mUrl => {
+                        if (mUrl && modal.isConnected) {
+                            const a = new Audio(mUrl);
+                            a.loop = true;
+                            a.muted = muted;
+                            activeAudio = a;
+                            a.play().catch(() => {});
+                        }
+                    }).catch(() => {});
+                }
+
+                if (db && s.id) {
+                    db.collection("official_stories").doc(s.id).update({
+                        viewedBy: firebase.firestore.FieldValue.arrayUnion(uid),
+                        views: firebase.firestore.FieldValue.increment(1)
+                    }).catch(() => {});
+                }
+            }
+
+            modal.querySelector("#nxsv-stage").onclick = (e) => {
+                if (e.clientX < window.innerWidth / 3) showSlide(index - 1);
+                else showSlide(index + 1);
+            };
+
+            showSlide(index);
+        };
+
+        window.addEventListener("load", () => {
+            setTimeout(initOfficialStoryListener, 800);
+        });
+    })();
+    </script>
 </body>
 </html>
