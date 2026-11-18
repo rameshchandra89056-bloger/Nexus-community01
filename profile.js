@@ -3307,3 +3307,483 @@
     forceFetchFirebasePostsAndUsersNow();
     setTimeout(forceFetchFirebasePostsAndUsersNow, 700);
 })();
+/* ============================================================================
+   PASTE AT THE VERY BOTTOM OF profile.js
+   1. Fixes Header Search Button (Nexus.openSearch) -> Real Member & Post Search + 1-Tap DM
+   2. Fixes Header Notification Bell (Nexus.openNotifications) -> Real Unread DMs, Likes, Comments & Followers + Red Badge Counter (#nx-notif-dot)
+   ============================================================================ */
+(function () {
+    let unreadDmNotifications = [];
+    let notifDmUnsub = null;
+
+    function norm(u) {
+        return String(u || "").toLowerCase().replace(/^@/, "").trim();
+    }
+
+    function getActiveMe() {
+        try {
+            if (window.Nexus && Nexus.getCurrentUser) {
+                const u = Nexus.getCurrentUser();
+                if (u && u.username) return u;
+            }
+            const raw = localStorage.getItem("nx_active_account") || localStorage.getItem("nx_legacy_backup_account");
+            if (raw) return JSON.parse(raw);
+        } catch (e) {}
+        return null;
+    }
+
+    function formatAgo(ts) {
+        const num = Number(ts || 0);
+        if (!num || num < 1000000000000) return "Recent";
+        const sec = Math.max(1, Math.floor((Date.now() - num) / 1000));
+        if (sec < 60) return "Just now";
+        if (sec < 3600) return Math.floor(sec / 60) + "m ago";
+        if (sec < 86400) return Math.floor(sec / 3600) + "h ago";
+        return Math.floor(sec / 86400) + "d ago";
+    }
+
+    // Build all real notifications from Firebase Posts, Followers & Unread 1:1 DMs
+    function gatherAllRealNotifications() {
+        const me = getActiveMe();
+        if (!me || !me.username) return { items: [], unreadCount: 0 };
+        const myU = norm(me.username);
+        const myName = norm(me.name || myU);
+        const lastClearedAt = Number(localStorage.getItem("nx_notif_last_seen_" + myU) || 0);
+
+        const items = [];
+
+        // 1. Unread 1:1 Direct Messages
+        unreadDmNotifications.forEach((m) => {
+            const fromU = norm(m.fromUser);
+            if (!fromU || fromU === myU) return;
+            const preview = m.audioData
+                ? "🎤 Sent you a Voice Note"
+                : m.videoUrl
+                ? "🎬 Sent you a Video"
+                : (m.imgUrl || (m.imgUrls && m.imgUrls.length))
+                ? "📸 Sent you a Photo"
+                : `💬 "${(m.text || "New message").slice(0, 60)}"`;
+
+            items.push({
+                id: "dm_" + m.id,
+                type: "dm",
+                actorUname: fromU,
+                actorName: m.fromName || fromU,
+                text: preview,
+                ts: Number(m.createdAt || Date.now()),
+                isUnread: true
+            });
+        });
+
+        // 2. Likes & Comments on My Posts
+        const allPosts = (window.Nexus && Array.isArray(Nexus.posts)) ? Nexus.posts : [];
+        allPosts.forEach((p) => {
+            if (!p) return;
+            const pOwner = norm(p.username || p.author);
+            if (pOwner !== myU && pOwner !== myName) return;
+            const postSnippet = (p.content || p.text || "your media post").slice(0, 38);
+
+            // Likes
+            (Array.isArray(p.likedBy) ? p.likedBy : []).forEach((likerRaw) => {
+                const liker = norm(likerRaw);
+                if (!liker || liker === myU) return;
+                const ts = Number(p.createdAt || Date.now());
+                items.push({
+                    id: `like_${p.id}_${liker}`,
+                    type: "like",
+                    actorUname: liker,
+                    actorName: "@" + liker,
+                    text: `❤️ Liked your post: "${postSnippet}"`,
+                    postId: p.id,
+                    ts: ts,
+                    isUnread: ts > lastClearedAt
+                });
+            });
+
+            // Comments
+            (Array.isArray(p.comments) ? p.comments : []).forEach((c, idx) => {
+                if (!c) return;
+                const cUser = norm(c.username || c.author);
+                if (!cUser || cUser === myU) return;
+                const cTs = Number(c.createdAt || p.createdAt || Date.now());
+                items.push({
+                    id: `comm_${p.id}_${idx}`,
+                    type: "comment",
+                    actorUname: cUser,
+                    actorName: c.author || "@" + cUser,
+                    text: `💬 Commented: "${(c.text || c.content || "").slice(0, 55)}"`,
+                    postId: p.id,
+                    ts: cTs,
+                    isUnread: cTs > lastClearedAt
+                });
+            });
+        });
+
+        // 3. Followers
+        const myUserEntry = ((window.Nexus && Nexus.users) || []).find((u) => u && norm(u.username) === myU) || me;
+        (Array.isArray(myUserEntry.followersList) ? myUserEntry.followersList : []).forEach((fRaw) => {
+            const fU = norm(fRaw);
+            if (!fU || fU === myU) return;
+            const fObj = ((window.Nexus && Nexus.users) || []).find((u) => u && norm(u.username) === fU);
+            const fTs = Number((fObj && (fObj.lastOnline || fObj.createdAt)) || Date.now() - 3600000);
+            items.push({
+                id: `fol_${fU}`,
+                type: "follow",
+                actorUname: fU,
+                actorName: (fObj && fObj.name) || "@" + fU,
+                text: `👥 Started following you on Nexus`,
+                ts: fTs,
+                isUnread: fTs > lastClearedAt
+            });
+        });
+
+        items.sort((a, b) => b.ts - a.ts);
+        const unreadCount = items.filter((x) => x.isUnread).length;
+        return { items, unreadCount };
+    }
+
+    function updateHeaderNotifBadge() {
+        const dot = document.getElementById("nx-notif-dot");
+        if (!dot) return;
+        const { unreadCount } = gatherAllRealNotifications();
+        if (unreadCount > 0) {
+            dot.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+            dot.style.display = "inline-block";
+        } else {
+            dot.style.display = "none";
+        }
+    }
+
+    function startRealtimeNotifWatcher() {
+        const me = getActiveMe();
+        if (!me || !me.username || !window.Nexus || !Nexus.db || notifDmUnsub) return;
+        const myU = norm(me.username);
+
+        notifDmUnsub = Nexus.db
+            .collection("nexus_private_dms")
+            .where("toUser", "==", myU)
+            .limit(40)
+            .onSnapshot((snap) => {
+                unreadDmNotifications = [];
+                snap.forEach((doc) => {
+                    const d = doc.data() || {};
+                    if (!d.seen && !d.deleted) {
+                        unreadDmNotifications.push(Object.assign({ id: doc.id }, d));
+                    }
+                });
+                updateHeaderNotifBadge();
+            }, () => {});
+    }
+
+    // =========================================================================
+    // 1. REAL NOTIFICATION CENTER MODAL (Nexus.openNotifications)
+    // =========================================================================
+    window.openNexusRealNotificationsModal = function () {
+        document.getElementById("nx-real-notif-drawer")?.remove();
+        const me = getActiveMe();
+        const myU = me && me.username ? norm(me.username) : "";
+        const { items } = gatherAllRealNotifications();
+
+        if (myU) {
+            localStorage.setItem("nx_notif_last_seen_" + myU, String(Date.now()));
+            updateHeaderNotifBadge();
+        }
+
+        const modal = document.createElement("div");
+        modal.id = "nx-real-notif-drawer";
+        modal.style.cssText =
+            "position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:200160; display:flex; align-items:flex-end; justify-content:center; backdrop-filter:blur(6px);";
+
+        const rowsHtml = items.length
+            ? items
+                  .map((it, idx) => {
+                      const uObj = ((window.Nexus && Nexus.users) || []).find((u) => u && norm(u.username) === it.actorUname);
+                      const av =
+                          uObj && uObj.dp
+                              ? `<img src="${uObj.dp}" style="width:42px; height:42px; border-radius:50%; object-fit:cover; border:1.5px solid #10b981; flex-shrink:0;" />`
+                              : `<div style="width:42px; height:42px; border-radius:50%; background:linear-gradient(135deg,#10b981,#2563eb); color:#020617; font-weight:900; font-size:15px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${(
+                                    it.actorName || "U"
+                                )
+                                    .replace(/^@/, "")[0]
+                                    .toUpperCase()}</div>`;
+
+                      const actionBadge =
+                          it.type === "dm"
+                              ? `<span style="background:#10b981; color:#020617; padding:5px 10px; border-radius:9px; font-size:11px; font-weight:900; flex-shrink:0;">Reply 💬</span>`
+                              : `<span style="background:#1e293b; color:#38bdf8; border:1px solid #334155; padding:5px 9px; border-radius:9px; font-size:10.5px; font-weight:800; flex-shrink:0;">View →</span>`;
+
+                      return `
+                          <div data-notif-idx="${idx}" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 13px; border-radius:15px; background:${
+                          it.type === "dm" ? "rgba(16,185,129,0.12)" : "#090d16"
+                      }; border:1px solid ${
+                          it.type === "dm" ? "#10b981" : "#1e293b"
+                      }; margin-bottom:8px; cursor:pointer;">
+                              <div style="display:flex; align-items:center; gap:10px; min-width:0; flex:1;">
+                                  ${av}
+                                  <div style="min-width:0; flex:1;">
+                                      <div style="display:flex; align-items:center; gap:6px;">
+                                          <span style="font-size:13px; font-weight:900; color:#f8fafc;">${it.actorName}</span>
+                                          <span style="font-size:10px; color:#64748b;">• ${formatAgo(it.ts)}</span>
+                                      </div>
+                                      <div style="font-size:12px; color:#cbd5e1; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                          ${it.text}
+                                      </div>
+                                  </div>
+                              </div>
+                              ${actionBadge}
+                          </div>
+                      `;
+                  })
+                  .join("")
+            : `<div style="text-align:center; padding:38px 16px; color:#64748b;">
+                   <div style="font-size:32px; margin-bottom:8px;">🔔</div>
+                   <div style="font-size:14px; font-weight:800; color:#cbd5e1;">No new notifications yet</div>
+                   <div style="font-size:11.5px; color:#64748b; margin-top:4px;">When friends message you, like, comment or follow you, they will appear here live!</div>
+               </div>`;
+
+        modal.innerHTML = `
+            <div style="background:#0f172a; border-top:2px solid #10b981; border-radius:24px 24px 0 0; width:100%; max-width:600px; max-height:86dvh; display:flex; flex-direction:column; padding:16px 16px 24px; color:#fff; box-shadow:0 -18px 50px rgba(0,0,0,0.95);">
+                <div style="width:42px; height:4px; background:#334155; border-radius:99px; margin:0 auto 12px;"></div>
+                <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #1e293b; margin-bottom:10px;">
+                    <div>
+                        <h3 style="font-size:16px; font-weight:900; color:#f8fafc;">🔔 Activity &amp; Notifications (${items.length})</h3>
+                        <div style="font-size:11px; color:#34d399; font-weight:700;">Live DMs, Likes, Comments &amp; Followers</div>
+                    </div>
+                    <button type="button" id="nx-close-notif-btn" style="width:32px; height:32px; border-radius:50%; background:#1e293b; border:none; color:#fff; font-weight:900; cursor:pointer;">✕</button>
+                </div>
+                <div style="flex:1; overflow-y:auto; max-height:66dvh; padding-right:2px;">
+                    ${rowsHtml}
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        modal.querySelector("#nx-close-notif-btn").onclick = () => modal.remove();
+        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+        modal.querySelectorAll("[data-notif-idx]").forEach((row) => {
+            row.onclick = () => {
+                const it = items[Number(row.getAttribute("data-notif-idx"))];
+                if (!it) return;
+                modal.remove();
+                if (it.type === "dm" && window.NexusDM && typeof NexusDM.openDirectChat === "function") {
+                    NexusDM.openDirectChat(it.actorUname, it.actorName, "");
+                } else if (window.openPublicUserProfileModal) {
+                    window.openPublicUserProfileModal(it.actorUname);
+                }
+            };
+        });
+    };
+
+    // =========================================================================
+    // 2. REAL SEARCH ENGINE MODAL (Nexus.openSearch)
+    // =========================================================================
+    window.openNexusRealSearchModal = function () {
+        document.getElementById("nx-real-search-drawer")?.remove();
+
+        const modal = document.createElement("div");
+        modal.id = "nx-real-search-drawer";
+        modal.style.cssText =
+            "position:fixed; inset:0; background:#090d16; z-index:200160; display:flex; flex-direction:column; color:#fff; max-width:600px; margin:0 auto; box-shadow:0 0 60px rgba(0,0,0,0.95);";
+
+        modal.innerHTML = `
+            <div style="padding:12px 14px; background:#0b1120; border-bottom:1px solid #1e293b; display:flex; align-items:center; gap:10px;">
+                <button type="button" id="nx-close-search-btn" style="background:none; border:none; color:#f8fafc; font-size:21px; font-weight:900; cursor:pointer; padding:4px;">←</button>
+                <input type="text" id="nx-global-search-inp" placeholder="🔍 Search members (@username, name) or posts..." autocomplete="off" style="flex:1; padding:10px 14px; border-radius:14px; background:#111827; border:1.5px solid #10b981; color:#fff; font-size:13.5px; outline:none;" />
+            </div>
+            <div id="nx-global-search-results" style="flex:1; overflow-y:auto; padding:12px 14px 40px;"></div>
+        `;
+
+        document.body.appendChild(modal);
+        const inp = modal.querySelector("#nx-global-search-inp");
+        const resBox = modal.querySelector("#nx-global-search-results");
+        modal.querySelector("#nx-close-search-btn").onclick = () => modal.remove();
+
+        const renderSearchResults = (rawQ) => {
+            const q = String(rawQ || "").toLowerCase().replace(/^@/, "").trim();
+            const allUsers = ((window.Nexus && Nexus.users) || []).filter(
+                (u) => u && u.username && norm(u.username) !== "member"
+            );
+            const allPosts = ((window.Nexus && Nexus.posts) || []).filter((p) => p && (p.content || p.text || p.image));
+
+            const matchedUsers = allUsers
+                .filter((u) => {
+                    if (!q) return true;
+                    return (
+                        norm(u.username).includes(q) ||
+                        norm(u.name).includes(q) ||
+                        norm(u.bio).includes(q)
+                    );
+                })
+                .slice(0, 20);
+
+            const matchedPosts = q
+                ? allPosts
+                      .filter(
+                          (p) =>
+                              norm(p.content || p.text).includes(q) ||
+                              norm(p.username).includes(q) ||
+                              norm(p.author).includes(q)
+                      )
+                      .slice(0, 12)
+                : [];
+
+            const usersHtml = matchedUsers.length
+                ? matchedUsers
+                      .map((u) => {
+                          const uKey = norm(u.username);
+                          const isOnline = (Date.now() - Number(u.lastOnline || 0)) < 120000;
+                          const av = u.dp
+                              ? `<img src="${u.dp}" style="width:44px; height:44px; border-radius:50%; object-fit:cover; border:2px solid ${
+                                    isOnline ? "#10b981" : "#334155"
+                                }; flex-shrink:0;" />`
+                              : `<div style="width:44px; height:44px; border-radius:50%; background:linear-gradient(135deg,#10b981,#2563eb); color:#020617; font-weight:900; font-size:16px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${(
+                                    u.name || uKey
+                                )[0].toUpperCase()}</div>`;
+
+                          return `
+                              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-radius:15px; background:#0f172a; border:1px solid #1e293b; margin-bottom:8px;">
+                                  <div data-srch-profile="${uKey}" style="display:flex; align-items:center; gap:11px; min-width:0; flex:1; cursor:pointer;">
+                                      ${av}
+                                      <div style="min-width:0; flex:1;">
+                                          <div style="display:flex; align-items:center; gap:5px;">
+                                              <span style="font-size:14px; font-weight:900; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${
+                                                  u.name || uKey
+                                              }</span>
+                                              <span style="background:#10b981; color:#020617; font-size:9px; font-weight:900; padding:1px 5px; border-radius:99px;">✓</span>
+                                              ${isOnline ? `<span style="font-size:10px; color:#34d399; font-weight:800;">● Live</span>` : ""}
+                                          </div>
+                                          <div style="font-size:11.5px; color:#38bdf8; font-weight:700;">@${uKey}</div>
+                                          ${
+                                              u.bio
+                                                  ? `<div style="font-size:11px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${u.bio}</div>`
+                                                  : ""
+                                          }
+                                      </div>
+                                  </div>
+                                  <div style="display:flex; gap:6px; flex-shrink:0;">
+                                      <button type="button" data-srch-chat="${uKey}" data-srch-name="${(u.name || uKey).replace(/"/g, "")}" style="padding:7px 12px; border-radius:10px; background:#10b981; color:#020617; border:none; font-size:12px; font-weight:900; cursor:pointer;">
+                                          💬 Chat
+                                      </button>
+                                  </div>
+                              </div>
+                          `;
+                      })
+                      .join("")
+                : `<div style="padding:18px; text-align:center; color:#64748b; font-size:12.5px;">No members found matching "${rawQ}"</div>`;
+
+            const postsHtml = matchedPosts.length
+                ? `<div style="font-size:11.5px; font-weight:900; color:#38bdf8; text-transform:uppercase; margin:16px 4px 8px;">📝 Matching Community Posts (${matchedPosts.length})</div>` +
+                  matchedPosts
+                      .map(
+                          (p, idx) => `
+                          <div data-srch-post="${idx}" style="padding:10px 12px; border-radius:14px; background:#0f172a; border:1px solid #1e293b; margin-bottom:8px; cursor:pointer;">
+                              <div style="font-size:12px; font-weight:900; color:#34d399;">@${p.username || p.author}</div>
+                              <div style="font-size:12.5px; color:#e2e8f0; margin-top:3px;">${(p.content || p.text || "📷 Media Post").slice(0, 110)}</div>
+                          </div>
+                      `
+                      )
+                      .join("")
+                : "";
+
+            resBox.innerHTML = `
+                <div style="font-size:11.5px; font-weight:900; color:#34d399; text-transform:uppercase; margin:2px 4px 10px;">
+                    👥 ${q ? `Matching Members (${matchedUsers.length})` : `Active Community Members (${matchedUsers.length})`}
+                </div>
+                ${usersHtml}
+                ${postsHtml}
+            `;
+
+            resBox.querySelectorAll("[data-srch-profile]").forEach((el) => {
+                el.onclick = () => {
+                    const uKey = el.getAttribute("data-srch-profile");
+                    modal.remove();
+                    if (window.openPublicUserProfileModal) window.openPublicUserProfileModal(uKey);
+                };
+            });
+
+            resBox.querySelectorAll("[data-srch-chat]").forEach((btn) => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const uKey = btn.getAttribute("data-srch-chat");
+                    const uName = btn.getAttribute("data-srch-name");
+                    modal.remove();
+                    if (window.NexusDM && typeof NexusDM.openDirectChat === "function") {
+                        NexusDM.openDirectChat(uKey, uName, "");
+                    } else if (window.openDirect1to1ChatWithUser) {
+                        window.openDirect1to1ChatWithUser(uKey);
+                    }
+                };
+            });
+
+            resBox.querySelectorAll("[data-srch-post]").forEach((row) => {
+                row.onclick = () => {
+                    const p = matchedPosts[Number(row.getAttribute("data-srch-post"))];
+                    modal.remove();
+                    if (p && window.openScrollableProfilePostsFeed) {
+                        window.openScrollableProfilePostsFeed([p], 0, { username: p.username });
+                    }
+                };
+            });
+        };
+
+        inp.oninput = () => renderSearchResults(inp.value);
+        renderSearchResults("");
+        setTimeout(() => inp.focus(), 60);
+    };
+
+    // Also ensure clicking "Message 💬" on ANY profile directly calls NexusDM.openDirectChat!
+    const origOpenDirect = window.openDirect1to1ChatWithUser;
+    window.openDirect1to1ChatWithUser = function (targetIdentifier) {
+        const uKey =
+            typeof targetIdentifier === "object"
+                ? norm(targetIdentifier.username || targetIdentifier.name)
+                : norm(targetIdentifier);
+        const uObj = ((window.Nexus && Nexus.users) || []).find((u) => u && norm(u.username) === uKey);
+        const uName = (uObj && (uObj.name || uObj.username)) || (typeof targetIdentifier === "object" && targetIdentifier.name) || uKey;
+        const uDp = (uObj && uObj.dp) || "";
+
+        document.getElementById("nx-public-profile-modal")?.remove();
+        document.getElementById("nx-follow-list-modal")?.remove();
+        document.getElementById("nx-avatar-zoom-overlay")?.remove();
+
+        if (window.NexusDM && typeof NexusDM.openDirectChat === "function" && uKey) {
+            NexusDM.openDirectChat(uKey, uName, uDp);
+            return;
+        }
+        if (typeof origOpenDirect === "function") {
+            origOpenDirect(targetIdentifier);
+        }
+    };
+
+    // Bind directly to Nexus.openNotifications & Nexus.openSearch + header buttons
+    function bindHeaderSearchAndNotifButtons() {
+        startRealtimeNotifWatcher();
+        updateHeaderNotifBadge();
+        if (window.Nexus) {
+            Nexus.openNotifications = window.openNexusRealNotificationsModal;
+            Nexus.openSearch = window.openNexusRealSearchModal;
+        }
+        document.querySelectorAll('.nx-header-actions button').forEach((btn) => {
+            const oc = btn.getAttribute("onclick") || "";
+            if (oc.includes("openNotifications") && !btn.dataset.nxNotifBound) {
+                btn.dataset.nxNotifBound = "1";
+                btn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.openNexusRealNotificationsModal();
+                };
+            } else if (oc.includes("openSearch") && !btn.dataset.nxSearchBound) {
+                btn.dataset.nxSearchBound = "1";
+                btn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.openNexusRealSearchModal();
+                };
+            }
+        });
+    }
+
+    setInterval(bindHeaderSearchAndNotifButtons, 700);
+    setTimeout(bindHeaderSearchAndNotifButtons, 150);
+})();
