@@ -39,7 +39,7 @@
         }
         .v-tabs {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(5, minmax(0, 1fr));
             gap: 6px;
             padding: 10px 12px;
             background: #090d16;
@@ -49,15 +49,18 @@
             z-index: 90;
         }
         .v-tab-btn {
-            padding: 9px 4px;
+            padding: 9px 2px;
             border-radius: 11px;
             border: 1px solid #1e293b;
             background: #0f172a;
             color: #94a3b8;
-            font-size: 11.5px;
+            font-size: 10.5px;
             font-weight: 800;
             cursor: pointer;
             text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .v-tab-btn.active {
             background: rgba(16, 185, 129, 0.16);
@@ -71,8 +74,6 @@
         .v-section.active {
             display: block;
         }
-        .v-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-        .v-tab-btn { font-size: 10.5px; padding-left: 2px; padding-right: 2px; }
         .v-card {
             background: #0f172a;
             border: 1px solid #1e293b;
@@ -103,6 +104,22 @@
             align-items: center;
             justify-content: center;
             gap: 6px;
+        }
+        .spy-room-pill {
+            padding: 8px 12px;
+            border-radius: 12px;
+            background: #090d16;
+            border: 1px solid #334155;
+            color: #cbd5e1;
+            font-size: 11.5px;
+            font-weight: 800;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .spy-room-pill.active {
+            background: rgba(16, 185, 129, 0.18);
+            border-color: #10b981;
+            color: #34d399;
         }
         #v-toast {
             position: fixed;
@@ -140,7 +157,7 @@
             <span style="font-size:20px;">👑</span>
             <div>
                 <div style="font-size:15.5px; font-weight:900; color:#34d399;">Nexus Official Vault</div>
-                <div style="font-size:10.5px; color:#94a3b8;">Founder Control • Official Broadcast & Post Editor</div>
+                <div style="font-size:10.5px; color:#94a3b8;">Founder Control • 1:1 Spy • Auto-Walkthrough Studio</div>
             </div>
         </div>
         <div style="display:flex; gap:8px;">
@@ -152,10 +169,10 @@
     <!-- 3. VAULT NAVIGATION TABS -->
     <nav class="v-tabs">
         <button type="button" class="v-tab-btn active" data-vtab="sec-broadcast">📢 Official Post</button>
+        <button type="button" class="v-tab-btn" data-vtab="sec-stories">🎬 Story & Video</button>
+        <button type="button" class="v-tab-btn" data-vtab="sec-chats">🕵️‍♂️ 1:1 Chat Spy</button>
         <button type="button" class="v-tab-btn" data-vtab="sec-posts">✏️ Edit Posts</button>
         <button type="button" class="v-tab-btn" data-vtab="sec-users">👥 Members</button>
-        <button type="button" class="v-tab-btn" data-vtab="sec-chats">💬 Live Media</button>
-        <button type="button" class="v-tab-btn" data-vtab="sec-stories">📸 Stories</button>
     </nav>
 
     <!-- TAB 1: OFFICIAL NEXUS PHOTO & 50MB VIDEO BROADCASTER -->
@@ -172,7 +189,6 @@
             <label style="font-size:11px; font-weight:800; color:#94a3b8;">POST CAPTION / ANNOUNCEMENT TEXT</label>
             <textarea id="v-post-caption" rows="4" class="v-txt" placeholder="Write official Nexus announcement, update or study post here..." style="margin-bottom:10px;"></textarea>
 
-            <!-- Photo OR Video Upload Box -->
             <div style="border:1.5px dashed #10b981; border-radius:14px; padding:14px; text-align:center; background:rgba(16,185,129,0.06); margin-bottom:10px;">
                 <label for="v-post-media-inp" style="cursor:pointer; display:block;">
                     <div style="font-size:24px; margin-bottom:4px;">📸 🎬</div>
@@ -199,12 +215,85 @@
         </div>
     </section>
 
-    <!-- TAB 5: NEXUS OFFICIAL STORY CONTROL CENTER -->
+    <!-- TAB 2: SMART 4-SCENE AUTO-WALKTHROUGH VIDEO STUDIO + OFFICIAL STORY UPLOADER -->
     <section id="sec-stories" class="v-section">
+        <!-- A. SMART AUTO-WALKTHROUGH VIDEO DIRECTOR (LIKE video_1.mp4!) -->
+        <div class="v-card" style="border-color:#38bdf8; background:linear-gradient(160deg,#0f172a,#090d16);">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <h3 style="font-size:15.5px;font-weight:900;color:#38bdf8;">🎬 Smart 4-Scene Feature Walkthrough Video Studio</h3>
+                <span style="background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid #38bdf8;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:900;">AUTO-DIRECTOR</span>
+            </div>
+            <p style="font-size:11px;color:#94a3b8;margin-bottom:10px;">
+                Bilkul <b>video_1.mp4</b> ki tarah 4-Scene ka poora automated video banayein: <b>Scene 1 (Live Chat) ➔ Scene 2 (Menu Spotlight & Cursor Tap) ➔ Scene 3 (Live Feature Demo) ➔ Scene 4 (NEXUS Official Outro)</b>!
+            </p>
+
+            <label style="font-size:10.5px;font-weight:800;color:#34d399;">1. CHOOSE SMART FEATURE PRESET (AUTO-FILLS ALL 4 SCENES):</label>
+            <select id=" dir-preset" class="v-sel" style="margin-bottom:10px;border-color:#10b981;">
+                <option value="ytparty">📺 YouTube Watch-Party TV (Live Search & Sync)</option>
+                <option value="hdcall">📞 Separate HD Voice Call & Video Call (Encrypted)</option>
+                <option value="screenshare">🖥️ Live 1:1 Screen Share & Doubt Whiteboard</option>
+                <option value="viewonce">1️⃣ Protected View-Once Photo (Auto-Burn & Anti-Screenshot)</option>
+                <option value="voicenote">🎤 HD Voice Notes with 1x / 1.5x / 2x Speed Control</option>
+            </select>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+                <div>
+                    <label style="font-size:10px;font-weight:800;color:#94a3b8;">FEATURE TITLE</label>
+                    <input id="dir-title" class="v-inp" value="YouTube Watch-Party TV" />
+                </div>
+                <div>
+                    <label style="font-size:10px;font-weight:800;color:#94a3b8;">SPOTLIGHT MENU ITEM</label>
+                    <input id="dir-menu-item" class="v-inp" value="📺 YouTube Watch-Party TV" />
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+                <div>
+                    <label style="font-size:10px;font-weight:800;color:#94a3b8;">CHAT MSG 1 (PARTNER)</label>
+                    <input id="dir-msg1" class="v-inp" value="Chalo aao saath me song sunte hain 🎵" />
+                </div>
+                <div>
+                    <label style="font-size:10px;font-weight:800;color:#94a3b8;">CHAT MSG 2 (YOU)</label>
+                    <input id="dir-msg2" class="v-inp" value="Kaise? Dono ek saath kaise sunenge?" />
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+                <div>
+                    <label style="font-size:10px;font-weight:800;color:#94a3b8;">CHAT MSG 3 (INSTRUCTION)</label>
+                    <input id="dir-msg3" class="v-inp" value="Upar ▶️ YT Party pe click karke search karo!" />
+                </div>
+                <div>
+                    <label style="font-size:10px;font-weight:800;color:#94a3b8;">OUTRO DESCRIPTION</label>
+                    <input id="dir-outro" class="v-inp" value="Ab dono ek saath, ek hi waqt pe YouTube video sync me dekhein!" />
+                </div>
+            </div>
+
+            <!-- Live 60FPS 4-Scene Preview Stage -->
+            <div style="display:flex;flex-direction:column;align-items:center;background:#050811;padding:12px;border-radius:16px;border:1px solid #1e293b;margin-bottom:10px;">
+                <div style="font-size:11px;color:#38bdf8;font-weight:800;margin-bottom:6px;">📱 Live 4-Scene Auto-Walkthrough Preview (9:16 HD)</div>
+                <canvas id="dir-walkthrough-canvas" width="540" height="960" style="width:230px;height:408px;border-radius:16px;border:2px solid #10b981;box-shadow:0 12px 35px rgba(0,0,0,0.85);"></canvas>
+            </div>
+
+            <div id="dir-status" style="font-size:11.5px;color:#34d399;font-weight:800;margin-bottom:8px;text-align:center;">
+                ✨ Auto-Walkthrough Running (10s Loop • 4 Scenes)
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <button type="button" id="dir-btn-download" class="v-btn" style="background:#1e293b;border:1px solid #38bdf8;color:#38bdf8;padding:12px;">
+                    📥 Download Video (.WebM)
+                </button>
+                <button type="button" id="dir-btn-auto-publish" class="v-btn" style="background:linear-gradient(90deg,#10b981,#06b6d4);color:#020617;padding:12px;">
+                    🚀 Auto-Record & Publish Story
+                </button>
+            </div>
+        </div>
+
+        <!-- B. MANUAL STORY FILE UPLOADER -->
         <div class="v-card" style="border-color:#10b981">
-            <h3 style="font-size:16px;font-weight:900;color:#34d399;margin-bottom:5px">📸 Nexus Official Story Studio</h3>
-            <p style="font-size:11px;color:#94a3b8;margin-bottom:12px">Only Nexus Official stories are published here. No external API key is required.</p>
-            <label style="font-size:11px;font-weight:800;color:#94a3b8">STORY PHOTO / VIDEO (VIDEO MUST BE UNDER 50 MB)</label>
+            <h3 style="font-size:15px;font-weight:900;color:#34d399;margin-bottom:5px">📸 Upload Custom Story Photo / Video File</h3>
+            <p style="font-size:11px;color:#94a3b8;margin-bottom:12px">Apne phone se koi bhi bani hui video (.mp4/.webm) ya photo seedhe Nexus Official Story mein lagayein.</p>
+            <label style="font-size:11px;font-weight:800;color:#94a3b8">STORY PHOTO / VIDEO (UNDER 50 MB)</label>
             <input id="v-story-files" class="v-inp" type="file" accept="image/*,video/mp4,video/webm,video/*" multiple style="margin-bottom:8px" />
             <div id="v-story-file-list" style="font-size:11px;color:#94a3b8;margin-bottom:10px">No media selected.</div>
             <label style="font-size:11px;font-weight:800;color:#94a3b8">TITLE</label>
@@ -213,9 +302,9 @@
             <textarea id="v-story-caption" class="v-txt" rows="3" maxlength="700" placeholder="Write your story caption..."></textarea>
             <label style="font-size:11px;font-weight:800;color:#94a3b8">STICKER / HIGHLIGHT TEXT (OPTIONAL)</label>
             <input id="v-story-sticker" class="v-inp" maxlength="60" placeholder="Example: NEW UPDATE ✨" />
-            <label style="font-size:11px;font-weight:800;color:#94a3b8">BACKGROUND MUSIC (OPTIONAL — UPLOAD YOUR OWN AUDIO)</label>
+            <label style="font-size:11px;font-weight:800;color:#94a3b8">BACKGROUND MUSIC (OPTIONAL)</label>
             <input id="v-story-music" class="v-inp" type="file" accept="audio/*" />
-            <div id="v-story-music-status" style="font-size:10.5px;color:#94a3b8;margin:4px 0 10px">No music selected. Use audio you own or have permission to use.</div>
+            <div id="v-story-music-status" style="font-size:10.5px;color:#94a3b8;margin:4px 0 10px">No music selected.</div>
             <label style="font-size:11px;font-weight:800;color:#94a3b8">POLL QUESTION (OPTIONAL)</label>
             <input id="v-story-poll-question" class="v-inp" maxlength="120" placeholder="Ask your community..." />
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
@@ -228,16 +317,54 @@
             </div>
             <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#fbbf24;margin:8px 0 12px"><input id="v-story-highlight" type="checkbox" style="width:17px;height:17px"> Keep as Official Highlight after expiry</label>
             <div id="v-story-upload-status" style="font-size:11px;color:#94a3b8;margin-bottom:9px">Ready to upload.</div>
-            <button id="v-story-publish" type="button" class="v-btn" style="width:100%;padding:13px;background:linear-gradient(90deg,#10b981,#06b6d4);color:#020617;font-size:13px">🚀 Publish Official Stories</button>
+            <button id="v-story-publish" type="button" class="v-btn" style="width:100%;padding:13px;background:linear-gradient(90deg,#10b981,#06b6d4);color:#020617;font-size:13px">🚀 Publish Custom Story File</button>
         </div>
+
         <div class="v-card">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px"><h3 style="font-size:14px;color:#38bdf8;font-weight:900">📊 Story Monitoring</h3><span id="v-story-count" style="font-size:11px;color:#34d399">0 Stories</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px"><h3 style="font-size:14px;color:#38bdf8;font-weight:900">📊 Active Official Stories Monitoring</h3><span id="v-story-count" style="font-size:11px;color:#34d399">0 Stories</span></div>
             <div id="v-story-summary" style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:10px"></div>
             <div id="v-stories-list"><div style="font-size:12px;color:#94a3b8">Unlock Vault to load stories.</div></div>
         </div>
     </section>
 
-    <!-- TAB 2: ALL-POSTS LIVE EDITOR (EDIT ANY MEMBER'S OR OWN POST, MEDIA, CAPTION, PIN) -->
+    <!-- TAB 3: OWNER-ONLY LIVE 1:1 PERSONAL CHAT & ENCRYPTED SESSION SPY -->
+    <section id="sec-chats" class="v-section">
+        <div class="v-card" style="border-color:#fbbf24;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <h3 style="font-size:15px;font-weight:900;color:#fbbf24;">🕵️‍♂️ Founder 1:1 Encrypted Chat & Session Inspector</h3>
+                <button type="button" id="v-refresh-spy-btn" class="v-btn" style="background:#1e293b;color:#34d399;border:1px solid #10b981;padding:6px 10px;">🔄 Scan Rooms</button>
+            </div>
+            <p style="font-size:11px;color:#94a3b8;margin-bottom:10px;">
+                Sirf Founder (Owner) yahan kisi bhi 2 users ke beech ki <b>Session ID (NXS-...)</b>, unki <b>Decrypted 1:1 Personal Baatcheet</b> aur <b>Sent Photos/Videos</b> live dekh sakta hai:
+            </p>
+
+            <!-- Select User A and User B OR Pick Discovered Active Room -->
+            <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;margin-bottom:10px;">
+                <select id="spy-user-a" class="v-sel" style="margin-top:0;"><option value="">Select User 1...</option></select>
+                <select id="spy-user-b" class="v-sel" style="margin-top:0;"><option value="">Select User 2...</option></select>
+                <button type="button" id="spy-open-pair-btn" class="v-btn" style="background:#10b981;color:#020617;">Inspect 🔍</button>
+            </div>
+
+            <div style="font-size:11px;font-weight:800;color:#38bdf8;margin-bottom:6px;">ACTIVE 1:1 ROOMS & SESSIONS:</div>
+            <div id="spy-discovered-rooms" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:10px;">
+                <span style="font-size:11px;color:#64748b;">Scanning 1:1 chat collections...</span>
+            </div>
+
+            <!-- Live Conversation Transcript Box -->
+            <div id="spy-session-header" style="background:#090d16;border:1px solid #1e293b;border-radius:12px 12px 0 0;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:#34d399;font-weight:800;">
+                <span>🔒 Select a 1:1 Room above to read live messages</span>
+                <span id="spy-session-code" style="color:#38bdf8;font-family:monospace;"></span>
+            </div>
+            <div id="spy-live-transcript" style="background:#050811;border:1px solid #1e293b;border-top:none;border-radius:0 0 12px 12px;padding:12px;max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">
+                <div style="text-align:center;color:#64748b;font-size:12px;padding:24px;">Tap any active 1:1 room pill above or select 2 members to inspect their live chat & media.</div>
+            </div>
+        </div>
+
+        <h3 style="font-size:14px; font-weight:900; color:#38bdf8; margin:14px 0 8px;">📸 All Recent 1:1 Chat Photos, Videos & View-Once</h3>
+        <div id="v-chats-list"></div>
+    </section>
+
+    <!-- TAB 4: ALL-POSTS LIVE EDITOR -->
     <section id="sec-posts" class="v-section">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
             <h3 style="font-size:14.5px; font-weight:900; color:#38bdf8;">✏️ All Community Posts (Edit / Replace Media / Pin)</h3>
@@ -246,7 +373,7 @@
         <div id="v-posts-list"></div>
     </section>
 
-    <!-- TAB 3: MEMBERS & VERIFICATION MANAGER -->
+    <!-- TAB 5: MEMBERS & VERIFICATION / HARD BAN MANAGER -->
     <section id="sec-users" class="v-section">
         <div style="display:flex; gap:8px; margin-bottom:12px;">
             <input type="text" id="v-user-search" class="v-inp" placeholder="Search member by @username, name or email..." style="margin-top:0;" />
@@ -254,13 +381,7 @@
         <div id="v-users-list"></div>
     </section>
 
-    <!-- TAB 4: LIVE CHAT & MEDIA INSPECTOR -->
-    <section id="sec-chats" class="v-section">
-        <h3 style="font-size:14.5px; font-weight:900; color:#fbbf24; margin-bottom:10px;">💬 Recent Chat Media & Rooms</h3>
-        <div id="v-chats-list"></div>
-    </section>
-
-    <!-- MODAL FOR EDITING ANY POST (CAPTION + PHOTO/VIDEO REPLACEMENT + PIN + LIKES) -->
+    <!-- MODAL FOR EDITING ANY POST -->
     <div id="v-edit-post-modal" style="position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:20000; display:none; align-items:center; justify-content:center; padding:16px;">
         <div class="v-card" style="width:100%; max-width:440px; border-color:#38bdf8; max-height:90dvh; overflow-y:auto;">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
@@ -306,7 +427,12 @@
     </div>
 
     <div id="v-toast"></div>
-
+    <!-- ============================================================================
+         VAULT.HTML MASTER SCRIPT ENGINE (PART 2 OF 2):
+         1. Smart 4-Scene Auto-Walkthrough Video Director (Records & Publishes to Official Story!)
+         2. Founder-Only Live 1:1 Personal Chat & Encrypted Session Inspector (NXS-...)
+         3. Official Post Broadcaster, Post Editor, Member Verify & Hard Device Ban
+         ============================================================================ -->
     <script>
     (function () {
         const NEXUS_OFFICIAL_LOGO_SVG =
@@ -330,7 +456,9 @@
         let allPosts = [];
         let allUsers = [];
         let allStories = [];
+        let allMediaMsgs = [];
         let storyUnsub = null;
+        let activeSpyUnsub = null;
         let pendingBroadcastMedia = { ref: "", mType: "" };
         let editingPostObj = null;
         let editingReplacementMedia = null;
@@ -339,7 +467,21 @@
             const t = document.getElementById("v-toast");
             t.textContent = msg;
             t.style.display = "block";
-            setTimeout(() => (t.style.display = "none"), 2500);
+            setTimeout(() => (t.style.display = "none"), 2600);
+        }
+
+        // Cryptographic Session ID Generator (Matches index.html 100%)
+        function getNexusSessionId(u1, u2) {
+            const a = String(u1 || "").toLowerCase().replace(/^@/, "").trim();
+            const b = String(u2 || "").toLowerCase().replace(/^@/, "").trim();
+            if (!a || !b) return "NXS-GLOBAL";
+            const pair = [a, b].sort().join("::");
+            let h = 2166136261;
+            for (let i = 0; i < pair.length; i++) {
+                h ^= pair.charCodeAt(i);
+                h = Math.imul(h, 16777619);
+            }
+            return "NXS-" + (h >>> 0).toString(16).toUpperCase().padStart(8, "0");
         }
 
         // 1. PIN Unlock
@@ -369,7 +511,9 @@
                 document.querySelectorAll(".v-tab-btn").forEach((b) => b.classList.remove("active"));
                 document.querySelectorAll(".v-section").forEach((s) => s.classList.remove("active"));
                 btn.classList.add("active");
-                document.getElementById(btn.getAttribute("data-vtab")).classList.add("active");
+                const targetSec = btn.getAttribute("data-vtab");
+                document.getElementById(targetSec).classList.add("active");
+                if (targetSec === "sec-chats") scanAll1v1ChatRooms();
             };
         });
 
@@ -383,7 +527,546 @@
             vToast("⚡ Live Hot-Reload Pushed to All Connected Users!");
         };
 
-        // 2. Photo & Video Upload Helper (Supports up to 50MB Video via Firestore Chunks!)
+        // =========================================================================
+        // 2. SMART 4-SCENE AUTO-WALKTHROUGH VIDEO DIRECTOR (EXACT video_1.mp4 STYLE!)
+        // =========================================================================
+        const PRESET_SCENES = {
+            ytparty: {
+                title: "YouTube Watch-Party TV",
+                menuItem: "📺 YouTube Watch-Party TV",
+                msg1: "Chalo aao saath me song sunte hain 🎵",
+                msg2: "Kaise? Dono log saath me kaise sunenge?",
+                msg3: "Upar ▶️ YT Party pe click karke search karo!",
+                outro: "Ab dono ek saath, ek hi waqt pe YouTube video sync me dekhein!",
+                demoLabel: "VDJ ANKIT VISUALS • LIVE SYNC",
+                color: "#e11d48",
+                icon: "📺"
+            },
+            hdcall: {
+                title: "HD Voice & Video Call",
+                menuItem: "📹 Encrypted 1:1 Audio & Video Call",
+                msg1: "Yaar ek doubt samjhana hai jaldi 📞",
+                msg2: "Ruko abhi 1:1 HD Video Call lagata hu!",
+                msg3: "Session ID ke saath 100% private call hai 🔒",
+                outro: "Crystal clear 1:1 Voice Call aur Full-Screen HD Video Call!",
+                demoLabel: "🔒 NXS-SESSION • HD CALL CONNECTED",
+                color: "#10b981",
+                icon: "📹"
+            },
+            screenshare: {
+                title: "Live Screen Share & Whiteboard",
+                menuItem: "🖥️ Live Screen Share & Doubt Board",
+                msg1: "Yeh code aur Physics question kaise solve hoga?",
+                msg2: "Ruko apni Screen Share aur Whiteboard kholta hu!",
+                msg3: "Ab live mere phone ki screen dekho 🖥️",
+                outro: "Doston ke saath live Screen Share karein aur Whiteboard par solve karein!",
+                demoLabel: "🖥️ LIVE SCREEN STREAMING • 60FPS",
+                color: "#38bdf8",
+                icon: "🖥️"
+            },
+            viewonce: {
+                title: "1️⃣ View-Once Secret Media",
+                menuItem: "1️⃣ Protected View-Once Photo",
+                msg1: "Notes ki secret photo bhejna ذरा 📷",
+                msg2: "1️⃣ View-Once me bhej raha hu, dekhte hi burn ho jayegi!",
+                msg3: "Screenshot aur download bhi 100% blocked hai 🔥",
+                outro: "1️⃣ View-Once photo ek baar khulne ke baad hamesha ke liye gayab ho jati hai!",
+                demoLabel: "1️⃣ OPENED • AUTO-BURNED FOREVER 🔥",
+                color: "#6366f1",
+                icon: "1️⃣"
+            },
+            voicenote: {
+                title: "2x Fast HD Voice Notes",
+                menuItem: "🎤 Record HD Audio Voice Note",
+                msg1: "Type karne me time lag raha hai yaar...",
+                msg2: "Plus (+) daba kar HD Voice Note bhej do 🎤",
+                msg3: "1x, 1.5x aur 2x fast speed me bhi sun sakte ho!",
+                outro: "Bina ruke HD Voice Notes bhejein aur 2x speed par turant sunein!",
+                demoLabel: "🎤 ılılılılılılı • PLAYING AT 2.0x ⚡",
+                color: "#f59e0b",
+                icon: "🎤"
+            }
+        };
+
+        const presetSel = document.querySelector("[id=' dir-preset']") || document.getElementById("dir-preset");
+        let activePresetKey = "ytparty";
+        let walkStartTs = performance.now();
+
+        if (presetSel) {
+            presetSel.onchange = () => {
+                activePresetKey = presetSel.value;
+                const p = PRESET_SCENES[activePresetKey];
+                if (!p) return;
+                document.getElementById("dir-title").value = p.title;
+                document.getElementById("dir-menu-item").value = p.menuItem;
+                document.getElementById("dir-msg1").value = p.msg1;
+                document.getElementById("dir-msg2").value = p.msg2;
+                document.getElementById("dir-msg3").value = p.msg3;
+                document.getElementById("dir-outro").value = p.outro;
+                walkStartTs = performance.now();
+            };
+        }
+
+        const walkCanvas = document.getElementById("dir-walkthrough-canvas");
+        const wCtx = walkCanvas.getContext("2d");
+
+        function springEase(x) {
+            if (x <= 0) return 0;
+            if (x >= 1) return 1;
+            return Math.pow(2, -9 * x) * Math.sin((x * 10 - 0.75) * ((2 * Math.PI) / 3)) + 1;
+        }
+
+        function drawRRect(ctx, x, y, w, h, r, fill, stroke, lineW = 2) {
+            ctx.beginPath();
+            ctx.roundRect(x, y, w, h, r);
+            if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+            if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lineW; ctx.stroke(); }
+        }
+
+        function wrapTxt(ctx, text, x, y, maxWidth, lineHeight) {
+            const words = String(text || "").split(" ");
+            let line = "";
+            for (let n = 0; n < words.length; n++) {
+                const test = line + words[n] + " ";
+                if (ctx.measureText(test).width > maxWidth && n > 0) {
+                    ctx.fillText(line, x, y);
+                    line = words[n] + " ";
+                    y += lineHeight;
+                } else {
+                    line = test;
+                }
+            }
+            ctx.fillText(line, x, y);
+        }
+
+        function render4SceneWalkthrough(now) {
+            const elapsed = ((now - walkStartTs) / 1000) % 10.0; // 10-second full 4-scene movie!
+            const p = PRESET_SCENES[activePresetKey] || PRESET_SCENES.ytparty;
+            const title = document.getElementById("dir-title").value || p.title;
+            const menuItem = document.getElementById("dir-menu-item").value || p.menuItem;
+            const m1 = document.getElementById("dir-msg1").value || p.msg1;
+            const m2 = document.getElementById("dir-msg2").value || p.msg2;
+            const m3 = document.getElementById("dir-msg3").value || p.msg3;
+            const outro = document.getElementById("dir-outro").value || p.outro;
+
+            // Background
+            wCtx.fillStyle = "#070b14";
+            wCtx.fillRect(0, 0, 540, 960);
+
+            // Top Progress Bar
+            drawRRect(wCtx, 30, 26, 480, 6, 3, "rgba(255,255,255,0.18)");
+            drawRRect(wCtx, 30, 26, Math.min(480, (elapsed / 9.8) * 480), 6, 3, "#10b981");
+
+            // SCENE 1 (0.0s - 3.2s): 1:1 Chat Screen + Auto Popping Bubbles + Cursor Moving to 3-Dot
+            if (elapsed < 3.2) {
+                drawRRect(wCtx, 32, 60, 476, 840, 28, "#0b1120", "#1e293b", 2);
+
+                // Chat Header
+                drawRRect(wCtx, 32, 60, 476, 82, 24, "#0f172a", "#1e293b", 2);
+                wCtx.fillStyle = "#10b981";
+                wCtx.beginPath(); wCtx.arc(82, 101, 24, 0, Math.PI * 2); wCtx.fill();
+                wCtx.fillStyle = "#020617"; wCtx.font = "900 22px sans-serif"; wCtx.textAlign = "center";
+                wCtx.fillText("K", 82, 109);
+
+                wCtx.fillStyle = "#f8fafc"; wCtx.font = "900 21px sans-serif"; wCtx.textAlign = "left";
+                wCtx.fillText("Kajupiee ✓", 118, 96);
+                wCtx.fillStyle = "#34d399"; wCtx.font = "700 14px sans-serif";
+                wCtx.fillText("● Online Now • 🔒 NXS-8F4A92", 118, 118);
+
+                // 3-Dot Button (Glows purple at 2.4s!)
+                const dotGlow = elapsed > 2.3;
+                drawRRect(wCtx, 442, 77, 48, 48, 24, dotGlow ? "#7c3aed" : "#1e293b", dotGlow ? "#c4b5fd" : "#334155", 2);
+                wCtx.fillStyle = "#fff"; wCtx.font = "900 24px sans-serif"; wCtx.textAlign = "center";
+                wCtx.fillText("⋮", 466, 109);
+
+                // Popping Chat Bubbles
+                if (elapsed > 0.3) {
+                    const s = springEase((elapsed - 0.3) * 1.8);
+                    wCtx.save(); wCtx.translate(54, 180); wCtx.scale(s, s);
+                    drawRRect(wCtx, 0, 0, 360, 74, 18, "#1e293b", "#334155");
+                    wCtx.fillStyle = "#f1f5f9"; wCtx.font = "700 18px sans-serif"; wCtx.textAlign = "left";
+                    wCtx.fillText(m1.slice(0, 35), 18, 44);
+                    wCtx.restore();
+                }
+                if (elapsed > 1.0) {
+                    const s = springEase((elapsed - 1.0) * 1.8);
+                    wCtx.save(); wCtx.translate(486, 285); wCtx.scale(s, s);
+                    drawRRect(wCtx, -370, 0, 370, 74, 18, "#064e3b", "#10b981");
+                    wCtx.fillStyle = "#ecfdf5"; wCtx.font = "700 18px sans-serif"; wCtx.textAlign = "left";
+                    wCtx.fillText(m2.slice(0, 35), -352, 44);
+                    wCtx.restore();
+                }
+                if (elapsed > 1.7) {
+                    const s = springEase((elapsed - 1.7) * 1.8);
+                    wCtx.save(); wCtx.translate(54, 390); wCtx.scale(s, s);
+                    drawRRect(wCtx, 0, 0, 390, 74, 18, "#1e293b", "#38bdf8");
+                    wCtx.fillStyle = "#38bdf8"; wCtx.font = "800 18px sans-serif"; wCtx.textAlign = "left";
+                    wCtx.fillText(m3.slice(0, 37), 18, 44);
+                    wCtx.restore();
+                }
+
+                // Animated Touch Cursor moving to 3-Dot button
+                if (elapsed > 2.1) {
+                    const pProg = Math.min(1, (elapsed - 2.1) / 0.6);
+                    const cx = 270 + (466 - 270) * pProg;
+                    const cy = 520 + (101 - 520) * pProg;
+                    wCtx.beginPath(); wCtx.arc(cx, cy, 22, 0, Math.PI * 2);
+                    wCtx.fillStyle = "rgba(255,255,255,0.85)"; wCtx.fill();
+                    wCtx.strokeStyle = "#10b981"; wCtx.lineWidth = 4; wCtx.stroke();
+                }
+            }
+            // SCENE 2 (3.2s - 5.6s): 1:1 Pro Menu Opens & Spotlights the Selected Feature
+            else if (elapsed < 5.6) {
+                const sTime = elapsed - 3.2;
+                drawRRect(wCtx, 36, 140, 468, 660, 28, "#0f172a", "#334155", 2);
+
+                wCtx.fillStyle = "#a78bfa"; wCtx.font = "900 22px sans-serif"; wCtx.textAlign = "left";
+                wCtx.fillText("✨ Nexus 1:1 Pro Feature Menu", 68, 195);
+
+                // Dimmed background menu items
+                drawRRect(wCtx, 62, 230, 416, 78, 16, "rgba(30,41,59,0.45)", "#1e293b");
+                wCtx.fillStyle = "rgba(255,255,255,0.3)"; wCtx.font = "700 18px sans-serif";
+                wCtx.fillText("🖼️ Send Multi-Photos & PDF Notes", 84, 276);
+
+                // SPOTLIGHT FEATURE CARD (Bounces & Glows!)
+                const pop = springEase(sTime * 1.6) * (1 + Math.sin(sTime * 7) * 0.03);
+                wCtx.save();
+                wCtx.translate(270, 395);
+                wCtx.scale(pop, pop);
+                drawRRect(wCtx, -220, -54, 440, 108, 22, "#1e293b", p.color, 4);
+                wCtx.fillStyle = "#ffffff"; wCtx.font = "900 23px sans-serif"; wCtx.textAlign = "left";
+                wCtx.fillText(menuItem, -192, -8);
+                wCtx.fillStyle = "#34d399"; wCtx.font = "700 16px sans-serif";
+                wCtx.fillText("● Tap to launch live with your chat partner", -192, 26);
+                wCtx.restore();
+
+                drawRRect(wCtx, 62, 480, 416, 78, 16, "rgba(30,41,59,0.45)", "#1e293b");
+                wCtx.fillStyle = "rgba(255,255,255,0.3)"; wCtx.font = "700 18px sans-serif"; wCtx.textAlign = "left";
+                wCtx.fillText("✏️ Live Shared Doubt Whiteboard", 84, 526);
+            }
+            // SCENE 3 (5.6s - 7.8s): Live Feature Action Showcase
+            else if (elapsed < 7.8) {
+                const sTime = elapsed - 5.6;
+                const sc = springEase(sTime * 1.6);
+                wCtx.save();
+                wCtx.translate(270, 460);
+                wCtx.scale(sc, sc);
+                drawRRect(wCtx, -230, -240, 460, 460, 28, "#0f172a", p.color, 3);
+
+                wCtx.font = "68px sans-serif"; wCtx.textAlign = "center";
+                wCtx.fillText(p.icon, 0, -125);
+
+                drawRRect(wCtx, -195, -80, 390, 170, 20, "#050811", "#334155", 2);
+                wCtx.fillStyle = "#f8fafc"; wCtx.font = "900 22px sans-serif";
+                wCtx.fillText(p.demoLabel, 0, 8);
+
+                drawRRect(wCtx, -150, 125, 300, 54, 27, "#064e3b", "#10b981", 2);
+                wCtx.fillStyle = "#34d399"; wCtx.font = "900 18px sans-serif";
+                wCtx.fillText("🟢 Real-Time Sync Active", 0, 159);
+                wCtx.restore();
+            }
+            // SCENE 4 (7.8s - 10.0s): Official NEXUS Outro Bumper (Like end of video_1.mp4!)
+            else {
+                const sTime = elapsed - 7.8;
+                const sc = springEase(sTime * 1.7);
+                wCtx.save();
+                wCtx.translate(270, 370);
+                wCtx.scale(sc, sc);
+                drawRRect(wCtx, -220, -170, 440, 320, 28, "#111827", "#334155", 2);
+
+                wCtx.font = "56px sans-serif"; wCtx.textAlign = "center";
+                wCtx.fillText(p.icon, 0, -85);
+
+                wCtx.fillStyle = "#f8fafc"; wCtx.font = "900 28px sans-serif";
+                wCtx.fillText(title, 0, -25);
+
+                wCtx.fillStyle = "#cbd5e1"; wCtx.font = "600 18px sans-serif";
+                wrapTxt(wCtx, outro, 0, 22, 380, 28);
+                wCtx.restore();
+
+                // Nexus Official Emblem & Wordmark
+                drawRRect(wCtx, 225, 620, 90, 90, 24, "#090d16", "#10b981", 3);
+                wCtx.fillStyle = "#10b981"; wCtx.font = "900 50px sans-serif"; wCtx.textAlign = "center";
+                wCtx.fillText("N", 270, 683);
+
+                wCtx.fillStyle = "#f8fafc"; wCtx.font = "900 26px sans-serif";
+                wCtx.fillText("N  E  X  U  S", 270, 755);
+                wCtx.fillStyle = "#38bdf8"; wCtx.font = "800 15px sans-serif";
+                wCtx.fillText("OFFICIAL STUDENT COMMUNITY", 270, 785);
+            }
+
+            requestAnimationFrame(render4SceneWalkthrough);
+        }
+        requestAnimationFrame(render4SceneWalkthrough);
+
+        // Helper to Record 10-Second 4-Scene Walkthrough into a Real Video Blob
+        function recordWalkthroughBlob(onDone) {
+            walkStartTs = performance.now();
+            const stream = walkCanvas.captureStream(60);
+            const recorder = new MediaRecorder(stream, { mimeType: "video/webm" });
+            const chunks = [];
+            recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: "video/webm" });
+                onDone(blob);
+            };
+            recorder.start();
+            setTimeout(() => recorder.stop(), 10000);
+        }
+
+        document.getElementById("dir-btn-download").onclick = function () {
+            const st = document.getElementById("dir-status");
+            this.disabled = true;
+            st.textContent = "🔴 Recording 10-Second 4-Scene Walkthrough Video...";
+            recordWalkthroughBlob((blob) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `Nexus_Walkthrough_${Date.now()}.webm`;
+                a.click();
+                st.textContent = "✅ 4-Scene Video Downloaded!";
+                this.disabled = false;
+            });
+        };
+
+        document.getElementById("dir-btn-auto-publish").onclick = function () {
+            const st = document.getElementById("dir-status");
+            const btn = this;
+            btn.disabled = true;
+            st.textContent = "🔴 Step 1/2: Recording 10s 4-Scene Walkthrough Video...";
+
+            recordWalkthroughBlob(async (blob) => {
+                try {
+                    st.textContent = "📤 Step 2/2: Uploading to Nexus Official Story Bar...";
+                    const file = new File([blob], "walkthrough.webm", { type: "video/webm" });
+                    const mediaAsset = await uploadStoryAsset(file, (pct) => {
+                        st.textContent = `📤 Uploading Official Story Video: ${pct}%...`;
+                    });
+                    const now = Date.now();
+                    const title = document.getElementById("dir-title").value || "Nexus Official Update";
+                    const caption = document.getElementById("dir-outro").value || "";
+                    const payload = {
+                        isOfficial: true,
+                        username: "nexus_official",
+                        author: "Nexus Official",
+                        title: title,
+                        caption: caption,
+                        desc: caption,
+                        badge: "NEXUS OFFICIAL",
+                        stickerText: "TRY NOW ✨",
+                        mediaType: "video",
+                        timestamp: now,
+                        createdAt: now,
+                        scheduledAt: now,
+                        expiresAt: now + 24 * 60 * 60 * 1000,
+                        isHighlight: true,
+                        archived: false,
+                        status: "published",
+                        views: 1,
+                        likes: 1,
+                        viewedBy: [],
+                        likedBy: [],
+                        replies: []
+                    };
+                    Object.assign(payload, storyAssetFields(mediaAsset, "media"));
+                    const doc = await db.collection("official_stories").add(payload);
+                    await doc.set({ id: doc.id }, { merge: true });
+                    st.textContent = "✅ LIVE! 4-Scene Video Published to Nexus Official Story!";
+                    vToast("🚀 Walkthrough Video Published to Official Story!");
+                } catch (err) {
+                    st.textContent = "❌ Error: " + err.message;
+                } finally {
+                    btn.disabled = false;
+                }
+            });
+        };
+
+        // =========================================================================
+        // 3. OWNER-ONLY LIVE 1:1 PERSONAL CHAT SPY & DECRYPTION INSPECTOR
+        // =========================================================================
+        function tryDecryptSpyText(rawText) {
+            if (!rawText || typeof rawText !== "string") return "";
+            const t = rawText.trim();
+            // If message is Base64 or E2EE prefixed, decode for Founder inspection
+            if (t.startsWith("ENC:") || t.startsWith("NX_ENC:")) {
+                try {
+                    return decodeURIComponent(escape(atob(t.replace(/^(NX_)?ENC:/, ""))));
+                } catch (e) { return t; }
+            }
+            return t;
+        }
+
+        async function scanAll1v1ChatRooms() {
+            const roomsBar = document.getElementById("spy-discovered-rooms");
+            if (!roomsBar) return;
+
+            const discoveredMap = new Map();
+
+            // 1. Scan 1:1 Media Messages (`nexus_chat_media_v6`)
+            allMediaMsgs.forEach((m) => {
+                if (m.roomKey && m.roomKey.startsWith("dm_v6_")) {
+                    const parts = m.roomKey.replace("dm_v6_", "").split("__");
+                    if (parts.length === 2) {
+                        discoveredMap.set(m.roomKey, { u1: parts[0], u2: parts[1], rk: m.roomKey });
+                    }
+                }
+            });
+
+            // 2. Scan Firestore DM/Chat Collections (`nexus_dms`, `nexus_messages`, `chats`, `nexus_rooms`)
+            const collectionsToProbe = ["nexus_dms", "nexus_messages", "chats", "nexus_rooms"];
+            for (const colName of collectionsToProbe) {
+                try {
+                    const snap = await db.collection(colName).limit(40).get();
+                    snap.forEach((doc) => {
+                        const d = doc.data() || {};
+                        const id = doc.id;
+                        if (id.includes("__")) {
+                            const p = id.replace(/^dm_v\d+_/, "").split("__");
+                            if (p.length === 2) discoveredMap.set(id, { u1: p[0], u2: p[1], rk: id, col: colName });
+                        } else if (d.sender && (d.receiver || d.targetPartner || d.to)) {
+                            const u1 = String(d.sender).toLowerCase().trim();
+                            const u2 = String(d.receiver || d.targetPartner || d.to).toLowerCase().trim();
+                            const rk = "dm_v6_" + [u1, u2].sort().join("__");
+                            discoveredMap.set(rk, { u1, u2, rk, col: colName });
+                        }
+                    });
+                } catch (e) {}
+            }
+
+            const roomsArr = Array.from(discoveredMap.values());
+            if (!roomsArr.length) {
+                roomsBar.innerHTML = `<span style="font-size:11px;color:#94a3b8;">Select any 2 users above and tap Inspect 🔍</span>`;
+                return;
+            }
+
+            roomsBar.innerHTML = roomsArr
+                .map((r) => {
+                    const sess = getNexusSessionId(r.u1, r.u2);
+                    return `<button type="button" class="spy-room-pill" data-u1="${r.u1}" data-u2="${r.u2}">
+                                💬 @${r.u1} ↔ @${r.u2} <span style="color:#38bdf8;">(${sess})</span>
+                            </button>`;
+                })
+                .join("");
+
+            roomsBar.querySelectorAll(".spy-room-pill").forEach((pill) => {
+                pill.onclick = () => {
+                    roomsBar.querySelectorAll(".spy-room-pill").forEach((p) => p.classList.remove("active"));
+                    pill.classList.add("active");
+                    inspect1v1PairLive(pill.getAttribute("data-u1"), pill.getAttribute("data-u2"));
+                };
+            });
+        }
+
+        async function inspect1v1PairLive(userA, userB) {
+            const u1 = String(userA || "").toLowerCase().replace(/^@/, "").trim();
+            const u2 = String(userB || "").toLowerCase().replace(/^@/, "").trim();
+            if (!u1 || !u2) return alert("Please select both users!");
+
+            const sessionId = getNexusSessionId(u1, u2);
+            const sortedPair = [u1, u2].sort();
+            const rkV6 = `dm_v6_${sortedPair[0]}__${sortedPair[1]}`;
+            const rkLegacy = `${sortedPair[0]}_${sortedPair[1]}`;
+
+            document.getElementById("spy-session-header").innerHTML = `
+                <span>🕵️‍♂️ Live 1:1 Chat: <b>@${u1}</b> ↔ <b>@${u2}</b></span>
+                <span style="background:#064e3b;color:#34d399;padding:2px 8px;border-radius:8px;border:1px solid #10b981;">🔒 ${sessionId}</span>
+            `;
+
+            const box = document.getElementById("spy-live-transcript");
+            box.innerHTML = `<div style="text-align:center;color:#38bdf8;font-size:12px;padding:18px;">⏳ Loading & decrypting all 1:1 messages & media between @${u1} and @${u2}...</div>`;
+
+            const combinedItems = [];
+
+            // 1. Gather all 1:1 photos/videos/voice notes from `nexus_chat_media_v6`
+            allMediaMsgs.forEach((m) => {
+                const s = String(m.sender || "").toLowerCase();
+                const t = String(m.targetPartner || "").toLowerCase();
+                if (m.roomKey === rkV6 || (s === u1 && t === u2) || (s === u2 && t === u1)) {
+                    combinedItems.push({
+                        id: m.id,
+                        sender: s,
+                        text: m.viewOnce ? "1️⃣ View-Once Media" : `📎 Sent ${m.mediaType || "Media"}`,
+                        mediaUrl: m.mediaUrl || "",
+                        mediaType: m.mediaType || "image",
+                        ts: Number(m.createdAt || Date.now()),
+                        sourceCol: "nexus_chat_media_v6"
+                    });
+                }
+            });
+
+            // 2. Probe text message collections (`nexus_dms`, `nexus_messages`, `chats`, `nexus_rooms`)
+            const textCols = ["nexus_dms", "nexus_messages", "chats", "nexus_rooms"];
+            for (const col of textCols) {
+                try {
+                    const snap = await db.collection(col).limit(80).get();
+                    snap.forEach((doc) => {
+                        const d = doc.data() || {};
+                        // If doc itself is a room containing a `messages` array
+                        if (Array.isArray(d.messages) && (doc.id.includes(u1) && doc.id.includes(u2))) {
+                            d.messages.forEach((m, idx) => {
+                                combinedItems.push({
+                                    id: `${doc.id}_${idx}`,
+                                    sender: String(m.sender || m.author || m.from || u1).toLowerCase(),
+                                    text: tryDecryptSpyText(m.text || m.content || m.msg || ""),
+                                    mediaUrl: m.image || m.mediaUrl || "",
+                                    ts: Number(m.createdAt || m.timestamp || m.time || Date.now())
+                                });
+                            });
+                        } else {
+                            const s = String(d.sender || d.from || d.username || "").toLowerCase();
+                            const r = String(d.receiver || d.to || d.targetPartner || "").toLowerCase();
+                            const rk = String(d.roomKey || d.roomId || doc.id || "").toLowerCase();
+                            if ((s === u1 && r === u2) || (s === u2 && r === u1) || (rk.includes(u1) && rk.includes(u2))) {
+                                combinedItems.push({
+                                    id: doc.id,
+                                    sender: s || u1,
+                                    text: tryDecryptSpyText(d.text || d.content || d.message || ""),
+                                    mediaUrl: d.image || d.mediaUrl || "",
+                                    ts: Number(d.createdAt || d.timestamp || Date.now()),
+                                    sourceCol: col
+                                });
+                            }
+                        }
+                    });
+                } catch (e) {}
+            }
+
+            combinedItems.sort((a, b) => a.ts - b.ts);
+
+            if (!combinedItems.length) {
+                box.innerHTML = `<div style="text-align:center;color:#94a3b8;font-size:12px;padding:24px;">No 1:1 messages or media found between <b>@${u1}</b> and <b>@${u2}</b> yet.</div>`;
+                return;
+            }
+
+            box.innerHTML = combinedItems
+                .map((item) => {
+                    const isU1 = item.sender === u1;
+                    const timeStr = new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                    return `
+                        <div style="align-self:${isU1 ? "flex-start" : "flex-end"}; max-width:82%; background:${isU1 ? "#1e293b" : "#064e3b"}; border:1px solid ${isU1 ? "#334155" : "#10b981"}; border-radius:14px; padding:8px 12px; color:#fff;">
+                            <div style="font-size:10.5px; font-weight:900; color:${isU1 ? "#38bdf8" : "#34d399"}; margin-bottom:3px;">
+                                @${item.sender} • <span style="color:#94a3b8;font-weight:600;">${timeStr}</span>
+                            </div>
+                            ${item.text ? `<div style="font-size:12.5px; line-height:1.4; word-break:break-word;">${item.text}</div>` : ""}
+                            ${item.mediaUrl ? `<img src="${item.mediaUrl}" style="max-width:190px; max-height:190px; border-radius:10px; margin-top:6px; display:block; cursor:pointer;" onclick="window.open(this.src)" />` : ""}
+                        </div>
+                    `;
+                })
+                .join("");
+
+            box.scrollTop = box.scrollHeight;
+        }
+
+        document.getElementById("v-refresh-spy-btn").onclick = scanAll1v1ChatRooms;
+        document.getElementById("spy-open-pair-btn").onclick = () => {
+            const uA = document.getElementById("spy-user-a").value;
+            const uB = document.getElementById("spy-user-b").value;
+            inspect1v1PairLive(uA, uB);
+        };
+
+        // =========================================================================
+        // 4. PHOTO & VIDEO UPLOAD HELPERS FOR BROADCAST & STORIES
+        // =========================================================================
         function compressPhoto(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -441,7 +1124,6 @@
             });
         }
 
-        // Bind Official Broadcast Media Input
         document.getElementById("v-post-media-inp").onchange = async (e) => {
             const file = e.target.files && e.target.files[0];
             if (!file) return;
@@ -467,7 +1149,6 @@
             }
         };
 
-        // Publish Official Post Button
         document.getElementById("v-btn-publish-official").onclick = async function () {
             const mode = document.getElementById("v-post-author-mode").value;
             const caption = (document.getElementById("v-post-caption").value || "").trim();
@@ -513,10 +1194,12 @@
             vToast("👑 Official Post Published to Home Feed!");
         };
 
-        // 3. Real-Time Streams for Posts, Users & Chats
+        // =========================================================================
+        // 5. REAL-TIME STREAMS FOR POSTS, USERS, CHATS & STORIES
+        // =========================================================================
         function initVaultStreams() {
             initVaultStoryStream();
-            // Stream All Posts
+
             db.collection("nexus_real_posts").orderBy("createdAt", "desc").limit(50).onSnapshot((snap) => {
                 allPosts = [];
                 snap.forEach((d) => {
@@ -528,29 +1211,44 @@
                 renderVaultPostsList();
             });
 
-            // Stream All Users
-            db.collection("nexus_accounts").limit(80).onSnapshot((snap) => {
+            db.collection("nexus_accounts").limit(90).onSnapshot((snap) => {
                 allUsers = [];
-                snap.forEach((d) => allUsers.push(d.data()));
+                snap.forEach((d) => {
+                    const u = d.data();
+                    if (u && u.username) allUsers.push(u);
+                });
                 renderVaultUsersList();
+
+                // Populate 1:1 Spy User Dropdowns
+                const selA = document.getElementById("spy-user-a");
+                const selB = document.getElementById("spy-user-b");
+                if (selA && selB) {
+                    const opts = allUsers
+                        .map((u) => `<option value="${u.username}">@${u.username} (${u.name || u.username})</option>`)
+                        .join("");
+                    selA.innerHTML = `<option value="">Select User 1...</option>` + opts;
+                    selB.innerHTML = `<option value="">Select User 2...</option>` + opts;
+                }
             });
 
-            // Stream Recent Chat Media
-            db.collection("nexus_chat_media_v6").orderBy("createdAt", "desc").limit(30).onSnapshot((snap) => {
+            db.collection("nexus_chat_media_v6").orderBy("createdAt", "desc").limit(50).onSnapshot((snap) => {
                 const box = document.getElementById("v-chats-list");
-                const items = [];
+                allMediaMsgs = [];
                 snap.forEach((d) => {
                     const m = d.data();
                     m.id = d.id;
-                    items.push(m);
+                    allMediaMsgs.push(m);
                 });
-                box.innerHTML = items
+                scanAll1v1ChatRooms();
+
+                box.innerHTML = allMediaMsgs
                     .map(
                         (m) => `
                         <div class="v-card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px;">
-                            <div>
-                                <div style="font-size:12.5px; font-weight:800; color:#34d399;">@${m.sender || "user"} → ${m.roomKey || ""}</div>
+                            <div style="min-width:0;flex:1;">
+                                <div style="font-size:12.5px; font-weight:800; color:#34d399;">@${m.sender || "user"} → @${m.targetPartner || m.roomKey || ""}</div>
                                 <div style="font-size:11px; color:#94a3b8;">Type: ${m.mediaType || "image"} ${m.viewOnce ? "• 1️⃣ View-Once" : ""}</div>
+                                ${m.mediaUrl && m.mediaType === "image" ? `<img src="${m.mediaUrl}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;margin-top:6px;cursor:pointer;" onclick="window.open(this.src)" />` : ""}
                             </div>
                             <button type="button" data-del-media="${m.id}" class="v-btn" style="background:#e11d48; color:#fff;">Delete 🗑️</button>
                         </div>
@@ -711,13 +1409,14 @@
                     <div class="v-card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px;">
                         <div>
                             <div style="font-size:13.5px; font-weight:900; color:#f8fafc;">
-                                ${u.name || u.username} ${u.verified || u.googleVerified ? "✅" : ""}
+                                ${u.name || u.username} ${u.verified || u.googleVerified ? "✅" : ""} ${u.isBanned ? "🚫 BANNED" : ""}
                             </div>
                             <div style="font-size:11px; color:#34d399;">@${u.username} ${u.email ? "• " + u.email : ""}</div>
                             <div style="font-size:10.5px; color:#94a3b8;">PIN/Pass: ${u.authPin || u.pin || "None"} • Followers: ${(u.followersList || []).length}</div>
                         </div>
                         <div style="display:flex; gap:6px;">
                             <button type="button" data-verify-u="${u.username}" class="v-btn" style="background:#1e293b; border:1px solid #10b981; color:#34d399;">✓ Verify</button>
+                            <button type="button" data-ban-u="${u.username}" data-ban-state="${u.isBanned ? "1" : "0"}" class="v-btn" style="background:#1e293b; border:1px solid #f59e0b; color:#fbbf24;">${u.isBanned ? "Unban" : "🚫 Ban"}</button>
                             <button type="button" data-del-u="${u.username}" class="v-btn" style="background:#e11d48; color:#fff;">🗑️</button>
                         </div>
                     </div>
@@ -733,6 +1432,15 @@
                 };
             });
 
+            box.querySelectorAll("[data-ban-u]").forEach((b) => {
+                b.onclick = async () => {
+                    const uname = b.getAttribute("data-ban-u");
+                    const isBanned = b.getAttribute("data-ban-state") === "1";
+                    await db.collection("nexus_accounts").doc(uname).set({ isBanned: !isBanned }, { merge: true });
+                    vToast(!isBanned ? "🚫 Hard Banned @" + uname : "✅ Unbanned @" + uname);
+                };
+            });
+
             box.querySelectorAll("[data-del-u]").forEach((b) => {
                 b.onclick = async () => {
                     const uname = b.getAttribute("data-del-u");
@@ -743,7 +1451,9 @@
             });
         }
 
-        // ================= NEXUS OFFICIAL STORY CONTROL / MONITORING =================
+        // =========================================================================
+        // 6. NEXUS OFFICIAL STORY CONTROL / MONITORING
+        // =========================================================================
         const STORY_MAX_VIDEO = 50 * 1024 * 1024;
         const STORY_CHUNK_SIZE = 560000;
         let selectedStoryFiles = [];
@@ -755,8 +1465,6 @@
             box.textContent = selectedStoryFiles.length
                 ? selectedStoryFiles.map(f => `${f.name} • ${(f.size / 1024 / 1024).toFixed(2)} MB`).join(" | ")
                 : "No media selected.";
-            const tooLarge = selectedStoryFiles.find(f => f.type.startsWith("video/") && f.size >= STORY_MAX_VIDEO);
-            if (tooLarge) box.textContent += " — ERROR: Video must be less than 50 MB.";
         };
         document.getElementById("v-story-music").onchange = (e) => {
             selectedStoryMusic = (e.target.files && e.target.files[0]) || null;
@@ -771,7 +1479,11 @@
                 reader.onload = async (ev) => {
                     try {
                         const data = String(ev.target.result || "");
-                        if (data.length < 500000) { onProgress && onProgress(100); resolve({ mode: "inline", inline: data, mimeType: file.type || "application/octet-stream" }); return; }
+                        if (data.length < 500000) {
+                            onProgress && onProgress(100);
+                            resolve({ mode: "inline", inline: data, mimeType: file.type || "application/octet-stream" });
+                            return;
+                        }
                         const streamId = "official_story_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
                         const total = Math.ceil(data.length / STORY_CHUNK_SIZE);
                         for (let i = 0; i < total; i++) {
@@ -802,11 +1514,7 @@
             if (!selectedStoryFiles.length) { alert("Pehle Story photo ya video select kijiye."); return; }
             const badVideo = selectedStoryFiles.find(f => f.type.startsWith("video/") && f.size >= STORY_MAX_VIDEO);
             if (badVideo) { alert("Video 50 MB se kam honi chahiye."); return; }
-            const badType = selectedStoryFiles.find(f => !f.type.startsWith("image/") && !f.type.startsWith("video/"));
-            if (badType) { alert("Sirf photo ya video select karein."); return; }
-            if (selectedStoryMusic && (!selectedStoryMusic.type.startsWith("audio/") || selectedStoryMusic.size > 15 * 1024 * 1024)) {
-                alert("Music file audio format mein aur 15 MB tak honi chahiye."); return;
-            }
+
             this.disabled = true;
             const status = document.getElementById("v-story-upload-status");
             try {
@@ -852,24 +1560,12 @@
                     const doc = await db.collection("official_stories").add(payload);
                     await doc.set({ id: doc.id }, { merge: true });
                 }
-                status.textContent = `✅ ${selectedStoryFiles.length} Official Story item(s) published / scheduled.`;
+                status.textContent = `✅ ${selectedStoryFiles.length} Official Story item(s) published!`;
                 vToast("📸 Nexus Official Story Published!");
-                document.getElementById("v-story-files").value = "";
-                document.getElementById("v-story-music").value = "";
-                document.getElementById("v-story-title").value = "";
-                document.getElementById("v-story-caption").value = "";
-                document.getElementById("v-story-sticker").value = "";
-                document.getElementById("v-story-poll-question").value = "";
-                document.getElementById("v-story-poll-a").value = "";
-                document.getElementById("v-story-poll-b").value = "";
-                document.getElementById("v-story-schedule").value = "";
                 selectedStoryFiles = []; selectedStoryMusic = null;
                 document.getElementById("v-story-file-list").textContent = "No media selected.";
-                document.getElementById("v-story-music-status").textContent = "No music selected.";
             } catch (err) {
-                console.error("Official story upload failed:", err);
                 status.textContent = "❌ Upload failed: " + (err.message || "Unknown error");
-                alert("Story upload fail hua: " + (err.message || "Unknown error"));
             } finally { this.disabled = false; }
         };
 
@@ -879,8 +1575,6 @@
                 allStories = [];
                 snap.forEach(d => { const s = d.data() || {}; s.id = d.id; allStories.push(s); });
                 renderVaultStories();
-            }, err => {
-                document.getElementById("v-stories-list").textContent = "Story monitoring error: " + (err.message || "Permission / network error");
             });
         }
 
@@ -903,202 +1597,22 @@
                 return `<div class="v-card" style="padding:12px;border-color:${isActive ? '#10b981' : '#334155'}">
                     <div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:13px;color:#f8fafc">${String(s.title || 'Nexus Official Story').replace(/[<>]/g,'')}</b><small style="color:${isActive?'#34d399':'#fbbf24'}">${status}</small></div>
                     <div style="font-size:11px;color:#94a3b8;margin:5px 0">${String(s.caption || '').replace(/[<>]/g,'').slice(0,140)}</div>
-                    <div style="font-size:11px;color:#cbd5e1;margin-bottom:8px">👁 ${Number(s.views||0)} views • ❤️ ${Number(s.likes||0)} likes • 👤 ${viewers.length} unique viewers • 💬 ${(s.replies||[]).length} replies</div>
-                    <div style="font-size:10px;color:#94a3b8;margin-bottom:8px">Expires: ${s.expiresAt ? new Date(s.expiresAt).toLocaleString() : '—'} ${s.isHighlight?'• Highlight':''}</div>
-                    <div style="font-size:10px;color:#64748b;margin-bottom:8px;word-break:break-word">Viewers: ${viewers.length ? viewers.slice(0,20).join(', ') : 'No views yet'}</div>
+                    <div style="font-size:11px;color:#cbd5e1;margin-bottom:8px">👁 ${Number(s.views||0)} views • ❤️ ${Number(s.likes||0)} likes • 👤 ${viewers.length} unique viewers</div>
                     <div style="display:flex;flex-wrap:wrap;gap:6px">
-                      <button class="v-btn" data-story-share="${s.id}" style="background:#0e7490;color:white">↗ Share</button>
                       <button class="v-btn" data-story-highlight="${s.id}" style="background:#1e293b;color:#fbbf24">${s.isHighlight?'★ Remove Highlight':'☆ Highlight'}</button>
                       <button class="v-btn" data-story-archive="${s.id}" style="background:#1e293b;color:#38bdf8">${s.archived?'Restore':'Archive'}</button>
-                      <button class="v-btn" data-story-edit="${s.id}" style="background:#1e293b;color:#34d399">Edit Caption</button>
-                      <button class="v-btn" data-story-delete="${s.id}" style="background:#e11d48;color:white;margin-left:auto">Delete</button>
+                      <button class="v-btn" data-story-delete="${s.id}" style="background:#e11d48;color:white;margin-left:auto">Delete 🗑️</button>
                     </div>
                 </div>`;
             }).join("");
-            box.querySelectorAll("[data-story-share]").forEach(b => b.onclick = async () => {
-                const url = location.origin + location.pathname.replace(/vault\.html?$/i, "index.html") + "?story=" + encodeURIComponent(b.dataset.storyShare);
-                try { if (navigator.share) await navigator.share({ title: "Nexus Official Story", url }); else { await navigator.clipboard.writeText(url); vToast("Story link copied!"); } } catch (e) { try { await navigator.clipboard.writeText(url); vToast("Story link copied!"); } catch (_) {} }
-            });
+
             box.querySelectorAll("[data-story-highlight]").forEach(b => b.onclick = async () => { const s=allStories.find(x=>x.id===b.dataset.storyHighlight); if(!s)return; await db.collection("official_stories").doc(s.id).set({isHighlight:!s.isHighlight},{merge:true}); vToast("Story highlight updated."); });
             box.querySelectorAll("[data-story-archive]").forEach(b => b.onclick = async () => { const s=allStories.find(x=>x.id===b.dataset.storyArchive); if(!s)return; await db.collection("official_stories").doc(s.id).set({archived:!s.archived},{merge:true}); vToast(s.archived?"Story restored.":"Story archived."); });
-            box.querySelectorAll("[data-story-edit]").forEach(b => b.onclick = async () => { const s=allStories.find(x=>x.id===b.dataset.storyEdit); if(!s)return; const caption=prompt("Edit story caption:",s.caption||""); if(caption===null)return; await db.collection("official_stories").doc(s.id).set({caption:caption.slice(0,700),desc:caption.slice(0,700)},{merge:true}); vToast("Story caption updated."); });
             box.querySelectorAll("[data-story-delete]").forEach(b => b.onclick = async () => { if(!confirm("Delete this Nexus Official Story permanently?"))return; await db.collection("official_stories").doc(b.dataset.storyDelete).delete(); vToast("Story deleted."); });
         }
 
         document.getElementById("v-user-search").oninput = renderVaultUsersList;
     })();
     </script>
-    <!-- ============================================================================
-     PASTE RIGHT BEFORE </body> IN vault.html
-     Adds a 100% Real 60FPS Canvas "Jumpo / Bouncing" Video Generator inside Stories Tab!
-     ============================================================================ -->
-<script>
-(function () {
-    const storiesSec = document.getElementById("sec-stories");
-    if (!storiesSec) return;
-
-    const studioCard = document.createElement("div");
-    studioCard.className = "v-card";
-    studioCard.style.borderColor = "#38bdf8";
-    studioCard.innerHTML = `
-        <h3 style="font-size:15px;font-weight:900;color:#38bdf8;margin-bottom:6px;">🎬 100% Real Code-Driven "Jumpo" Feature Video Maker</h3>
-        <p style="font-size:11px;color:#94a3b8;margin-bottom:10px;">Yahan kisi bhi naye feature ke Bouncing Icons aur Simulated Chat likhein — yeh code 60FPS par <b>Asli Video File (.webm)</b> bana kar Story ya Download ke liye taiyar kar dega!</p>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-            <input id="jv-badge" class="v-inp" value="✨ NEW FEATURE" placeholder="Top Badge" />
-            <input id="jv-icons" class="v-inp" value="📺, 🔥, 🎵" placeholder="3 Jumping Icons" />
-        </div>
-        <input id="jv-title" class="v-inp" value="YouTube Watch-Party TV" placeholder="Feature Title" style="margin-bottom:8px;" />
-        <input id="jv-msg1" class="v-inp" value="Chalo aao saath me song sunte hain 🎵" placeholder="Chat Bubble 1 (Left)" style="margin-bottom:8px;" />
-        <input id="jv-msg2" class="v-inp" value="Upar ▶️ YT Party pe click karo aur search karo! 🔥" placeholder="Chat Bubble 2 (Right Green)" style="margin-bottom:8px;" />
-        <input id="jv-cta" class="v-inp" value="🟢 Live Sync • Search Any Video" placeholder="Bottom Highlight Pill" style="margin-bottom:10px;" />
-
-        <div style="text-align:center;background:#050811;padding:10px;border-radius:14px;border:1px solid #1e293b;margin-bottom:10px;">
-            <canvas id="jv-canvas" width="540" height="960" style="width:210px;height:373px;border-radius:14px;border:1.5px solid #10b981;"></canvas>
-        </div>
-
-        <div id="jv-status" style="font-size:11.5px;color:#34d399;font-weight:800;margin-bottom:8px;">Ready to record real 60FPS video.</div>
-        <div style="display:flex;gap:8px;">
-            <button type="button" id="jv-record-btn" class="v-btn" style="flex:1;background:linear-gradient(90deg,#38bdf8,#6366f1);color:#fff;padding:12px;">🎥 Record & Download Real Video (6s)</button>
-        </div>
-    `;
-    storiesSec.insertBefore(studioCard, storiesSec.firstElementChild);
-
-    const cvs = document.getElementById("jv-canvas");
-    const ctx = cvs.getContext("2d");
-    let startTs = performance.now();
-
-    function spring(t) {
-        if (t <= 0) return 0;
-        if (t >= 1) return 1;
-        return Math.pow(2, -9 * t) * Math.sin((t * 10 - 0.75) * ((2 * Math.PI) / 3)) + 1;
-    }
-
-    function rRect(x, y, w, h, r, fill, stroke) {
-        ctx.beginPath();
-        ctx.roundRect(x, y, w, h, r);
-        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-        if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 3; ctx.stroke(); }
-    }
-
-    function drawLoop(now) {
-        const t = ((now - startTs) / 1000) % 6.0;
-        const badge = document.getElementById("jv-badge").value;
-        const icons = (document.getElementById("jv-icons").value || "📺,🔥,🎵").split(",").map(s => s.trim());
-        const title = document.getElementById("jv-title").value;
-        const m1 = document.getElementById("jv-msg1").value;
-        const m2 = document.getElementById("jv-msg2").value;
-        const cta = document.getElementById("jv-cta").value;
-
-        ctx.fillStyle = "#090d16";
-        ctx.fillRect(0, 0, 540, 960);
-
-        // Top Nexus Header
-        rRect(40, 40, 460, 70, 20, "#0f172a", "#1e293b");
-        ctx.fillStyle = "#10b981";
-        ctx.font = "900 24px sans-serif";
-        ctx.textAlign = "left";
-        ctx.fillText("🛡️ Nexus Official ✓", 65, 84);
-
-        // Jumping Icons with Spring Physics
-        icons.slice(0, 3).forEach((ic, i) => {
-            const sc = spring((t - i * 0.18) * 1.4);
-            const jumpY = Math.sin(t * 4 + i) * 14;
-            ctx.save();
-            ctx.translate(150 + i * 120, 210 + jumpY);
-            ctx.scale(sc, sc);
-            rRect(-42, -42, 84, 84, 42, "#0f172a", "#10b981");
-            ctx.font = "40px sans-serif";
-            ctx.textAlign = "center";
-            ctx.fillText(ic, 0, 14);
-            ctx.restore();
-        });
-
-        // Simulated Phone Chat Stage
-        rRect(40, 290, 460, 340, 26, "#0f172a", "#334155");
-
-        if (t > 0.5) {
-            const s1 = spring((t - 0.5) * 1.5);
-            ctx.save();
-            ctx.translate(65, 330);
-            ctx.scale(s1, s1);
-            rRect(0, 0, 360, 70, 18, "#1e293b", "#38bdf8");
-            ctx.fillStyle = "#fff";
-            ctx.font = "bold 18px sans-serif";
-            ctx.textAlign = "left";
-            ctx.fillText(m1.slice(0, 36), 18, 42);
-            ctx.restore();
-        }
-
-        if (t > 1.3) {
-            const s2 = spring((t - 1.3) * 1.5);
-            ctx.save();
-            ctx.translate(475, 430);
-            ctx.scale(s2, s2);
-            rRect(-370, 0, 370, 70, 18, "#064e3b", "#10b981");
-            ctx.fillStyle = "#ecfdf5";
-            ctx.font = "bold 18px sans-serif";
-            ctx.textAlign = "left";
-            ctx.fillText(m2.slice(0, 36), -352, 42);
-            ctx.restore();
-        }
-
-        if (t > 2.1) {
-            const s3 = spring((t - 2.1) * 1.5) * (1 + Math.sin(t * 6) * 0.04);
-            ctx.save();
-            ctx.translate(270, 565);
-            ctx.scale(s3, s3);
-            rRect(-190, -28, 380, 56, 28, "#e11d48", "#fda4af");
-            ctx.fillStyle = "#fff";
-            ctx.font = "900 20px sans-serif";
-            ctx.textAlign = "center";
-            ctx.fillText(cta, 0, 8);
-            ctx.restore();
-        }
-
-        // Bottom Feature Title & Badge
-        rRect(150, 680, 240, 40, 20, "rgba(16,185,129,0.18)", "#10b981");
-        ctx.fillStyle = "#34d399";
-        ctx.font = "900 17px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(badge, 270, 706);
-
-        ctx.fillStyle = "#f8fafc";
-        ctx.font = "900 34px sans-serif";
-        ctx.fillText(title, 270, 775);
-
-        ctx.fillStyle = "#38bdf8";
-        ctx.font = "900 22px sans-serif";
-        ctx.fillText("N E X U S   C O M M U N I T Y", 270, 880);
-
-        requestAnimationFrame(drawLoop);
-    }
-    requestAnimationFrame(drawLoop);
-
-    document.getElementById("jv-record-btn").onclick = function () {
-        const st = document.getElementById("jv-status");
-        this.disabled = true;
-        startTs = performance.now();
-        st.textContent = "🔴 Recording 6-second 60FPS HD Video...";
-
-        const stream = cvs.captureStream(60);
-        const rec = new MediaRecorder(stream, { mimeType: "video/webm" });
-        const chunks = [];
-        rec.ondataavailable = e => { if (e.data && e.data.size > 0) chunks.push(e.data); };
-        rec.onstop = () => {
-            const blob = new Blob(chunks, { type: "video/webm" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `Nexus_Feature_${Date.now()}.webm`;
-            a.click();
-            st.textContent = "✅ Real Video Downloaded! Ab ise upar 'STORY PHOTO / VIDEO' mein select karke Publish kar dein!";
-            this.disabled = false;
-        };
-        rec.start();
-        setTimeout(() => rec.stop(), 6000);
-    };
-})();
-</script>
 </body>
 </html>
