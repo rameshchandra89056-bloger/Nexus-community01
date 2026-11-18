@@ -3428,5 +3428,775 @@
     const queryStory=new URLSearchParams(location.search).get('story');if(queryStory){let tries=0;const t=setInterval(()=>{if(dbRef()){clearInterval(t);window.openNexusOfficialStory(queryStory);}if(++tries>30)clearInterval(t);},500);}
 })();
     </script>
+    <script>
+// ============================================================================
+// NEXUS COMMUNITY — ALL-IN-ONE MASTER ENGINE (FIXES ALL REPORTED ISSUES)
+// 1. Stop 5-People Message/Call Leak (Strict Single-Target Lock)
+// 2. Kill "Member Full Profile" Popup -> Force Chanchal-Style Full Profile
+// 3. Fix 0:00/0:00 Video Player + Custom Voice Note Player (No Chrome Embed)
+// 4. Post Music/Song Attachment & Auto-Play on Feed
+// 5. Nexus Official Exclusive Story + Spinning Green Ring + Auto-Promo Video
+// ============================================================================
+
+(function() {
+    // ------------------------------------------------------------------------
+    // PART A: MASTER CSS (Spinning Green Story Ring, Clean Video, Audio & UI)
+    // ------------------------------------------------------------------------
+    if (!document.getElementById('nexus-pro-master-styles')) {
+        const style = document.createElement('style');
+        style.id = 'nexus-pro-master-styles';
+        style.innerHTML = `
+            /* 1. Kill Chrome Native Video & Audio Controls completely */
+            video::-webkit-media-controls,
+            video::-webkit-media-controls-enclosure,
+            video::-webkit-media-controls-panel,
+            audio::-webkit-media-controls,
+            audio::-webkit-media-controls-enclosure {
+                display: none !important;
+                opacity: 0 !important;
+                pointer-events: none !important;
+            }
+
+            /* 2. Spinning Neon Green Ring ONLY for Nexus Official Story */
+            @keyframes nexusSpinRing {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            .nexus-official-ring-wrap {
+                position: relative;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding: 3px;
+                border-radius: 50%;
+            }
+            .nexus-official-ring-wrap::before {
+                content: "";
+                position: absolute;
+                inset: -3px;
+                border-radius: 50%;
+                background: conic-gradient(#00e676, #00bfa5, #10b981, transparent 30%, #00e676);
+                animation: nexusSpinRing 2.2s linear infinite;
+                z-index: 0;
+            }
+            .nexus-official-ring-wrap > * {
+                position: relative;
+                z-index: 1;
+            }
+
+            /* 3. Nexus Pro Reels-Style Video Player (Fixes 0:00 / 0:00 ugly bar) */
+            .nx-pro-video-box {
+                position: relative;
+                width: 100%;
+                border-radius: 14px;
+                overflow: hidden;
+                background: #070a0f;
+                user-select: none;
+                cursor: pointer;
+                margin-top: 8px;
+                border: 1px solid #1e2636;
+            }
+            .nx-pro-video-box video {
+                width: 100%;
+                max-height: 480px;
+                object-fit: cover;
+                display: block;
+                pointer-events: none;
+            }
+            .nx-pro-play-btn {
+                position: absolute;
+                top: 50%; left: 50%;
+                transform: translate(-50%, -50%) scale(1);
+                width: 58px; height: 58px;
+                border-radius: 50%;
+                background: rgba(11, 20, 26, 0.78);
+                border: 2px solid #00e676;
+                color: #00e676;
+                display: flex; align-items: center; justify-content: center;
+                font-size: 22px;
+                box-shadow: 0 8px 25px rgba(0, 230, 118, 0.35);
+                transition: all 0.22s ease;
+                pointer-events: none;
+            }
+            .nx-pro-play-btn.playing {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.6);
+            }
+
+            /* 4. Custom Nexus Official Voice Note Player (Replaces Chrome Embed) */
+            .nx-voice-note-card {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                background: linear-gradient(135deg, #112229, #192f38);
+                border: 1px solid #00a884;
+                padding: 8px 12px;
+                border-radius: 16px;
+                min-width: 220px;
+                max-width: 280px;
+                margin: 4px 0;
+                color: #fff;
+            }
+            .nx-vn-play {
+                width: 36px; height: 36px;
+                border-radius: 50%;
+                background: #00e676;
+                color: #000;
+                border: none;
+                font-weight: 900;
+                font-size: 15px;
+                cursor: pointer;
+                flex-shrink: 0;
+                display: flex; align-items: center; justify-content: center;
+            }
+            .nx-vn-waves {
+                flex: 1;
+                display: flex;
+                align-items: center;
+                gap: 3px;
+                height: 22px;
+            }
+            .nx-vn-bar {
+                flex: 1;
+                background: rgba(0, 230, 118, 0.4);
+                height: 35%;
+                border-radius: 2px;
+                transition: height 0.15s ease, background 0.15s ease;
+            }
+            .nx-vn-bar.active {
+                background: #00e676;
+                height: 95%;
+            }
+            .nx-vn-speed {
+                background: #0b141a;
+                color: #00e676;
+                border: 1px solid #00a884;
+                border-radius: 10px;
+                padding: 3px 7px;
+                font-size: 11px;
+                font-weight: 800;
+                cursor: pointer;
+            }
+
+            /* 5. Post Music Pill (Instagram Style Song on Post) */
+            .nx-post-music-bar {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                background: rgba(0, 168, 132, 0.12);
+                border: 1px solid rgba(0, 230, 118, 0.35);
+                border-radius: 10px;
+                padding: 7px 12px;
+                margin: 8px 0;
+                font-size: 12px;
+                color: #e2e8f0;
+                cursor: pointer;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // ------------------------------------------------------------------------
+    // PART B: FIX CHANCHAL'S BUG — STOP MESSAGES & CALLS GOING TO 5 PEOPLE!
+    // ------------------------------------------------------------------------
+    window.CURRENT_LOCKED_CHAT_UID = null;
+    window.CURRENT_LOCKED_ROOM_ID = null;
+
+    window.getStrictSortedRoomId = function(uidA, uidB) {
+        if (!uidA || !uidB) return null;
+        return [String(uidA).trim().toLowerCase(), String(uidB).trim().toLowerCase()].sort().join('_');
+    };
+
+    // Call this whenever opening ANY 1:1 chat so old listeners are 100% wiped!
+    window.lockActiveChatPartner = function(targetUid, targetUsername) {
+        const myUid = window.currentUser?.uid || window.currentUser?.username || localStorage.getItem('nexus_uid');
+        window.CURRENT_LOCKED_CHAT_UID = targetUid;
+        window.CURRENT_LOCKED_ROOM_ID = window.getStrictSortedRoomId(myUid, targetUid);
+
+        // Clone & replace Send button and Call button to destroy all stacked listeners!
+        const sendBtn = document.querySelector('#send-msg-btn, .send-btn, #dm-send-btn');
+        if (sendBtn && sendBtn.parentNode) {
+            const cleanSend = sendBtn.cloneNode(true);
+            sendBtn.parentNode.replaceChild(cleanSend, sendBtn);
+            cleanSend.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof window.sendLocked1v1Message === 'function') {
+                    window.sendLocked1v1Message();
+                }
+            };
+        }
+
+        const callBtn = document.querySelector('#dm-call-btn, .call-btn, [title="Call"]');
+        if (callBtn && callBtn.parentNode) {
+            const cleanCall = callBtn.cloneNode(true);
+            callBtn.parentNode.replaceChild(cleanCall, callBtn);
+            cleanCall.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof window.startStrict1v1Call === 'function') {
+                    window.startStrict1v1Call(window.CURRENT_LOCKED_CHAT_UID, targetUsername);
+                }
+            };
+        }
+    };
+
+    // Hard Block / Device Ban Check (For toxic users like Sidra if blocked from Vault)
+    window.checkHardBanStatus = async function() {
+        const myName = (window.currentUser?.username || localStorage.getItem('nexus_username') || '').toLowerCase();
+        const bannedList = JSON.parse(localStorage.getItem('nexus_hard_banned_users') || '[]');
+        if (bannedList.includes(myName) || localStorage.getItem('nexus_device_banned') === 'true') {
+            document.body.innerHTML = `
+                <div style="position:fixed;inset:0;background:#070a0e;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;font-family:sans-serif;z-index:9999999;">
+                    <div style="font-size:54px;margin-bottom:12px;">🚫</div>
+                    <h2 style="color:#ff3b30;margin-bottom:8px;">Access Permanently Restricted</h2>
+                    <p style="color:#94a3b8;font-size:14px;max-width:300px;line-height:1.5;">Your account and device have been permanently blocked from Nexus Community for violating community guidelines.</p>
+                </div>
+            `;
+        }
+    };
+    window.checkHardBanStatus();
+
+    // ------------------------------------------------------------------------
+    // PART C: KILL "MEMBER FULL PROFILE" POPUP -> FORCE CHANCHAL FULL PROFILE
+    // ------------------------------------------------------------------------
+    function enforceChanchalStyleFullProfileEverywhere() {
+        // 1. Detect if the ugly "Member Full Profile" modal pops up and immediately convert it!
+        document.querySelectorAll('div, section').forEach(el => {
+            if (el.textContent && el.textContent.includes('Member Full Profile') && el.offsetHeight > 100 && el.offsetWidth < window.innerWidth) {
+                // Find the @username inside this popup
+                const match = el.innerText.match(/@([a-zA-Z0-9_.\-]+)/);
+                const extractedUsername = match ? match[1] : null;
+                const modalRoot = el.closest('[style*="fixed"], .modal, .popup') || el;
+                modalRoot.remove(); // Destroy the small popup!
+
+                if (extractedUsername && typeof window.openChanchalStyleFullProfile === 'function') {
+                    window.openChanchalStyleFullProfile(extractedUsername);
+                }
+            }
+        });
+    }
+
+    // Unified Chanchal-Style Full-Screen Profile Renderer (If native full profile isn't triggered)
+    window.openChanchalStyleFullProfile = async function(usernameOrUid) {
+        // First try calling your existing full-screen profile page function if it exists
+        if (typeof window.openFullPageProfile === 'function') {
+            return window.openFullPageProfile(usernameOrUid);
+        }
+
+        const cleanHandle = String(usernameOrUid || 'user').replace('@', '').trim();
+        document.getElementById('nx-chanchal-full-profile')?.remove();
+
+        let userDoc = {
+            username: cleanHandle,
+            displayName: cleanHandle.toUpperCase(),
+            bio: "Nexus Community Member ✨",
+            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanHandle)}&background=00a884&color=fff`,
+            verified: true,
+            songTitle: "Mann Jogiya",
+            songArtist: "Arijit Singh & Ishita Vishwakarma",
+            songUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+            postsCount: 0,
+            followersCount: 1,
+            followingCount: 1
+        };
+
+        const userPosts = [];
+
+        if (typeof db !== 'undefined' && db.collection) {
+            try {
+                const uSnap = await db.collection('users').get();
+                uSnap.forEach(doc => {
+                    const d = doc.data();
+                    if ((d.username || '').toLowerCase() === cleanHandle.toLowerCase() || doc.id === cleanHandle) {
+                        userDoc = { ...userDoc, ...d, uid: doc.id };
+                    }
+                });
+                const pSnap = await db.collection('posts').get();
+                pSnap.forEach(doc => {
+                    const p = doc.data();
+                    if ((p.username || p.authorName || '').toLowerCase() === cleanHandle.toLowerCase()) {
+                        userPosts.push({ id: doc.id, ...p });
+                    }
+                });
+                userDoc.postsCount = userPosts.length;
+            } catch (e) {}
+        }
+
+        const page = document.createElement('div');
+        page.id = 'nx-chanchal-full-profile';
+        page.style.cssText = 'position:fixed;inset:0;background:#0b0f17;z-index:99999;overflow-y:auto;color:#fff;font-family:sans-serif;padding-bottom:60px;';
+        page.innerHTML = `
+            <!-- Top Header Bar (Exact @chanchal style) -->
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#0e141f;border-bottom:1px solid #1e293b;position:sticky;top:0;z-index:20;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <button onclick="document.getElementById('nx-chanchal-full-profile').remove(); if(window.profileSongAudio) window.profileSongAudio.pause();" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;">←</button>
+                    <div>
+                        <div style="font-weight:800;font-size:17px;display:flex;align-items:center;gap:6px;">
+                            @${userDoc.username} <span style="background:#00e676;color:#000;border-radius:4px;padding:1px 5px;font-size:11px;">✔</span>
+                        </div>
+                        <div style="font-size:11px;color:#94a3b8;">🟢 Active on Nexus</div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button onclick="window.openDirectChatWithUser('${userDoc.uid || userDoc.username}', '${userDoc.username}')" style="background:#1e293b;color:#fff;border:1px solid #334155;border-radius:18px;padding:6px 12px;font-size:12px;cursor:pointer;">📞</button>
+                    <button style="background:#1e293b;color:#fff;border:1px solid #334155;border-radius:18px;padding:6px 12px;font-size:12px;font-weight:bold;">QR</button>
+                </div>
+            </div>
+
+            <!-- Avatar + Stats + Bio -->
+            <div style="padding:18px 16px;">
+                <div style="display:flex;align-items:center;gap:16px;">
+                    <div style="text-align:center;">
+                        <img src="${userDoc.avatar || userDoc.profilePic}" style="width:86px;height:86px;border-radius:50%;object-fit:cover;border:3px solid #0ea5e9;padding:2px;">
+                        <div style="font-weight:800;font-size:14px;margin-top:6px;">${userDoc.displayName || userDoc.username}</div>
+                    </div>
+                    <div style="flex:1;">
+                        <div style="display:flex;justify-content:space-around;background:#131b2b;border:1px solid #1e293b;border-radius:14px;padding:10px;margin-bottom:10px;text-align:center;">
+                            <div><div style="font-weight:800;font-size:17px;">${userDoc.postsCount}</div><div style="font-size:11px;color:#94a3b8;">posts</div></div>
+                            <div><div style="font-weight:800;font-size:17px;">${userDoc.followersCount || 2}</div><div style="font-size:11px;color:#94a3b8;">followers</div></div>
+                            <div><div style="font-weight:800;font-size:17px;">${userDoc.followingCount || 1}</div><div style="font-size:11px;color:#94a3b8;">following</div></div>
+                        </div>
+                        <div style="background:#131b2b;border:1px solid #1e293b;border-radius:14px;padding:10px 12px;font-size:13px;">
+                            <span style="background:#0ea5e922;color:#38bdf8;padding:2px 8px;border-radius:8px;font-size:11px;">🛡️ @${userDoc.username}</span>
+                            <div style="margin-top:6px;color:#e2e8f0;">${userDoc.bio || 'Focused on goals 🚀'}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Profile Song Anthem Bar (Just like @chanchal's Mann Jogiya bar!) -->
+                <div style="display:flex;align-items:center;justify-content:space-between;background:#0f1d22;border:1px solid #00a884;border-radius:16px;padding:10px 14px;margin:16px 0;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <div style="width:38px;height:38px;border-radius:8px;background:#00a884;color:#000;display:flex;align-items:center;justify-content:center;font-weight:900;">🎵</div>
+                        <div>
+                            <div style="font-weight:800;font-size:14px;color:#fff;">${userDoc.songTitle || 'Mann Jogiya'}</div>
+                            <div style="font-size:11px;color:#00e676;">${userDoc.songArtist || 'Profile Anthem • Nexus Music'}</div>
+                        </div>
+                    </div>
+                    <button id="prof-song-play-btn" style="background:#00e676;color:#000;border:none;padding:7px 16px;border-radius:20px;font-weight:800;font-size:12px;cursor:pointer;">▶ Play</button>
+                </div>
+
+                <!-- Follow / Message / Share Buttons (Fixes Chanchal's "DM option nahi aa raha" bug!) -->
+                <div style="display:flex;gap:10px;margin-bottom:16px;">
+                    <button onclick="this.textContent = this.textContent === 'Following ✔' ? 'Follow' : 'Following ✔'" style="flex:1;background:#00c853;color:#000;border:none;padding:12px;border-radius:14px;font-weight:800;font-size:14px;cursor:pointer;">Follow</button>
+                    <button onclick="document.getElementById('nx-chanchal-full-profile').remove(); window.openDirectChatWithUser('${userDoc.uid || userDoc.username}', '${userDoc.username}')" style="flex:1;background:#1e293b;color:#fff;border:1px solid #334155;padding:12px;border-radius:14px;font-weight:800;font-size:14px;cursor:pointer;">Message 💬</button>
+                    <button onclick="navigator.share && navigator.share({title:'@${userDoc.username} on Nexus', url:location.href})" style="background:#1e293b;color:#38bdf8;border:1px solid #334155;padding:12px 16px;border-radius:14px;font-weight:800;font-size:14px;cursor:pointer;">Share 🔗</button>
+                </div>
+
+                <!-- Grid / Scroll Posts / Videos Tabs -->
+                <div style="display:flex;border-bottom:1px solid #1e293b;margin-bottom:10px;text-align:center;font-size:13px;font-weight:700;">
+                    <div style="flex:1;padding:10px;border-bottom:2px solid #00e676;color:#fff;">⊞ Grid (${userPosts.length})</div>
+                    <div style="flex:1;padding:10px;color:#94a3b8;">📱 Scroll Posts (${userPosts.length})</div>
+                    <div style="flex:1;padding:10px;color:#94a3b8;">🎬 Videos</div>
+                </div>
+
+                <!-- 3-Column Post Grid -->
+                <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:4px;">
+                    ${userPosts.length > 0 ? userPosts.map(p => `
+                        <div style="aspect-ratio:1/1;background:#131b2b;overflow:hidden;position:relative;border-radius:4px;">
+                            ${p.imageUrl || p.mediaUrl ? `<img src="${p.imageUrl || p.mediaUrl}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="padding:8px;font-size:11px;color:#cbd5e1;display:flex;align-items:center;justify-content:center;height:100%;text-align:center;">${(p.text || '').substring(0, 45)}</div>`}
+                        </div>
+                    `).join('') : `<div style="grid-column:span 3;text-align:center;padding:32px;color:#64748b;font-size:13px;">No posts shared yet.</div>`}
+                </div>
+            </div>
+        `;
+        document.body.appendChild(page);
+
+        // Profile Song Play/Pause Logic
+        const songBtn = document.getElementById('prof-song-play-btn');
+        songBtn.onclick = () => {
+            if (!window.profileSongAudio) {
+                window.profileSongAudio = new Audio(userDoc.songUrl);
+            }
+            if (window.profileSongAudio.paused) {
+                window.profileSongAudio.play().catch(()=>{});
+                songBtn.textContent = '⏸ Pause';
+            } else {
+                window.profileSongAudio.pause();
+                songBtn.textContent = '▶ Play';
+            }
+        };
+    };
+
+    // Helper to open 1:1 DM directly from any profile
+    window.openDirectChatWithUser = function(uid, username) {
+        window.lockActiveChatPartner(uid, username);
+        if (typeof window.openChat === 'function') window.openChat(uid, username);
+        else if (typeof window.startDM === 'function') window.startDM(uid, username);
+    };
+
+    // ------------------------------------------------------------------------
+    // PART D: FIX BROKEN 0:00/0:00 VIDEO PLAYER & CHROME AUDIO EMBED
+    // ------------------------------------------------------------------------
+    const mediaScrollObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            const el = entry.target;
+            if (!entry.isIntersecting && !el.paused) {
+                el.pause();
+            }
+        });
+    }, { threshold: 0.35 });
+
+    window.upgradeVideosAndVoiceNotes = function() {
+        // 1. Fix All Feed & Chat Videos (Removes 0:00 / 0:00 ugly bar)
+        document.querySelectorAll('video').forEach(vid => {
+            if (vid.dataset.nxProUpgraded === "true" || vid.closest('#nx-official-story-viewer')) return;
+            vid.dataset.nxProUpgraded = "true";
+
+            vid.removeAttribute('controls');
+            vid.controls = false;
+            vid.preload = "metadata";
+            vid.setAttribute('playsinline', '');
+            vid.setAttribute('webkit-playsinline', '');
+            vid.oncontextmenu = e => e.preventDefault();
+
+            // Force load first frame so video isn't a dead black box!
+            if (vid.src && !vid.src.includes('#t=')) {
+                vid.src = vid.src + '#t=0.1';
+            }
+
+            // Hide any old broken custom control bars next to the video (like the 0:00/0:00 bar in Screenshot 6!)
+            const parentCard = vid.parentElement;
+            if (parentCard) {
+                parentCard.querySelectorAll('div, span').forEach(sibling => {
+                    if (sibling !== vid && sibling.textContent && sibling.textContent.includes('0:00 / 0:00')) {
+                        sibling.style.display = 'none';
+                    }
+                });
+            }
+
+            const box = document.createElement('div');
+            box.className = 'nx-pro-video-box';
+            vid.parentNode.insertBefore(box, vid);
+            box.appendChild(vid);
+
+            const playBadge = document.createElement('div');
+            playBadge.className = 'nx-pro-play-btn';
+            playBadge.innerHTML = '▶';
+            box.appendChild(playBadge);
+
+            const mutePill = document.createElement('button');
+            mutePill.style.cssText = 'position:absolute;bottom:12px;right:12px;background:rgba(11,20,26,0.8);color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:20px;padding:5px 10px;font-size:12px;cursor:pointer;z-index:5;';
+            mutePill.innerHTML = vid.muted ? '🔇 Muted' : '🔊 Sound';
+            mutePill.onclick = (e) => {
+                e.stopPropagation();
+                vid.muted = !vid.muted;
+                mutePill.innerHTML = vid.muted ? '🔇 Muted' : '🔊 Sound';
+            };
+            box.appendChild(mutePill);
+
+            const progBar = document.createElement('div');
+            progBar.style.cssText = 'position:absolute;bottom:0;left:0;height:3px;background:#00e676;width:0%;transition:width 0.1s linear;';
+            box.appendChild(progBar);
+
+            vid.addEventListener('timeupdate', () => {
+                if (vid.duration) progBar.style.width = ((vid.currentTime / vid.duration) * 100) + '%';
+            });
+
+            box.onclick = () => {
+                if (vid.paused) {
+                    document.querySelectorAll('video, audio').forEach(m => { if (m !== vid) m.pause(); });
+                    vid.play().catch(()=>{});
+                    playBadge.classList.add('playing');
+                } else {
+                    vid.pause();
+                    playBadge.classList.remove('playing');
+                }
+            };
+
+            vid.addEventListener('pause', () => playBadge.classList.remove('playing'));
+            vid.addEventListener('play', () => playBadge.classList.add('playing'));
+            mediaScrollObserver.observe(vid);
+        });
+
+        // 2. Replace Chrome's Ugly <audio controls> Embed with Nexus Official Voice Note Player!
+        document.querySelectorAll('audio').forEach(aud => {
+            if (aud.dataset.nxVoiceUpgraded === "true") return;
+            aud.dataset.nxVoiceUpgraded = "true";
+            aud.removeAttribute('controls');
+            aud.style.display = 'none';
+
+            const vnCard = document.createElement('div');
+            vnCard.className = 'nx-voice-note-card';
+            vnCard.innerHTML = `
+                <button class="nx-vn-play">▶</button>
+                <div class="nx-vn-waves">
+                    ${Array.from({length: 14}).map((_, i) => `<div class="nx-vn-bar" style="height:${25 + ((i*17)%65)}%"></div>`).join('')}
+                </div>
+                <span class="nx-vn-time" style="font-size:11px;color:#cbd5e1;min-width:32px;">0:00</span>
+                <button class="nx-vn-speed">1x</button>
+            `;
+            aud.parentNode.insertBefore(vnCard, aud);
+
+            const playBtn = vnCard.querySelector('.nx-vn-play');
+            const bars = vnCard.querySelectorAll('.nx-vn-bar');
+            const timeEl = vnCard.querySelector('.nx-vn-time');
+            const speedBtn = vnCard.querySelector('.nx-vn-speed');
+
+            playBtn.onclick = (e) => {
+                e.stopPropagation();
+                if (aud.paused) {
+                    document.querySelectorAll('video, audio').forEach(m => { if (m !== aud) m.pause(); });
+                    aud.play().catch(()=>{});
+                    playBtn.textContent = '⏸';
+                } else {
+                    aud.pause();
+                    playBtn.textContent = '▶';
+                }
+            };
+
+            speedBtn.onclick = (e) => {
+                e.stopPropagation();
+                const speeds = [1, 1.5, 2];
+                const next = speeds[(speeds.indexOf(aud.playbackRate) + 1) % speeds.length];
+                aud.playbackRate = next;
+                speedBtn.textContent = next + 'x';
+            };
+
+            aud.addEventListener('timeupdate', () => {
+                const cur = Math.floor(aud.currentTime || 0);
+                timeEl.textContent = `0:${cur < 10 ? '0'+cur : cur}`;
+                const pct = aud.duration ? (aud.currentTime / aud.duration) : 0;
+                const activeCount = Math.floor(pct * bars.length);
+                bars.forEach((b, idx) => b.classList.toggle('active', idx <= activeCount));
+            });
+
+            aud.addEventListener('ended', () => {
+                playBtn.textContent = '▶';
+                bars.forEach(b => b.classList.remove('active'));
+            });
+        });
+    };
+
+    // ------------------------------------------------------------------------
+    // PART E: POST SONG / MUSIC ATTACHMENT & AUTO-PLAY ON FEED
+    // ------------------------------------------------------------------------
+    const NEXUS_SONGS_LIBRARY = [
+        { title: "Mann Jogiya", artist: "Arijit Singh", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" },
+        { title: "Kesariya Vibes", artist: "Bollywood Lo-Fi", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" },
+        { title: "Unstoppable Motivation", artist: "Study & Goal Beats", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" }
+    ];
+
+    // Attach song player bar to any post that has post.songUrl or song attribute
+    window.attachSongsToFeedPosts = function() {
+        document.querySelectorAll('.post-card, [id^="post-"]').forEach(card => {
+            if (card.dataset.songAttached === "true") return;
+            const songTitle = card.dataset.songTitle || card.getAttribute('data-song');
+            const songUrl = card.dataset.songUrl;
+            if (!songTitle && !songUrl) return;
+
+            card.dataset.songAttached = "true";
+            const musicBar = document.createElement('div');
+            musicBar.className = 'nx-post-music-bar';
+            musicBar.innerHTML = `
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span>🎵</span>
+                    <marquee scrollamount="3" style="max-width:190px;font-weight:700;color:#00e676;">${songTitle || 'Original Audio • Nexus Music'}</marquee>
+                </div>
+                <span class="song-state-pill" style="background:#00e676;color:#000;padding:3px 10px;border-radius:12px;font-weight:800;font-size:11px;">▶ Listen</span>
+            `;
+
+            const audio = new Audio(songUrl || NEXUS_SONGS_LIBRARY[0].url);
+            audio.loop = true;
+
+            musicBar.onclick = (e) => {
+                e.stopPropagation();
+                if (audio.paused) {
+                    document.querySelectorAll('video, audio').forEach(m => m.pause());
+                    if (window.activePostSong && window.activePostSong !== audio) window.activePostSong.pause();
+                    window.activePostSong = audio;
+                    audio.play().catch(()=>{});
+                    musicBar.querySelector('.song-state-pill').textContent = '⏸ Playing';
+                } else {
+                    audio.pause();
+                    musicBar.querySelector('.song-state-pill').textContent = '▶ Listen';
+                }
+            };
+
+            card.insertBefore(musicBar, card.children[1] || null);
+        });
+    };
+
+    // ------------------------------------------------------------------------
+    // PART F: NEXUS OFFICIAL EXCLUSIVE STORY + SPINNING GREEN RING +
+    //         VIDEO_1.MP4 STYLE AUTOMATED WALKTHROUGH ENGINE!
+    // ------------------------------------------------------------------------
+    window.lockStoryBarToNexusOfficialOnly = function() {
+        document.querySelectorAll('div, span').forEach(el => {
+            const txt = (el.textContent || '').trim();
+            // 1. Add Spinning Green Ring ONLY to Nexus Official Circle
+            if (txt === 'Official' && !el.dataset.nxOfficialRing) {
+                el.dataset.nxOfficialRing = "true";
+                const parentCircle = el.parentElement;
+                if (parentCircle) {
+                    const avatarCircle = parentCircle.querySelector('div, img');
+                    if (avatarCircle && !avatarCircle.parentElement.classList.contains('nexus-official-ring-wrap')) {
+                        const ringWrap = document.createElement('div');
+                        ringWrap.className = 'nexus-official-ring-wrap';
+                        avatarCircle.parentNode.insertBefore(ringWrap, avatarCircle);
+                        ringWrap.appendChild(avatarCircle);
+                    }
+                    parentCircle.style.cursor = 'pointer';
+                    parentCircle.onclick = (e) => {
+                        e.stopPropagation();
+                        window.openNexusOfficialProStory();
+                    };
+                }
+            }
+        });
+    };
+
+    // Full-Screen Instagram/WhatsApp Pro Story Viewer with video_1.mp4 Auto-Walkthrough!
+    window.openNexusOfficialProStory = function() {
+        document.getElementById('nx-official-story-viewer')?.remove();
+
+        const viewer = document.createElement('div');
+        viewer.id = 'nx-official-story-viewer';
+        viewer.style.cssText = 'position:fixed;inset:0;background:#070c10;z-index:9999999;display:flex;flex-direction:column;justify-content:space-between;color:#fff;font-family:sans-serif;user-select:none;';
+
+        viewer.innerHTML = `
+            <!-- TOP INSTAGRAM/WHATSAPP OFFICIAL BAR -->
+            <div style="padding:14px 16px;background:linear-gradient(to bottom,rgba(0,0,0,0.85),transparent);z-index:20;">
+                <div style="display:flex;gap:5px;margin-bottom:12px;">
+                    <div style="flex:1;height:3px;background:rgba(255,255,255,0.25);border-radius:3px;overflow:hidden;">
+                        <div id="nx-st-prog-fill" style="width:0%;height:100%;background:#00e676;transition:width 12s linear;"></div>
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#00e676);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;">N</div>
+                        <div>
+                            <div style="font-weight:800;font-size:14px;display:flex;align-items:center;gap:5px;">
+                                Nexus Official <span style="background:#00e676;color:#000;border-radius:50%;width:15px;height:15px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;">✔</span>
+                            </div>
+                            <div style="font-size:11px;color:#00e676;">Verified System Update • Live Demo</div>
+                        </div>
+                    </div>
+                    <button onclick="document.getElementById('nx-official-story-viewer').remove()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer;">✖</button>
+                </div>
+            </div>
+
+            <!-- CENTER STAGE: EXACT video_1.mp4 AUTO-SIMULATED WALKTHROUGH -->
+            <div id="nx-director-stage" style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:14px;max-width:400px;width:100%;margin:0 auto;position:relative;overflow:hidden;"></div>
+
+            <!-- BOTTOM OFFICIAL INSTAGRAM-STYLE BAR (Reactions + CTA + Views) -->
+            <div style="padding:14px 16px 24px;background:linear-gradient(to top,rgba(0,0,0,0.92),transparent);z-index:20;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                    <div style="display:flex;gap:8px;background:#162029;border:1px solid #263847;padding:8px 14px;border-radius:24px;">
+                        <span onclick="this.style.transform='scale(1.3)'" style="font-size:18px;cursor:pointer;transition:0.2s;">🔥</span>
+                        <span onclick="this.style.transform='scale(1.3)'" style="font-size:18px;cursor:pointer;transition:0.2s;">❤️</span>
+                        <span onclick="this.style.transform='scale(1.3)'" style="font-size:18px;cursor:pointer;transition:0.2s;">👏</span>
+                        <span onclick="this.style.transform='scale(1.3)'" style="font-size:18px;cursor:pointer;transition:0.2s;">🚀</span>
+                    </div>
+                    <button onclick="document.getElementById('nx-official-story-viewer').remove()" style="flex:1;background:#00e676;color:#000;border:none;padding:11px 16px;border-radius:24px;font-weight:900;font-size:13px;cursor:pointer;">Try Feature Now ↗</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(viewer);
+
+        setTimeout(() => {
+            const bar = document.getElementById('nx-st-prog-fill');
+            if (bar) bar.style.width = '100%';
+        }, 80);
+
+        // Run the 12-Second Automated Scene (Exact replica of video_1.mp4!)
+        const stage = document.getElementById('nx-director-stage');
+        // Step 1 (0s): Simulated Chat Screen + Messages popping in
+        stage.innerHTML = `
+            <div style="background:#0e1621;border:1px solid #1e293b;border-radius:20px;padding:14px;box-shadow:0 15px 40px rgba(0,0,0,0.7);">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:1px solid #1e293b;margin-bottom:12px;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="width:32px;height:32px;border-radius:50%;background:#10b981;display:flex;align-items:center;justify-content:center;font-weight:bold;">K</div>
+                        <div><div style="font-size:13px;font-weight:bold;">Kajupiee</div><div style="font-size:10px;color:#00e676;">● Online Now</div></div>
+                    </div>
+                    <div id="demo-3dot" style="width:32px;height:32px;border-radius:50%;background:#1e293b;display:flex;align-items:center;justify-content:center;font-weight:bold;transition:0.3s;">⋮</div>
+                </div>
+                <div id="demo-chat-box" style="display:flex;flex-direction:column;gap:8px;min-height:210px;font-size:12px;"></div>
+            </div>
+        `;
+
+        const chatBox = document.getElementById('demo-chat-box');
+        const addDemoMsg = (text, isRight) => {
+            if (!chatBox) return;
+            const b = document.createElement('div');
+            b.style.cssText = `align-self:${isRight ? 'flex-end' : 'flex-start'};background:${isRight ? '#056162' : '#1e293b'};color:#fff;padding:8px 12px;border-radius:12px;max-width:82%;animation:waSpringPop 0.35s ease;`;
+            b.textContent = text;
+            chatBox.appendChild(b);
+        };
+
+        setTimeout(() => addDemoMsg("Chalo aao song sunte hain 🎵", false), 200);
+        setTimeout(() => addDemoMsg("Kaise? Dono log saath me kaise sunenge?", true), 900);
+        setTimeout(() => addDemoMsg("Upar 3-dot pe click karo aur YouTube Watch-Party TV chuno!", false), 1700);
+        setTimeout(() => addDemoMsg("Ok karta hu, try karte hain 👍", true), 2400);
+
+        // Step 2 (3.2s): Highlight 3-dot & Show 1:1 Pro Menu with Red Spotlight on Watch Party TV
+        setTimeout(() => {
+            const dot = document.getElementById('demo-3dot');
+            if (dot) dot.style.background = '#7c3aed';
+            if (!stage) return;
+            stage.innerHTML = `
+                <div style="background:#111827;border:1px solid #374151;border-radius:20px;padding:16px;">
+                    <div style="font-weight:800;font-size:14px;color:#a78bfa;margin-bottom:12px;">✨ 1:1 Pro Menu • Live Features</div>
+                    <div style="opacity:0.3;padding:10px;border-radius:12px;background:#1f2937;margin-bottom:8px;font-size:12px;">📹 Live Face-to-Face Video Call</div>
+                    <div style="padding:12px;border-radius:14px;background:#1f2937;border:2px solid #ff3b30;box-shadow:0 0 20px rgba(255,59,48,0.4);margin-bottom:8px;">
+                        <div style="font-weight:800;font-size:14px;color:#fff;">📺 YouTube Watch-Party TV</div>
+                        <div style="font-size:11px;color:#9ca3af;">Watch YouTube videos together live in sync</div>
+                    </div>
+                    <div style="opacity:0.3;padding:10px;border-radius:12px;background:#1f2937;font-size:12px;">🎙️ Record Audio Voice Note (1x/1.5x/2x)</div>
+                </div>
+            `;
+        }, 3300);
+
+        // Step 3 (6.5s): Show Live Synced YouTube Player
+        setTimeout(() => {
+            if (!stage) return;
+            stage.innerHTML = `
+                <div style="background:#0f172a;border:2px solid #ff3b30;border-radius:20px;padding:14px;text-align:center;">
+                    <div style="font-weight:800;font-size:13px;color:#ff3b30;margin-bottom:8px;">📺 YouTube Watch-Party TV • Live Sync</div>
+                    <div style="background:#000;height:150px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid #334155;margin-bottom:10px;">
+                        <div style="font-size:20px;font-weight:900;letter-spacing:2px;color:#e2e8f0;">VDJ ANKIT VISUALS</div>
+                        <div style="font-size:11px;color:#00e676;margin-top:6px;">● Playing in Real-Time Sync with Partner</div>
+                    </div>
+                    <div style="display:flex;justify-content:center;gap:8px;font-size:11px;">
+                        <span style="background:#064e3b;color:#34d399;padding:4px 10px;border-radius:12px;">🟢 Live Sync Active</span>
+                        <span style="background:#1e293b;color:#fff;padding:4px 10px;border-radius:12px;">🔒 Private 1-on-1 Chat</span>
+                    </div>
+                </div>
+            `;
+        }, 6500);
+
+        // Step 4 (9.5s): NEXUS Official Outro Bumper (Exact end screen of video_1.mp4!)
+        setTimeout(() => {
+            if (!stage) return;
+            stage.innerHTML = `
+                <div style="text-align:center;">
+                    <div style="background:#161b26;border:1px solid #2d3748;border-radius:22px;padding:22px;margin-bottom:24px;">
+                        <div style="font-size:36px;margin-bottom:8px;">📺</div>
+                        <h3 style="color:#ff4d4d;font-size:20px;margin-bottom:8px;">YouTube Watch-Party TV</h3>
+                        <p style="font-size:13px;color:#cbd5e1;line-height:1.5;margin-bottom:14px;">Ab dono ek saath, ek hi waqt pe ek hi YouTube video dekh sakte ho. Koi bhi link daalo, Sync me chalega.</p>
+                        <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;font-size:11px;font-weight:bold;">
+                            <span style="background:#00c853;color:#000;padding:5px 12px;border-radius:14px;">● Live Sync</span>
+                            <span style="background:#ff3b30;color:#fff;padding:5px 12px;border-radius:14px;">▶ YouTube TV</span>
+                            <span style="background:#334155;color:#fff;padding:5px 12px;border-radius:14px;">🎵 Full Songs</span>
+                        </div>
+                    </div>
+                    <div style="width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,#6366f1,#10b981);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:900;margin:0 auto 10px;">N</div>
+                    <div style="font-weight:900;letter-spacing:6px;font-size:18px;color:#e2e8f0;">N E X U S</div>
+                </div>
+            `;
+        }, 9500);
+
+        setTimeout(() => viewer.remove(), 12300);
+    };
+
+    // Run continuous observer every 800ms to keep all UI upgraded
+    setInterval(() => {
+        enforceChanchalStyleFullProfileEverywhere();
+        window.upgradeVideosAndVoiceNotes();
+        window.attachSongsToFeedPosts();
+        window.lockStoryBarToNexusOfficialOnly();
+    }, 800);
+})();
+</script>
 </body>
 </html>
