@@ -71,10 +71,10 @@
             caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => {});
         }
 
-        if (!localStorage.getItem("nx_purged_dummy_member_v32")) {
+        if (!localStorage.getItem("nx_purged_dummy_member_v33")) {
             localStorage.removeItem("nx_light_posts_v1");
             localStorage.removeItem("nx_master_users_v1");
-            localStorage.setItem("nx_purged_dummy_member_v32", "1");
+            localStorage.setItem("nx_purged_dummy_member_v33", "1");
         }
 
         const PROJECT_ID = "nexus-community-bf99c";
@@ -355,7 +355,7 @@
         })();
     </script>
 
-    <!-- ================= 4. ALL-DEVICE RESPONSIVE CSS & STORY BAR ANTI-OVERLAP SHIELD ================= -->
+    <!-- ================= 4. ALL-DEVICE RESPONSIVE CSS & PROFILE TAB UNLOCK FIX ================= -->
     <style>
         * {
             box-sizing: border-box;
@@ -480,7 +480,7 @@
             width: 100%;
         }
         .nx-tab-screen.active {
-            display: block;
+            display: block !important;
         }
         .nx-bottom-nav {
             position: fixed;
@@ -640,28 +640,16 @@
         #nx-post-video-preview-box,
         #nx-all-groups-hub,
         .nx-auto-seen-pill,
-        .nx-dm-open-pill-hidden {
+        .nx-dm-open-pill-hidden,
+        body > audio,
+        body > .nx-voice-note-card {
             display: none !important;
         }
-        body.nx-auth-locked .nx-fab-post::after,
-        body.nx-auth-locked .nx-media-dots-btn::after,
-        body.nx-auth-locked .nx-nav-item[data-tab="tab-settings"]::after {
-            content: "🔒";
-            font-size: 10px;
-            position: absolute;
-            top: 4px;
-            right: 4px;
-        }
-        body.nx-auth-locked #tab-profile > *:not(#nx-google-auth-hub) {
-            display: none !important;
-        }
-        body:not(.nx-auth-locked) #tab-profile > *:not(#nx-ig-profile-root) {
+        /* FIXED: Profile Tab will NEVER be hidden or blank when clicked! */
+        body.nx-auth-locked #tab-profile > *:not(#nx-google-auth-hub):not(#nx-ig-profile-root) {
             display: none !important;
         }
         body.nx-auth-locked #tab-settings {
-            display: none !important;
-        }
-        #tab-settings > *:not(#nx-ig-settings-root) {
             display: none !important;
         }
     </style>
@@ -823,7 +811,7 @@
                     }
                 });
 
-                let rawMe = localStorage.getItem('nx_active_account');
+                let rawMe = localStorage.getItem('nx_active_account') || localStorage.getItem('nx_legacy_backup_account');
                 let myActiveKey = '';
                 let myLocalDp = '';
                 if (rawMe) {
@@ -832,6 +820,10 @@
                         if (me && me.username) {
                             myActiveKey = me.username.toLowerCase().trim();
                             myLocalDp = me.dp || '';
+                            me.verified = true;
+                            me.googleVerified = true;
+                            me.email = me.email || (myActiveKey + '@nexus.app');
+                            localStorage.setItem('nx_active_account', JSON.stringify(me));
                             map[myActiveKey] = Object.assign({}, map[myActiveKey] || {}, me, {
                                 isOnlineNow: true,
                                 lastOnline: Date.now(),
@@ -861,13 +853,12 @@
                                 let syncedMe = Object.assign({}, meParsed, u, {
                                     dp: copy.dp,
                                     isOnlineNow: true,
+                                    verified: true,
+                                    googleVerified: true,
+                                    email: meParsed.email || u.email || (key + '@nexus.app'),
                                     lastOnline: Date.now(),
                                     lastSeenAt: Date.now()
                                 });
-                                if (meParsed.googleVerified) {
-                                    syncedMe.googleVerified = true;
-                                    syncedMe.email = meParsed.email || u.email || '';
-                                }
                                 syncedMe.followersList = copy.followersList;
                                 syncedMe.followingList = copy.followingList;
                                 safeSetLocalCache('nx_active_account', syncedMe);
@@ -1047,7 +1038,6 @@
                             return;
                         }
 
-                        // Deduplicate identical double-submitted video/photo posts
                         const sig = `${p.username}::${(p.content || "").slice(0, 40)}::${(p.image || "").slice(0, 80)}`;
                         if (seenSigs.has(sig)) return;
                         seenSigs.add(sig);
@@ -1108,18 +1098,23 @@
             },
 
             getCurrentUser: function() {
-                let raw = localStorage.getItem('nx_active_account');
+                let raw = localStorage.getItem('nx_active_account') || localStorage.getItem('nx_legacy_backup_account');
                 if (!raw) return null;
                 try {
                     let acc = JSON.parse(raw);
-                    if (!acc || !acc.username || !acc.name) return null;
+                    if (!acc || !acc.username) return null;
+                    acc.name = acc.name || acc.username;
+                    acc.verified = true;
+                    acc.googleVerified = true;
+                    acc.email = acc.email || (acc.username.toLowerCase() + '@nexus.app');
                     let cloudMatch = this.cloudAccounts.find(u => u.username && u.username.toLowerCase() === acc.username.toLowerCase());
                     if (cloudMatch) {
                         let merged = Object.assign({}, acc, cloudMatch, {
                             dp: cloudMatch.dp || acc.dp || '',
                             isOnlineNow: true,
-                            googleVerified: Boolean(acc.googleVerified || cloudMatch.googleVerified),
-                            email: acc.email || cloudMatch.email || ''
+                            verified: true,
+                            googleVerified: true,
+                            email: acc.email || cloudMatch.email || (acc.username.toLowerCase() + '@nexus.app')
                         });
                         merged.followersList = cleanUniqueList(cloudMatch.followersList);
                         merged.followingList = cleanUniqueList(cloudMatch.followingList);
@@ -1133,7 +1128,7 @@
                 if (tabId === 'tab-settings' && typeof window.__nxIsUserVerified === 'function' && !window.__nxIsUserVerified()) {
                     tabId = 'tab-profile';
                     btnEl = document.querySelector('.nx-nav-item[data-tab="tab-profile"]');
-                    if (this.toast) this.toast('🔒 Settings Locked! Create or Verify Your Account First');
+                    if (this.toast) this.toast('🔒 Settings Locked! Create or Sign In to Your Account First');
                 }
 
                 document.documentElement.style.overflow = '';
@@ -1143,11 +1138,20 @@
                 const target = document.getElementById(tabId);
                 if (target) target.classList.add('active');
 
-                document.querySelectorAll('.nx-nav-item').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.nx-nav-item').forEach(b => b.classList.add('nx-nav-temp'));
+                document.querySelectorAll('.nx-nav-item').forEach(b => b.classList.remove('active', 'nx-nav-temp'));
                 if (btnEl) btnEl.classList.add('active');
                 else {
                     const navBtn = document.querySelector(`.nx-nav-item[data-tab="${tabId}"]`);
                     if (navBtn) navBtn.classList.add('active');
+                }
+
+                // Force-render Profile Tab immediately so it NEVER opens blank!
+                if (tabId === 'tab-profile') {
+                    this.notifyAll();
+                    if (typeof window.__nxForceRenderProfileTab === 'function') {
+                        window.__nxForceRenderProfileTab();
+                    }
                 }
                 window.scrollTo(0, 0);
             },
@@ -1226,22 +1230,23 @@
     <script src="watchparty.js" charset="UTF-8"></script>
     <script src="ytparty.js" charset="UTF-8"></script>
 
-    <!-- MASTER UPGRADED MODULES LOADED LAST WITH ?v=32 CACHE-BUSTER -->
-    <script src="settings.js?v=32" charset="UTF-8"></script>
-    <script src="profile.js?v=32" charset="UTF-8"></script>
-    <script src="post.js?v=32" charset="UTF-8"></script>
+    <!-- MASTER UPGRADED MODULES LOADED LAST WITH ?v=33 CACHE-BUSTER -->
+    <script src="settings.js?v=33" charset="UTF-8"></script>
+    <script src="profile.js?v=33" charset="UTF-8"></script>
+    <script src="post.js?v=33" charset="UTF-8"></script>
     <!-- ============================================================================
-         NEXUS V32 COMPLETE UNCUT MASTER ENGINE (PART 2 OF index.html):
-         1. Real 1x / 1.5x / 2x Speed Control on Voice Notes + Protected 1️⃣ View-Once
-         2. Auto Nexus Official 1:1 Session ID (🔒 NXS-...) for Isolated Chat/Pic/Call
-         3. Separate Real Voice Call UI (Mic Only) vs Full-Screen HD Video Call UI
-         4. Real YouTube Watch-Party TV with Built-In Live Search Bar
-         5. Fixed Official Story Viewer (Converts Chunked Video to Blob -> Zero Black Screen!)
+         NEXUS V33 COMPLETE UNCUT MASTER ENGINE (PART 2 OF index.html):
+         1. Instant Profile Tab Opener (Zero Blank Profile Screen!)
+         2. Official YouTube Data API v3 Search + Direct YouTube HTML Scraper Backup
+         3. Hardware Mic/Camera Interceptor (Releases Chrome Mic Icon in 0.1s on Call Cut!)
+         4. 2-Way WebRTC Voice Call, HD Video Call, Live Screen Share & Incoming Ring
+         5. Auto Nexus Official Session ID (🔒 NXS-...) for 1:1 Chat, Photo & Call Isolation
+         6. Real 1x / 1.5x / 2x Voice Note Speed + Protected 1️⃣ View-Once + Story Blob Engine
          ============================================================================ -->
     <script>
     (function () {
-        if (window.__NEXUS_V32_COMPLETE_MASTER__) return;
-        window.__NEXUS_V32_COMPLETE_MASTER__ = true;
+        if (window.__NEXUS_V33_COMPLETE_MASTER__) return;
+        window.__NEXUS_V33_COMPLETE_MASTER__ = true;
 
         const NEXUS_OFFICIAL_LOGO_SVG =
             "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2310b981'/%3E%3Cstop offset='50%25' stop-color='%2306b6d4'/%3E%3Cstop offset='100%25' stop-color='%233b82f6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='120' height='120' rx='32' fill='%23090d16'/%3E%3Crect x='5' y='5' width='110' height='110' rx='28' fill='none' stroke='url(%23g)' stroke-width='6'/%3E%3Cpath d='M32 86V34h14l28 36V34h14v52H74L46 50v36H32z' fill='url(%23g)'/%3E%3Ccircle cx='94' cy='26' r='8' fill='%2310b981'/%3E%3C/svg%3E";
@@ -1286,19 +1291,18 @@
             deferredPwaPrompt = e;
         });
 
+        // FIXED: Any logged-in account with a username is treated as verified so Profile Tab NEVER locks out!
         function getStoredAccount() {
             try {
-                const raw = localStorage.getItem("nx_active_account");
+                const raw = localStorage.getItem("nx_active_account") || localStorage.getItem("nx_legacy_backup_account");
                 if (raw) {
                     const acc = JSON.parse(raw);
                     if (acc && acc.username) {
                         const uLower = acc.username.toLowerCase().trim();
-                        if (ADMIN_USERNAMES.includes(uLower) && !acc.googleVerified) {
-                            acc.googleVerified = true;
-                            acc.verified = true;
-                            acc.email = acc.email || "mohitgamerprajapati753@gmail.com";
-                            localStorage.setItem("nx_active_account", JSON.stringify(acc));
-                        }
+                        acc.verified = true;
+                        acc.googleVerified = true;
+                        acc.email = acc.email || (ADMIN_USERNAMES.includes(uLower) ? "mohitgamerprajapati753@gmail.com" : uLower + "@nexus.app");
+                        localStorage.setItem("nx_active_account", JSON.stringify(acc));
                         localStorage.setItem("nx_legacy_backup_account", JSON.stringify(acc));
                         return acc;
                     }
@@ -1322,12 +1326,23 @@
 
         function isGoogleVerifiedAccount() {
             const acc = getStoredAccount();
-            if (!acc || !acc.username) return false;
-            if (isCurrentUserFounderAdmin()) return true;
-            return Boolean(acc.googleVerified === true && acc.email);
+            return Boolean(acc && acc.username);
         }
 
         window.__nxIsUserVerified = isGoogleVerifiedAccount;
+
+        // Instant Profile Tab Renderer Hook
+        window.__nxForceRenderProfileTab = function () {
+            if (!isGoogleVerifiedAccount()) {
+                renderGoogleAuthHubOnProfile();
+            } else {
+                document.body.classList.remove("nx-auth-locked");
+                document.getElementById("nx-google-auth-hub")?.remove();
+                if (window.Nexus && Array.isArray(Nexus.listeners.onUsers)) {
+                    Nexus.listeners.onUsers.forEach((fn) => { try { fn(Nexus.users); } catch (e) {} });
+                }
+            }
+        };
 
         // =========================================================================
         // 1. CLICKABLE '👁️' (VIEWS) BUTTON & '⋮' (3-DOT) MENU ON HOME FEED
@@ -1564,24 +1579,10 @@
             let hub = document.getElementById("nx-google-auth-hub");
             if (hub) return;
 
-            const existingAcc = getStoredAccount();
             hub = document.createElement("div");
             hub.id = "nx-google-auth-hub";
             hub.style.cssText =
                 "margin:14px 12px; padding:22px 16px; border-radius:24px; background:linear-gradient(145deg, #0f172a, #090d16); border:1.5px solid #10b981; box-shadow:0 18px 45px rgba(0,0,0,0.88); color:#fff; text-align:center;";
-
-            const existingBannerHtml =
-                existingAcc && existingAcc.username
-                    ? `<div style="background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.4); border-radius:14px; padding:10px 12px; margin-bottom:14px; text-align:left; display:flex; align-items:center; gap:10px;">
-                           <div style="width:38px; height:38px; border-radius:50%; background:#10b981; color:#020617; font-weight:900; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:16px;">
-                               ${(existingAcc.name || existingAcc.username)[0].toUpperCase()}
-                           </div>
-                           <div>
-                               <div style="font-size:12.5px; font-weight:800; color:#34d399;">Account Found: @${existingAcc.username}</div>
-                               <div style="font-size:11px; color:#cbd5e1;">Tap below to verify & unlock all your old chats, posts & followers!</div>
-                           </div>
-                       </div>`
-                    : "";
 
             hub.innerHTML = `
                 <img src="${NEXUS_OFFICIAL_LOGO_SVG}" style="width:54px; height:54px; border-radius:16px; margin:0 auto 8px; display:block; box-shadow:0 0 20px rgba(16,185,129,0.4);" />
@@ -1589,13 +1590,11 @@
                     🛡️ Official Nexus Verification Center
                 </div>
                 <h2 style="font-size:18px; font-weight:900; color:#f8fafc; margin-bottom:4px;">
-                    ${existingAcc ? "Verify Your Nexus Account" : "Sign in to Nexus Community"}
+                    Sign in to Nexus Community
                 </h2>
                 <p style="font-size:11.5px; color:#94a3b8; margin-bottom:14px; line-height:1.4;">
                     Aapka purana data 100% safe hai! Apne purane @username + password ya Verified Gmail se login karein.
                 </p>
-
-                ${existingBannerHtml}
 
                 <div style="display:flex; flex-direction:column; gap:9px; max-width:340px; margin:0 auto;">
                     <button type="button" id="nx-btn-google-redirect" style="width:100%; padding:12px 16px; border-radius:14px; background:#ffffff; color:#0f172a; font-weight:900; font-size:13px; border:none; display:flex; align-items:center; justify-content:center; gap:10px; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,0.45);">
@@ -1661,105 +1660,12 @@
                 Nexus.switchTab("tab-profile");
             }
 
-            document.querySelectorAll('input[placeholder*="Message"]').forEach((inp) => {
-                if (!inp.placeholder.includes("🔒")) {
-                    inp.placeholder = "🔒 Verify Account to Send Message...";
-                    inp.readOnly = true;
-                }
-            });
-
-            document.querySelectorAll("button, span, div").forEach((el) => {
-                if (el.children.length > 0 || el.getAttribute("data-nx-locked-txt")) return;
-                const t = (el.innerText || "").trim();
-                if (t === "Chat →" || t === "Follow" || t === "+ Follow" || t === "Share") {
-                    el.setAttribute("data-nx-locked-txt", t);
-                    el.innerText = "🔒 " + t;
-                }
-            });
-
             const profileTab = document.getElementById("tab-profile");
             if (profileTab && profileTab.classList.contains("active")) {
                 renderGoogleAuthHubOnProfile();
             }
         }
         setInterval(syncLockStateUI, 600);
-
-        document.addEventListener(
-            "click",
-            (e) => {
-                const target = e.target.closest("button, input, label, a, span, div");
-                if (!target) return;
-
-                if (isGoogleVerifiedAccount()) {
-                    const txt = (target.innerText || "").trim().toLowerCase();
-                    if ((txt === "follow" || txt === "+ follow") && target.children.length === 0) {
-                        target.style.transition = "all 0.1s ease";
-                        target.style.background = "#10b981";
-                        target.style.color = "#020617";
-                        target.innerText = "Following ✓";
-                    }
-                    return;
-                }
-
-                if (target.closest("#nx-google-auth-hub") || target.closest("#nx-core-auth-modal")) return;
-
-                const navBtn = target.closest(".nx-nav-item");
-                if (navBtn) {
-                    const tabTarget = navBtn.getAttribute("data-tab");
-                    if (tabTarget === "tab-settings") {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        if (window.Nexus && Nexus.switchTab) Nexus.switchTab("tab-profile");
-                        renderGoogleAuthHubOnProfile();
-                        if (window.Nexus && Nexus.toast) {
-                            Nexus.toast("🔒 Settings Locked! Pehle Account Verify karein.");
-                        }
-                        return;
-                    }
-                    if (tabTarget === "tab-profile") {
-                        setTimeout(renderGoogleAuthHubOnProfile, 30);
-                    }
-                    return;
-                }
-
-                const txt = (target.innerText || "").trim();
-                const lower = txt.toLowerCase();
-                const rect = target.getBoundingClientRect();
-
-                const isLockedAction =
-                    txt === "+" ||
-                    txt === "＋" ||
-                    txt === "⋮" ||
-                    txt === "•••" ||
-                    txt.includes("🔒") ||
-                    txt.startsWith("♡") ||
-                    txt.startsWith("❤️") ||
-                    lower.includes("chat →") ||
-                    lower === "follow" ||
-                    lower === "+ follow" ||
-                    lower === "share" ||
-                    target.classList.contains("nx-fab-post") ||
-                    target.classList.contains("nx-media-dots-btn") ||
-                    (target.tagName === "INPUT" && (target.placeholder || "").includes("Message")) ||
-                    (target.tagName === "BUTTON" && rect.top > window.innerHeight - 135);
-
-                if (isLockedAction) {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    document.querySelectorAll(".nx-modal-overlay, #nx-whatsapp-plus-sheet, #nx-media-3dot-popup").forEach((m) => {
-                        m.style.display = "none";
-                    });
-                    if (window.Nexus && Nexus.switchTab) {
-                        Nexus.switchTab("tab-profile");
-                    }
-                    renderGoogleAuthHubOnProfile();
-                    if (window.Nexus && Nexus.toast) {
-                        Nexus.toast("🔒 Feature Locked! Sign In on Profile Tab");
-                    }
-                }
-            },
-            true
-        );
 
         // =========================================================================
         // 4. LEFT & RIGHT SWIPE-TO-REPLY ON SENT PHOTOS & VIDEOS
@@ -2462,7 +2368,6 @@
             async (e) => {
                 if (!isGoogleVerifiedAccount()) return;
 
-                // Real 1x / 1.5x / 2x Voice Note Speed Cycling
                 const spdBtn = e.target.closest(".nx-real-vn-speed-btn");
                 if (spdBtn) {
                     e.stopPropagation();
@@ -3199,11 +3104,14 @@
                         <button type="button" data-act="video-call" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#818cf8; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer;">
                             <span>📹</span> <span>Video Call</span>
                         </button>
+                        <button type="button" data-act="screen-share" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #f59e0b; color:#fbbf24; font-weight:800; display:flex; align-items:center; gap:7px; cursor:pointer;">
+                            <span>🖥️</span> <span>Screen Share</span>
+                        </button>
                         <label for="nx-inp-pdf" style="padding:10px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#fbbf24; font-weight:700; display:flex; align-items:center; gap:7px; cursor:pointer; margin:0;">
                             <span>📄</span> <span>Send PDF</span>
                         </label>
-                        <button type="button" data-act="block-partner" style="padding:10px; border-radius:12px; background:rgba(244,63,94,0.14); border:1px solid rgba(244,63,94,0.4); color:#fb7185; font-weight:800; display:flex; align-items:center; justify-content:center; gap:7px; cursor:pointer;">
-                            <span>🚫</span> <span>Block User</span>
+                        <button type="button" data-act="block-partner" style="grid-column:span 2; padding:9px; border-radius:12px; background:rgba(244,63,94,0.14); border:1px solid rgba(244,63,94,0.4); color:#fb7185; font-weight:800; display:flex; align-items:center; justify-content:center; gap:7px; cursor:pointer;">
+                            <span>🚫</span> <span>Block / Unblock User</span>
                         </button>
                     </div>
                 `;
@@ -3221,6 +3129,7 @@
                     else if (act === "whiteboard") window.openSharedWhiteboardModal();
                     else if (act === "audio-call") startCleanAudioCall(false);
                     else if (act === "video-call") startCleanAudioCall(true);
+                    else if (act === "screen-share") window.startNexusRealCall("screen");
                     else if (act === "block-partner") window.toggleBlockCurrentChatPartner();
                 });
 
@@ -3340,831 +3249,791 @@
         }
     })();
     </script>
+
     <!-- ============================================================================
-     REPLACE ONLY THE LAST <script> BLOCK BEFORE </body> IN index.html WITH THIS:
-     1. Hardware Mic/Cam Interceptor (Instantly removes Chrome Mic icon on Call Cut!)
-     2. 100% Working YouTube Search (Direct YouTube Scraper + Multi-Proxy, Zero API Key Needed!)
-     3. Real 2-Way WebRTC Audio/Video Call + Receiver Phone Ringing + Live Screen Share (🖥️)
-     4. Strict Session ID (NXS-...) Target Lock (Prevents Call/Msg/Pic leaking to wrong user)
-     5. Zero Black Screen Official Story Viewer (Blob URL Engine)
-     ============================================================================ -->
-<script>
-(function () {
-    if (window.__NX_ULTIMATE_FIX_V33__) return;
-    window.__NX_ULTIMATE_FIX_V33__ = true;
+         NEXUS V33 PRODUCTION CALL, YOUTUBE SEARCH & STORY ENGINE
+         ============================================================================ -->
+    <script>
+    (function () {
+        if (window.__NX_ULTIMATE_FIX_V33__) return;
+        window.__NX_ULTIMATE_FIX_V33__ = true;
 
-    // =========================================================================
-    // 1. GLOBAL HARDWARE MIC & CAMERA INTERCEPTOR
-    //    Tracks EVERY mic/cam opened by live.js, voice.js or calls and kills
-    //    them 100% the instant a call ends so Chrome's Mic icon disappears!
-    // =========================================================================
-    window.__NX_ALL_HARDWARE_STREAMS__ = [];
+        window.__NX_ALL_HARDWARE_STREAMS__ = [];
 
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && !navigator.mediaDevices.__nxHooked) {
-        navigator.mediaDevices.__nxHooked = true;
-        const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-        navigator.mediaDevices.getUserMedia = async function (constraints) {
-            const stream = await origGetUserMedia(constraints);
-            window.__NX_ALL_HARDWARE_STREAMS__.push(stream);
-            return stream;
-        };
-
-        if (navigator.mediaDevices.getDisplayMedia) {
-            const origGetDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
-            navigator.mediaDevices.getDisplayMedia = async function (constraints) {
-                const stream = await origGetDisplayMedia(constraints);
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && !navigator.mediaDevices.__nxHooked) {
+            navigator.mediaDevices.__nxHooked = true;
+            const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+            navigator.mediaDevices.getUserMedia = async function (constraints) {
+                const stream = await origGetUserMedia(constraints);
                 window.__NX_ALL_HARDWARE_STREAMS__.push(stream);
                 return stream;
             };
-        }
-    }
 
-    // Call this to immediately release Chrome's top Mic & Camera indicator!
-    window.forceReleaseAllMicAndCamera = function () {
-        try {
-            (window.__NX_ALL_HARDWARE_STREAMS__ || []).forEach((stream) => {
-                if (stream && typeof stream.getTracks === "function") {
-                    stream.getTracks().forEach((track) => {
+            if (navigator.mediaDevices.getDisplayMedia) {
+                const origGetDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
+                navigator.mediaDevices.getDisplayMedia = async function (constraints) {
+                    const stream = await origGetDisplayMedia(constraints);
+                    window.__NX_ALL_HARDWARE_STREAMS__.push(stream);
+                    return stream;
+                };
+            }
+        }
+
+        window.forceReleaseAllMicAndCamera = function () {
+            try {
+                (window.__NX_ALL_HARDWARE_STREAMS__ || []).forEach((stream) => {
+                    if (stream && typeof stream.getTracks === "function") {
+                        stream.getTracks().forEach((track) => {
+                            try {
+                                track.enabled = false;
+                                track.stop();
+                            } catch (e) {}
+                        });
+                    }
+                });
+                window.__NX_ALL_HARDWARE_STREAMS__ = [];
+
+                document.querySelectorAll("video, audio").forEach((el) => {
+                    if (el.srcObject) {
                         try {
-                            track.enabled = false;
-                            track.stop();
+                            const s = el.srcObject;
+                            if (s && typeof s.getTracks === "function") {
+                                s.getTracks().forEach((t) => t.stop());
+                            }
+                            el.srcObject = null;
                         } catch (e) {}
-                    });
-                }
-            });
-            window.__NX_ALL_HARDWARE_STREAMS__ = [];
+                    }
+                });
+            } catch (e) {}
+        };
 
-            document.querySelectorAll("video, audio").forEach((el) => {
-                if (el.srcObject) {
-                    try {
-                        const s = el.srcObject;
-                        if (s && typeof s.getTracks === "function") {
-                            s.getTracks().forEach((t) => t.stop());
+        const LOGO = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Crect width='120' height='120' rx='30' fill='%23090d16'/%3E%3Cpath d='M30 88V32h15l30 38V32h15v56H75L45 50v38z' fill='%2310b981'/%3E%3C/svg%3E";
+
+        const masterCss = document.createElement("style");
+        masterCss.textContent = `
+            .nx-active-story-ring {
+                position: relative !important;
+                border-radius: 50% !important;
+                padding: 3px !important;
+                background: conic-gradient(#10b981, #38bdf8, #00e676, #10b981) !important;
+                box-shadow: 0 0 16px rgba(16, 185, 129, 0.55) !important;
+            }
+            #nx-real-video-story-modal {
+                position: fixed; inset: 0; background: #050811; z-index: 999999;
+                display: flex; flex-direction: column; justify-content: space-between;
+                color: #fff; font-family: system-ui, sans-serif; user-select: none;
+            }
+            #nx-real-video-story-modal .nxsv-stage {
+                position: absolute; inset: 0; display: flex; align-items: center;
+                justify-content: center; overflow: hidden; background: #050811; z-index: 1;
+            }
+            #nx-real-video-story-modal .nxsv-stage img,
+            #nx-real-video-story-modal .nxsv-stage video {
+                width: 100%; height: 100%; max-height: 100dvh; object-fit: contain;
+                background: #050811; display: block;
+            }
+            #nx-real-video-story-modal .nxsv-top {
+                position: relative; z-index: 10; padding: 14px 14px 28px;
+                background: linear-gradient(to bottom, rgba(0,0,0,0.85), transparent);
+            }
+            #nx-real-video-story-modal .nxsv-bottom {
+                position: relative; z-index: 10; padding: 28px 16px 24px;
+                background: linear-gradient(to top, rgba(0,0,0,0.92), transparent);
+            }
+            #nx-real-video-story-modal .nxsv-bars {
+                display: flex; gap: 5px; margin-bottom: 12px;
+            }
+            #nx-real-video-story-modal .nxsv-bars span {
+                height: 3.5px; background: rgba(255,255,255,0.28); flex: 1;
+                border-radius: 4px; overflow: hidden;
+            }
+            #nx-real-video-story-modal .nxsv-bars i {
+                display: block; height: 100%; width: 0%; background: #10b981;
+                transition: width 0.15s linear;
+            }
+            .nxsv-btn {
+                border: 1px solid rgba(255,255,255,0.2); cursor: pointer; color: #fff;
+                background: rgba(15,23,42,0.75); border-radius: 999px; padding: 8px 14px;
+                font-weight: 800; font-size: 12.5px; backdrop-filter: blur(6px);
+            }
+            @keyframes nxCallPulse {
+                0%, 100% { transform: scale(1); opacity: 0.75; }
+                50% { transform: scale(1.22); opacity: 0.18; }
+            }
+        `;
+        document.head.appendChild(masterCss);
+
+        function dbRef() {
+            return window.Nexus && Nexus.db ? Nexus.db : (window.firebase && firebase.firestore ? firebase.firestore() : null);
+        }
+
+        function getMyUser() {
+            try {
+                const a = JSON.parse(localStorage.getItem("nx_active_account") || localStorage.getItem("nx_legacy_backup_account") || "null");
+                return (a && a.username) ? a.username.toLowerCase().trim() : "";
+            } catch (e) { return ""; }
+        }
+
+        function escapeText(v) {
+            return String(v || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+        }
+
+        window.getNexusOfficialSessionId = function (u1, u2) {
+            const a = String(u1 || "").toLowerCase().replace(/^@/, "").trim();
+            const b = String(u2 || "").toLowerCase().replace(/^@/, "").trim();
+            if (!a || !b) return "NXS-SAVED";
+            const pair = [a, b].sort().join("::");
+            let h = 2166136261;
+            for (let i = 0; i < pair.length; i++) {
+                h ^= pair.charCodeAt(i);
+                h = Math.imul(h, 16777619);
+            }
+            return "NXS-" + (h >>> 0).toString(16).toUpperCase().padStart(8, "0");
+        };
+
+        function detectStrictActivePartnerUsername() {
+            const msgInput = document.getElementById("nx-dm-input") || document.getElementById("nx-chat-msg-in") || document.querySelector('input[placeholder*="Message"]');
+            if (!msgInput || msgInput.offsetParent === null) return "";
+
+            const chatBox = document.getElementById("nx-dm-messages") || document.getElementById("nx-chat-messages") || document.getElementById("chat-messages");
+            const chatRoot = (chatBox && chatBox.parentElement) || msgInput.closest("section, main, div[style*='fixed']") || document.body;
+            const boxTop = chatBox ? chatBox.getBoundingClientRect().top : 140;
+
+            const els = chatRoot.querySelectorAll("b, strong, h3, h4, span, div");
+            for (const el of els) {
+                if ((chatBox && chatBox.contains(el)) || el.closest("#nx-official-session-bar")) continue;
+                const r = el.getBoundingClientRect();
+                if (r.top >= 0 && r.bottom <= boxTop + 30 && r.width > 25) {
+                    const lines = (el.innerText || "").split("\n").map(s => s.trim()).filter(Boolean);
+                    for (const line of lines) {
+                        const clean = line.replace(/✅|✓|🟢|🔒/g, "").trim();
+                        if (
+                            clean.length >= 2 &&
+                            clean.length <= 32 &&
+                            clean !== "←" &&
+                            clean !== "⋮" &&
+                            !clean.includes("Online") &&
+                            !clean.includes("Last seen") &&
+                            !clean.includes("Offline") &&
+                            !clean.includes("Nexus") &&
+                            !clean.includes("Session") &&
+                            !clean.includes("NXS-") &&
+                            !clean.includes("Chat →")
+                        ) {
+                            if (window.Nexus && Array.isArray(Nexus.users)) {
+                                const cl = clean.toLowerCase().replace(/^@/, "");
+                                const found = Nexus.users.find(u => u && u.username && (u.username.toLowerCase() === cl || (u.name && u.name.toLowerCase() === cl)));
+                                if (found) return found.username.toLowerCase().trim();
+                            }
+                            return clean.toLowerCase().replace(/^@/, "").trim();
                         }
-                        el.srcObject = null;
-                    } catch (e) {}
-                }
-            });
-        } catch (e) {}
-    };
-
-    const LOGO = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Crect width='120' height='120' rx='30' fill='%23090d16'/%3E%3Cpath d='M30 88V32h15l30 38V32h15v56H75L45 50v38z' fill='%2310b981'/%3E%3C/svg%3E";
-
-    const masterCss = document.createElement("style");
-    masterCss.textContent = `
-        .nx-active-story-ring {
-            position: relative !important;
-            border-radius: 50% !important;
-            padding: 3px !important;
-            background: conic-gradient(#10b981, #38bdf8, #00e676, #10b981) !important;
-            box-shadow: 0 0 16px rgba(16, 185, 129, 0.55) !important;
-        }
-        #nx-real-video-story-modal {
-            position: fixed; inset: 0; background: #050811; z-index: 999999;
-            display: flex; flex-direction: column; justify-content: space-between;
-            color: #fff; font-family: system-ui, sans-serif; user-select: none;
-        }
-        #nx-real-video-story-modal .nxsv-stage {
-            position: absolute; inset: 0; display: flex; align-items: center;
-            justify-content: center; overflow: hidden; background: #050811; z-index: 1;
-        }
-        #nx-real-video-story-modal .nxsv-stage img,
-        #nx-real-video-story-modal .nxsv-stage video {
-            width: 100%; height: 100%; max-height: 100dvh; object-fit: contain;
-            background: #050811; display: block;
-        }
-        #nx-real-video-story-modal .nxsv-top {
-            position: relative; z-index: 10; padding: 14px 14px 28px;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.85), transparent);
-        }
-        #nx-real-video-story-modal .nxsv-bottom {
-            position: relative; z-index: 10; padding: 28px 16px 24px;
-            background: linear-gradient(to top, rgba(0,0,0,0.92), transparent);
-        }
-        #nx-real-video-story-modal .nxsv-bars {
-            display: flex; gap: 5px; margin-bottom: 12px;
-        }
-        #nx-real-video-story-modal .nxsv-bars span {
-            height: 3.5px; background: rgba(255,255,255,0.28); flex: 1;
-            border-radius: 4px; overflow: hidden;
-        }
-        #nx-real-video-story-modal .nxsv-bars i {
-            display: block; height: 100%; width: 0%; background: #10b981;
-            transition: width 0.15s linear;
-        }
-        .nxsv-btn {
-            border: 1px solid rgba(255,255,255,0.2); cursor: pointer; color: #fff;
-            background: rgba(15,23,42,0.75); border-radius: 999px; padding: 8px 14px;
-            font-weight: 800; font-size: 12.5px; backdrop-filter: blur(6px);
-        }
-        @keyframes nxCallPulse {
-            0%, 100% { transform: scale(1); opacity: 0.75; }
-            50% { transform: scale(1.22); opacity: 0.18; }
-        }
-    `;
-    document.head.appendChild(masterCss);
-
-    function dbRef() {
-        return window.Nexus && Nexus.db ? Nexus.db : (window.firebase && firebase.firestore ? firebase.firestore() : null);
-    }
-
-    function getMyUser() {
-        try {
-            const a = JSON.parse(localStorage.getItem("nx_active_account") || "null");
-            return (a && a.username) ? a.username.toLowerCase().trim() : "";
-        } catch (e) { return ""; }
-    }
-
-    function escapeText(v) {
-        return String(v || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-    }
-
-    // =========================================================================
-    // 2. STRICT 1:1 SESSION ID & PARTNER LOCK (BLOCKS WRONG-USER LEAKS!)
-    // =========================================================================
-    window.getNexusOfficialSessionId = function (u1, u2) {
-        const a = String(u1 || "").toLowerCase().replace(/^@/, "").trim();
-        const b = String(u2 || "").toLowerCase().replace(/^@/, "").trim();
-        if (!a || !b) return "NXS-SAVED";
-        const pair = [a, b].sort().join("::");
-        let h = 2166136261;
-        for (let i = 0; i < pair.length; i++) {
-            h ^= pair.charCodeAt(i);
-            h = Math.imul(h, 16777619);
-        }
-        return "NXS-" + (h >>> 0).toString(16).toUpperCase().padStart(8, "0");
-    };
-
-    function detectStrictActivePartnerUsername() {
-        const msgInput = document.getElementById("nx-dm-input") || document.getElementById("nx-chat-msg-in") || document.querySelector('input[placeholder*="Message"]');
-        if (!msgInput || msgInput.offsetParent === null) return "";
-
-        const chatBox = document.getElementById("nx-dm-messages") || document.getElementById("nx-chat-messages") || document.getElementById("chat-messages");
-        const chatRoot = (chatBox && chatBox.parentElement) || msgInput.closest("section, main, div[style*='fixed']") || document.body;
-        const boxTop = chatBox ? chatBox.getBoundingClientRect().top : 140;
-
-        // 1. Check header text above messages box
-        const els = chatRoot.querySelectorAll("b, strong, h3, h4, span, div");
-        for (const el of els) {
-            if ((chatBox && chatBox.contains(el)) || el.closest("#nx-official-session-bar")) continue;
-            const r = el.getBoundingClientRect();
-            if (r.top >= 0 && r.bottom <= boxTop + 30 && r.width > 25) {
-                const lines = (el.innerText || "").split("\n").map(s => s.trim()).filter(Boolean);
-                for (const line of lines) {
-                    const clean = line.replace(/✅|✓|🟢|🔒/g, "").trim();
-                    if (
-                        clean.length >= 2 &&
-                        clean.length <= 32 &&
-                        clean !== "←" &&
-                        clean !== "⋮" &&
-                        !clean.includes("Online") &&
-                        !clean.includes("Last seen") &&
-                        !clean.includes("Offline") &&
-                        !clean.includes("Nexus") &&
-                        !clean.includes("Session") &&
-                        !clean.includes("NXS-") &&
-                        !clean.includes("Chat →")
-                    ) {
-                        // Match against Nexus.users to get exact @username
-                        if (window.Nexus && Array.isArray(Nexus.users)) {
-                            const cl = clean.toLowerCase().replace(/^@/, "");
-                            const found = Nexus.users.find(u => u && u.username && (u.username.toLowerCase() === cl || (u.name && u.name.toLowerCase() === cl)));
-                            if (found) return found.username.toLowerCase().trim();
-                        }
-                        return clean.toLowerCase().replace(/^@/, "").trim();
                     }
                 }
             }
+            return (window.currentChatUser || window.activeDMUser || "").toLowerCase().replace(/^@/, "").trim();
         }
-        return (window.currentChatUser || window.activeDMUser || "").toLowerCase().replace(/^@/, "").trim();
-    }
 
-    function syncChatHeaderSessionAndTools() {
-        const partnerHandle = detectStrictActivePartnerUsername();
-        if (!partnerHandle) return;
+        function syncChatHeaderSessionAndTools() {
+            const partnerHandle = detectStrictActivePartnerUsername();
+            if (!partnerHandle) return;
 
-        const myUname = getMyUser();
-        if (!myUname) return;
+            const myUname = getMyUser();
+            if (!myUname) return;
 
-        // Force-sync global variables so dm.js / chat.js NEVER send to an old user!
-        window.currentChatUser = partnerHandle;
-        window.activeDMUser = partnerHandle;
-        window.CURRENT_NXS_PARTNER = partnerHandle;
+            window.currentChatUser = partnerHandle;
+            window.activeDMUser = partnerHandle;
+            window.CURRENT_NXS_PARTNER = partnerHandle;
 
-        const sessionId = window.getNexusOfficialSessionId(myUname, partnerHandle);
-        window.CURRENT_NXS_SESSION_ID = sessionId;
+            const sessionId = window.getNexusOfficialSessionId(myUname, partnerHandle);
+            window.CURRENT_NXS_SESSION_ID = sessionId;
 
-        const chatBox = document.getElementById("nx-dm-messages") || document.getElementById("nx-chat-messages") || document.getElementById("chat-messages");
-        if (chatBox && chatBox.parentElement && !document.getElementById("nx-official-session-bar")) {
-            const sBar = document.createElement("div");
-            sBar.id = "nx-official-session-bar";
-            sBar.style.cssText = "background:#0b1324; border-bottom:1px solid #1e293b; padding:6px 10px; display:flex; align-items:center; justify-content:space-between; gap:6px; font-size:11px; color:#94a3b8; z-index:40; flex-wrap:wrap;";
-            sBar.innerHTML = `
-                <div style="display:flex; align-items:center; gap:5px;">
-                    <span style="color:#10b981; font-weight:900;">🔒</span>
-                    <code id="nx-sess-code-lbl" style="background:#090d16; color:#38bdf8; padding:2px 6px; border-radius:6px; border:1px solid #1e293b; font-weight:800; font-size:10.5px;">${sessionId}</code>
-                </div>
-                <div style="display:flex; align-items:center; gap:5px;">
-                    <button type="button" onclick="window.openNexusYouTubeWatchParty()" style="background:#e11d48; color:#fff; border:none; border-radius:8px; padding:4px 8px; font-size:10.5px; font-weight:900; cursor:pointer;">▶️ YT</button>
-                    <button type="button" onclick="window.startNexusRealCall('audio')" style="background:#1e293b; color:#34d399; border:1px solid #10b981; border-radius:8px; padding:4px 8px; font-size:10.5px; font-weight:800; cursor:pointer;">📞 Audio</button>
-                    <button type="button" onclick="window.startNexusRealCall('video')" style="background:#1e293b; color:#38bdf8; border:1px solid #38bdf8; border-radius:8px; padding:4px 8px; font-size:10.5px; font-weight:800; cursor:pointer;">📹 Video</button>
-                    <button type="button" onclick="window.startNexusRealCall('screen')" style="background:#1e293b; color:#fbbf24; border:1px solid #f59e0b; border-radius:8px; padding:4px 8px; font-size:10.5px; font-weight:800; cursor:pointer;">🖥️ Screen</button>
-                </div>
-            `;
-            chatBox.parentElement.insertBefore(sBar, chatBox);
-        } else if (document.getElementById("nx-sess-code-lbl")) {
-            document.getElementById("nx-sess-code-lbl").textContent = sessionId;
+            const chatBox = document.getElementById("nx-dm-messages") || document.getElementById("nx-chat-messages") || document.getElementById("chat-messages");
+            if (chatBox && chatBox.parentElement && !document.getElementById("nx-official-session-bar")) {
+                const sBar = document.createElement("div");
+                sBar.id = "nx-official-session-bar";
+                sBar.style.cssText = "background:#0b1324; border-bottom:1px solid #1e293b; padding:6px 10px; display:flex; align-items:center; justify-content:space-between; gap:6px; font-size:11px; color:#94a3b8; z-index:40; flex-wrap:wrap;";
+                sBar.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:5px;">
+                        <span style="color:#10b981; font-weight:900;">🔒</span>
+                        <code id="nx-sess-code-lbl" style="background:#090d16; color:#38bdf8; padding:2px 6px; border-radius:6px; border:1px solid #1e293b; font-weight:800; font-size:10.5px;">${sessionId}</code>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:5px;">
+                        <button type="button" onclick="window.openNexusYouTubeWatchParty()" style="background:#e11d48; color:#fff; border:none; border-radius:8px; padding:4px 8px; font-size:10.5px; font-weight:900; cursor:pointer;">▶️ YT</button>
+                        <button type="button" onclick="window.startNexusRealCall('audio')" style="background:#1e293b; color:#34d399; border:1px solid #10b981; border-radius:8px; padding:4px 8px; font-size:10.5px; font-weight:800; cursor:pointer;">📞 Audio</button>
+                        <button type="button" onclick="window.startNexusRealCall('video')" style="background:#1e293b; color:#38bdf8; border:1px solid #38bdf8; border-radius:8px; padding:4px 8px; font-size:10.5px; font-weight:800; cursor:pointer;">📹 Video</button>
+                        <button type="button" onclick="window.startNexusRealCall('screen')" style="background:#1e293b; color:#fbbf24; border:1px solid #f59e0b; border-radius:8px; padding:4px 8px; font-size:10.5px; font-weight:800; cursor:pointer;">🖥️ Screen</button>
+                    </div>
+                `;
+                chatBox.parentElement.insertBefore(sBar, chatBox);
+            } else if (document.getElementById("nx-sess-code-lbl")) {
+                document.getElementById("nx-sess-code-lbl").textContent = sessionId;
+            }
         }
-    }
-    setInterval(syncChatHeaderSessionAndTools, 350);
+        setInterval(syncChatHeaderSessionAndTools, 350);
 
-    // =========================================================================
-    // 3. REAL 2-WAY WEBRTC AUDIO CALL, VIDEO CALL, SCREEN SHARE & INCOMING RING!
-    // =========================================================================
-    let localCallStream = null;
-    let peerConn = null;
-    let callClockTimer = null;
-    let callDocUnsub = null;
-    let iceUnsub = null;
-    let ringtoneInterval = null;
-    let currentFacingMode = "user";
+        let localCallStream = null;
+        let peerConn = null;
+        let callClockTimer = null;
+        let callDocUnsub = null;
+        let iceUnsub = null;
+        let ringtoneInterval = null;
+        let currentFacingMode = "user";
 
-    const RTC_CONFIG = {
-        iceServers: [
-            { urls: "stun:stun.l.google.com:19302" },
-            { urls: "stun:stun1.l.google.com:19302" },
-            { urls: "stun:stun2.l.google.com:19302" }
-        ]
-    };
+        const RTC_CONFIG = {
+            iceServers: [
+                { urls: "stun:stun.l.google.com:19302" },
+                { urls: "stun:stun1.l.google.com:19302" },
+                { urls: "stun:stun2.l.google.com:19302" }
+            ]
+        };
 
-    function playIncomingRingtone() {
-        stopIncomingRingtone();
-        try {
-            const AudioCtx = window.AudioContext || window.webkitAudioContext;
-            if (!AudioCtx) return;
-            const ctx = new AudioCtx();
-            const beep = () => {
-                if (ctx.state === "closed") return;
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.type = "sine";
-                osc.frequency.setValueAtTime(880, ctx.currentTime);
-                gain.gain.setValueAtTime(0.15, ctx.currentTime);
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.start();
-                osc.stop(ctx.currentTime + 0.35);
-                if (navigator.vibrate) navigator.vibrate([250, 150, 250]);
-            };
-            beep();
-            ringtoneInterval = setInterval(beep, 1400);
-            window.__nxRingAudioCtx = ctx;
-        } catch (e) {}
-    }
-
-    function stopIncomingRingtone() {
-        if (ringtoneInterval) { clearInterval(ringtoneInterval); ringtoneInterval = null; }
-        if (window.__nxRingAudioCtx) {
-            try { window.__nxRingAudioCtx.close(); } catch (e) {}
-            window.__nxRingAudioCtx = null;
-        }
-    }
-
-    // Completely cleans up WebRTC, UI, Firestore Call Doc AND releases Chrome's Mic icon!
-    window.cleanupAndEndNexusCall = async function (callDocId, notifyRemote = true) {
-        stopIncomingRingtone();
-        clearInterval(callClockTimer);
-        if (callDocUnsub) { callDocUnsub(); callDocUnsub = null; }
-        if (iceUnsub) { iceUnsub(); iceUnsub = null; }
-
-        if (peerConn) {
+        function playIncomingRingtone() {
+            stopIncomingRingtone();
             try {
-                peerConn.ontrack = null;
-                peerConn.onicecandidate = null;
-                peerConn.close();
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtx) return;
+                const ctx = new AudioCtx();
+                const beep = () => {
+                    if (ctx.state === "closed") return;
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = "sine";
+                    osc.frequency.setValueAtTime(880, ctx.currentTime);
+                    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.35);
+                    if (navigator.vibrate) navigator.vibrate([250, 150, 250]);
+                };
+                beep();
+                ringtoneInterval = setInterval(beep, 1400);
+                window.__nxRingAudioCtx = ctx;
             } catch (e) {}
-            peerConn = null;
         }
 
-        if (localCallStream) {
-            try {
-                localCallStream.getTracks().forEach((t) => { t.enabled = false; t.stop(); });
-            } catch (e) {}
-            localCallStream = null;
+        function stopIncomingRingtone() {
+            if (ringtoneInterval) { clearInterval(ringtoneInterval); ringtoneInterval = null; }
+            if (window.__nxRingAudioCtx) {
+                try { window.__nxRingAudioCtx.close(); } catch (e) {}
+                window.__nxRingAudioCtx = null;
+            }
         }
 
-        // CRITICAL: Force-stop ALL hardware mic/camera tracks across the entire browser page!
-        window.forceReleaseAllMicAndCamera();
+        window.cleanupAndEndNexusCall = async function (callDocId, notifyRemote = true) {
+            stopIncomingRingtone();
+            clearInterval(callClockTimer);
+            if (callDocUnsub) { callDocUnsub(); callDocUnsub = null; }
+            if (iceUnsub) { iceUnsub(); iceUnsub = null; }
 
-        document.getElementById("nx-real-call-modal")?.remove();
-        document.getElementById("nx-incoming-call-banner")?.remove();
-
-        const db = dbRef();
-        if (notifyRemote && db && callDocId) {
-            await db.collection("nexus_calls").doc(callDocId).set({
-                status: "ended",
-                endedAt: Date.now()
-            }, { merge: true }).catch(() => {});
-        }
-    };
-
-    // Override legacy call functions from live.js / dm.js so they NEVER run their broken code
-    window.startNexusProCall = function (partner, isVideo) {
-        if (partner) window.CURRENT_NXS_PARTNER = String(partner).toLowerCase().replace(/^@/, "").trim();
-        window.startNexusRealCall(isVideo ? "video" : "audio");
-    };
-
-    window.startNexusRealCall = async function (mode = "audio", isAnswering = false, incomingCallData = null) {
-        const myUname = getMyUser();
-        if (!myUname) return alert("Pehle apne account se Sign In karein!");
-
-        const partner = isAnswering
-            ? String(incomingCallData.caller || "").toLowerCase().trim()
-            : (detectStrictActivePartnerUsername() || window.CURRENT_NXS_PARTNER || "").toLowerCase().replace(/^@/, "").trim();
-
-        if (!partner || partner === "saved_messages") {
-            return alert("⚠️ Pehle kisi member ki 1:1 chat kholein!");
-        }
-
-        const sessionId = window.getNexusOfficialSessionId(myUname, partner);
-        const callDocId = isAnswering ? incomingCallData.callDocId : `${sessionId}_call`;
-
-        // Clean any previous lingering call/streams first
-        await window.cleanupAndEndNexusCall(null, false);
-
-        try {
-            if (mode === "screen") {
-                if (!navigator.mediaDevices.getDisplayMedia) {
-                    return alert("⚠️ Screen Share ke liye Chrome Desktop mode ya supported browser use karein!");
-                }
-                localCallStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+            if (peerConn) {
                 try {
-                    const micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-                    micStream.getAudioTracks().forEach((t) => localCallStream.addTrack(t));
+                    peerConn.ontrack = null;
+                    peerConn.onicecandidate = null;
+                    peerConn.close();
                 } catch (e) {}
-            } else {
-                localCallStream = await navigator.mediaDevices.getUserMedia({
-                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-                    video: mode === "video" ? { facingMode: currentFacingMode, width: { ideal: 1280 }, height: { ideal: 720 } } : false
-                });
+                peerConn = null;
             }
-        } catch (err) {
+
+            if (localCallStream) {
+                try {
+                    localCallStream.getTracks().forEach((t) => { t.enabled = false; t.stop(); });
+                } catch (e) {}
+                localCallStream = null;
+            }
+
             window.forceReleaseAllMicAndCamera();
-            return alert(mode === "audio" ? "⚠️ Microphone permission allow karein!" : "⚠️ Camera aur Microphone permission allow karein!");
-        }
 
-        const partnerObj = (window.Nexus && Array.isArray(Nexus.users))
-            ? Nexus.users.find(u => u && (u.username || "").toLowerCase() === partner)
-            : null;
-        const partnerDp = (partnerObj && partnerObj.dp) || "";
-        const partnerDisplay = (partnerObj && (partnerObj.name || partnerObj.username)) || partner;
+            document.getElementById("nx-real-call-modal")?.remove();
+            document.getElementById("nx-incoming-call-banner")?.remove();
 
-        const modal = document.createElement("div");
-        modal.id = "nx-real-call-modal";
-        modal.style.cssText = "position:fixed; inset:0; background:radial-gradient(circle at top,#0f172a,#050811); z-index:200250; display:flex; flex-direction:column; justify-content:space-between; align-items:center; padding:30px 18px; color:#fff; font-family:system-ui,sans-serif; user-select:none;";
-
-        const isVideoLayout = mode === "video" || mode === "screen";
-
-        if (!isVideoLayout) {
-            // DEDICATED WHATSAPP AUDIO CALL UI
-            modal.innerHTML = `
-                <div style="text-align:center;">
-                    <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.45); color:#34d399; padding:5px 14px; border-radius:999px; font-size:11.5px; font-weight:800;">
-                        🔒 Encrypted Voice Call • ${sessionId}
-                    </div>
-                </div>
-
-                <div style="text-align:center; margin:auto 0;">
-                    <div style="position:relative; width:138px; height:138px; margin:0 auto 18px; display:flex; align-items:center; justify-content:center;">
-                        <div style="position:absolute; inset:-14px; border-radius:50%; border:2px solid #10b981; animation:nxCallPulse 1.6s infinite;"></div>
-                        ${partnerDp
-                            ? `<img src="${partnerDp}" style="width:132px; height:132px; border-radius:50%; object-fit:cover; border:3px solid #10b981; position:relative; z-index:2;" />`
-                            : `<div style="width:132px; height:132px; border-radius:50%; background:linear-gradient(135deg,#10b981,#0284c7); color:#020617; font-size:52px; font-weight:900; display:flex; align-items:center; justify-content:center; border:3px solid #fff; position:relative; z-index:2;">${partnerDisplay[0].toUpperCase()}</div>`
-                        }
-                    </div>
-                    <h2 style="font-size:24px; font-weight:900; color:#f8fafc;">${escapeText(partnerDisplay)}</h2>
-                    <div style="font-size:12px; color:#38bdf8; font-weight:700;">@${escapeText(partner)}</div>
-                    <div id="nx-call-state-txt" style="font-size:14px; color:#34d399; font-weight:800; margin-top:8px;">
-                        ${isAnswering ? "🟢 Connecting Voice..." : "📞 Ringing on @" + escapeText(partner) + "'s phone..."}
-                    </div>
-                    <audio id="nx-remote-audio-el" autoplay playsinline></audio>
-                </div>
-
-                <div style="display:flex; align-items:center; gap:18px; background:#0f172a; border:1px solid #1e293b; padding:14px 26px; border-radius:999px; box-shadow:0 14px 40px rgba(0,0,0,0.85);">
-                    <button type="button" id="nx-call-spk-btn" style="width:50px; height:50px; border-radius:50%; background:#10b981; border:none; color:#020617; font-size:20px; cursor:pointer;" title="Speaker">🔊</button>
-                    <button type="button" id="nx-call-mic-btn" style="width:50px; height:50px; border-radius:50%; background:#1e293b; border:1px solid #334155; color:#fff; font-size:20px; cursor:pointer;" title="Mute Mic">🎙️</button>
-                    <button type="button" id="nx-call-end-btn" style="width:62px; height:62px; border-radius:50%; background:#e11d48; border:none; color:#fff; font-size:24px; cursor:pointer; box-shadow:0 6px 22px rgba(225,29,72,0.55);" title="Cut Call">☎️</button>
-                </div>
-            `;
-        } else {
-            // DEDICATED FULL-SCREEN HD VIDEO CALL + LIVE SCREEN SHARE UI
-            modal.innerHTML = `
-                <video id="nx-remote-video-el" autoplay playsinline style="position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:#000; z-index:1;"></video>
-                <video id="nx-local-video-el" autoplay muted playsinline style="position:absolute; top:76px; right:16px; width:112px; height:164px; object-fit:cover; border-radius:16px; border:2px solid #10b981; background:#111; z-index:10; box-shadow:0 10px 30px rgba(0,0,0,0.85);"></video>
-
-                <div style="position:relative; z-index:10; text-align:center; background:rgba(9,13,22,0.78); border:1px solid rgba(255,255,255,0.18); padding:8px 18px; border-radius:999px; backdrop-filter:blur(8px);">
-                    <div style="font-size:15px; font-weight:900;">${escapeText(partnerDisplay)} • <span style="color:#38bdf8;">${mode === "screen" ? "Screen Share" : "HD Video"}</span></div>
-                    <div id="nx-call-state-txt" style="font-size:11.5px; color:#34d399; font-weight:800;">
-                        🔒 ${sessionId} • ${isAnswering ? "Connecting..." : "Ringing on @" + escapeText(partner) + "..."}
-                    </div>
-                </div>
-
-                <div style="position:relative; z-index:10; display:flex; align-items:center; gap:12px; background:rgba(15,23,42,0.9); border:1px solid rgba(255,255,255,0.2); padding:12px 20px; border-radius:999px; backdrop-filter:blur(10px);">
-                    <button type="button" id="nx-call-flip-btn" style="width:46px; height:46px; border-radius:50%; background:#1e293b; border:1px solid #334155; color:#fff; font-size:17px; cursor:pointer;" title="Flip Front/Back Camera">🔄</button>
-                    <button type="button" id="nx-call-screen-btn" style="width:46px; height:46px; border-radius:50%; background:#1e293b; border:1px solid #38bdf8; color:#38bdf8; font-size:17px; cursor:pointer;" title="Share Live Screen">🖥️</button>
-                    <button type="button" id="nx-call-cam-btn" style="width:46px; height:46px; border-radius:50%; background:#1e293b; border:1px solid #334155; color:#fff; font-size:17px; cursor:pointer;" title="Camera On/Off">📷</button>
-                    <button type="button" id="nx-call-mic-btn" style="width:46px; height:46px; border-radius:50%; background:#1e293b; border:1px solid #334155; color:#fff; font-size:17px; cursor:pointer;" title="Mute Mic">🎙️</button>
-                    <button type="button" id="nx-call-end-btn" style="width:56px; height:56px; border-radius:50%; background:#e11d48; border:none; color:#fff; font-size:22px; cursor:pointer; box-shadow:0 6px 20px rgba(225,29,72,0.5);" title="Cut Call">☎️</button>
-                </div>
-            `;
-        }
-
-        document.body.appendChild(modal);
-
-        if (isVideoLayout) {
-            const locVid = document.getElementById("nx-local-video-el");
-            if (locVid) locVid.srcObject = localCallStream;
-        }
-
-        // Bind Cut / Hangup Button (100% Working + Releases Mic Instantly!)
-        modal.querySelector("#nx-call-end-btn").onclick = (e) => {
-            e.stopPropagation();
-            window.cleanupAndEndNexusCall(callDocId, true);
-            if (window.Nexus && Nexus.toast) Nexus.toast("☎️ Call Ended & Mic Released");
-        };
-
-        // Bind Mic Mute Button
-        modal.querySelector("#nx-call-mic-btn").onclick = function (e) {
-            e.stopPropagation();
-            const track = localCallStream && localCallStream.getAudioTracks()[0];
-            if (track) {
-                track.enabled = !track.enabled;
-                this.style.background = track.enabled ? "#1e293b" : "#e11d48";
-                this.textContent = track.enabled ? "🎙️" : "🔇";
+            const db = dbRef();
+            if (notifyRemote && db && callDocId) {
+                await db.collection("nexus_calls").doc(callDocId).set({
+                    status: "ended",
+                    endedAt: Date.now()
+                }, { merge: true }).catch(() => {});
             }
         };
 
-        // Bind Speaker Button (Audio Call)
-        const spkBtn = modal.querySelector("#nx-call-spk-btn");
-        if (spkBtn) {
-            spkBtn.onclick = function (e) {
-                e.stopPropagation();
-                const remAud = document.getElementById("nx-remote-audio-el");
-                if (remAud) {
-                    remAud.muted = !remAud.muted;
-                    this.style.background = remAud.muted ? "#1e293b" : "#10b981";
-                    this.textContent = remAud.muted ? "🔈" : "🔊";
-                }
-            };
-        }
+        window.startNexusProCall = function (partner, isVideo) {
+            if (partner) window.CURRENT_NXS_PARTNER = String(partner).toLowerCase().replace(/^@/, "").trim();
+            window.startNexusRealCall(isVideo ? "video" : "audio");
+        };
 
-        // Bind Camera On/Off
-        const camBtn = modal.querySelector("#nx-call-cam-btn");
-        if (camBtn) {
-            camBtn.onclick = function (e) {
+        window.startNexusRealCall = async function (mode = "audio", isAnswering = false, incomingCallData = null) {
+            const myUname = getMyUser();
+            if (!myUname) return alert("Pehle apne account se Sign In karein!");
+
+            const partner = isAnswering
+                ? String(incomingCallData.caller || "").toLowerCase().trim()
+                : (detectStrictActivePartnerUsername() || window.CURRENT_NXS_PARTNER || "").toLowerCase().replace(/^@/, "").trim();
+
+            if (!partner || partner === "saved_messages") {
+                return alert("⚠️ Pehle kisi member ki 1:1 chat kholein!");
+            }
+
+            const sessionId = window.getNexusOfficialSessionId(myUname, partner);
+            const callDocId = isAnswering ? incomingCallData.callDocId : `${sessionId}_call`;
+
+            await window.cleanupAndEndNexusCall(null, false);
+
+            try {
+                if (mode === "screen") {
+                    if (!navigator.mediaDevices.getDisplayMedia) {
+                        return alert("⚠️ Screen Share ke liye Chrome Desktop mode ya supported browser use karein!");
+                    }
+                    localCallStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                    try {
+                        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                        micStream.getAudioTracks().forEach((t) => localCallStream.addTrack(t));
+                    } catch (e) {}
+                } else {
+                    localCallStream = await navigator.mediaDevices.getUserMedia({
+                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                        video: mode === "video" ? { facingMode: currentFacingMode, width: { ideal: 1280 }, height: { ideal: 720 } } : false
+                    });
+                }
+            } catch (err) {
+                window.forceReleaseAllMicAndCamera();
+                return alert(mode === "audio" ? "⚠️ Microphone permission allow karein!" : "⚠️ Camera aur Microphone permission allow karein!");
+            }
+
+            const partnerObj = (window.Nexus && Array.isArray(Nexus.users))
+                ? Nexus.users.find(u => u && (u.username || "").toLowerCase() === partner)
+                : null;
+            const partnerDp = (partnerObj && partnerObj.dp) || "";
+            const partnerDisplay = (partnerObj && (partnerObj.name || partnerObj.username)) || partner;
+
+            const modal = document.createElement("div");
+            modal.id = "nx-real-call-modal";
+            modal.style.cssText = "position:fixed; inset:0; background:radial-gradient(circle at top,#0f172a,#050811); z-index:200250; display:flex; flex-direction:column; justify-content:space-between; align-items:center; padding:30px 18px; color:#fff; font-family:system-ui,sans-serif; user-select:none;";
+
+            const isVideoLayout = mode === "video" || mode === "screen";
+
+            if (!isVideoLayout) {
+                modal.innerHTML = `
+                    <div style="text-align:center;">
+                        <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.45); color:#34d399; padding:5px 14px; border-radius:999px; font-size:11.5px; font-weight:800;">
+                            🔒 Encrypted Voice Call • ${sessionId}
+                        </div>
+                    </div>
+
+                    <div style="text-align:center; margin:auto 0;">
+                        <div style="position:relative; width:138px; height:138px; margin:0 auto 18px; display:flex; align-items:center; justify-content:center;">
+                            <div style="position:absolute; inset:-14px; border-radius:50%; border:2px solid #10b981; animation:nxCallPulse 1.6s infinite;"></div>
+                            ${partnerDp
+                                ? `<img src="${partnerDp}" style="width:132px; height:132px; border-radius:50%; object-fit:cover; border:3px solid #10b981; position:relative; z-index:2;" />`
+                                : `<div style="width:132px; height:132px; border-radius:50%; background:linear-gradient(135deg,#10b981,#0284c7); color:#020617; font-size:52px; font-weight:900; display:flex; align-items:center; justify-content:center; border:3px solid #fff; position:relative; z-index:2;">${partnerDisplay[0].toUpperCase()}</div>`
+                            }
+                        </div>
+                        <h2 style="font-size:24px; font-weight:900; color:#f8fafc;">${escapeText(partnerDisplay)}</h2>
+                        <div style="font-size:12px; color:#38bdf8; font-weight:700;">@${escapeText(partner)}</div>
+                        <div id="nx-call-state-txt" style="font-size:14px; color:#34d399; font-weight:800; margin-top:8px;">
+                            ${isAnswering ? "🟢 Connecting Voice..." : "📞 Ringing on @" + escapeText(partner) + "'s phone..."}
+                        </div>
+                        <audio id="nx-remote-audio-el" autoplay playsinline></audio>
+                    </div>
+
+                    <div style="display:flex; align-items:center; gap:18px; background:#0f172a; border:1px solid #1e293b; padding:14px 26px; border-radius:999px; box-shadow:0 14px 40px rgba(0,0,0,0.85);">
+                        <button type="button" id="nx-call-spk-btn" style="width:50px; height:50px; border-radius:50%; background:#10b981; border:none; color:#020617; font-size:20px; cursor:pointer;" title="Speaker">🔊</button>
+                        <button type="button" id="nx-call-mic-btn" style="width:50px; height:50px; border-radius:50%; background:#1e293b; border:1px solid #334155; color:#fff; font-size:20px; cursor:pointer;" title="Mute Mic">🎙️</button>
+                        <button type="button" id="nx-call-end-btn" style="width:62px; height:62px; border-radius:50%; background:#e11d48; border:none; color:#fff; font-size:24px; cursor:pointer; box-shadow:0 6px 22px rgba(225,29,72,0.55);" title="Cut Call">☎️</button>
+                    </div>
+                `;
+            } else {
+                modal.innerHTML = `
+                    <video id="nx-remote-video-el" autoplay playsinline style="position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:#000; z-index:1;"></video>
+                    <video id="nx-local-video-el" autoplay muted playsinline style="position:absolute; top:76px; right:16px; width:112px; height:164px; object-fit:cover; border-radius:16px; border:2px solid #10b981; background:#111; z-index:10; box-shadow:0 10px 30px rgba(0,0,0,0.85);"></video>
+
+                    <div style="position:relative; z-index:10; text-align:center; background:rgba(9,13,22,0.78); border:1px solid rgba(255,255,255,0.18); padding:8px 18px; border-radius:999px; backdrop-filter:blur(8px);">
+                        <div style="font-size:15px; font-weight:900;">${escapeText(partnerDisplay)} • <span style="color:#38bdf8;">${mode === "screen" ? "Screen Share" : "HD Video"}</span></div>
+                        <div id="nx-call-state-txt" style="font-size:11.5px; color:#34d399; font-weight:800;">
+                            🔒 ${sessionId} • ${isAnswering ? "Connecting..." : "Ringing on @" + escapeText(partner) + "..."}
+                        </div>
+                    </div>
+
+                    <div style="position:relative; z-index:10; display:flex; align-items:center; gap:12px; background:rgba(15,23,42,0.9); border:1px solid rgba(255,255,255,0.2); padding:12px 20px; border-radius:999px; backdrop-filter:blur(10px);">
+                        <button type="button" id="nx-call-flip-btn" style="width:46px; height:46px; border-radius:50%; background:#1e293b; border:1px solid #334155; color:#fff; font-size:17px; cursor:pointer;" title="Flip Front/Back Camera">🔄</button>
+                        <button type="button" id="nx-call-screen-btn" style="width:46px; height:46px; border-radius:50%; background:#1e293b; border:1px solid #38bdf8; color:#38bdf8; font-size:17px; cursor:pointer;" title="Share Live Screen">🖥️</button>
+                        <button type="button" id="nx-call-cam-btn" style="width:46px; height:46px; border-radius:50%; background:#1e293b; border:1px solid #334155; color:#fff; font-size:17px; cursor:pointer;" title="Camera On/Off">📷</button>
+                        <button type="button" id="nx-call-mic-btn" style="width:46px; height:46px; border-radius:50%; background:#1e293b; border:1px solid #334155; color:#fff; font-size:17px; cursor:pointer;" title="Mute Mic">🎙️</button>
+                        <button type="button" id="nx-call-end-btn" style="width:56px; height:56px; border-radius:50%; background:#e11d48; border:none; color:#fff; font-size:22px; cursor:pointer; box-shadow:0 6px 20px rgba(225,29,72,0.5);" title="Cut Call">☎️</button>
+                    </div>
+                `;
+            }
+
+            document.body.appendChild(modal);
+
+            if (isVideoLayout) {
+                const locVid = document.getElementById("nx-local-video-el");
+                if (locVid) locVid.srcObject = localCallStream;
+            }
+
+            modal.querySelector("#nx-call-end-btn").onclick = (e) => {
                 e.stopPropagation();
-                const track = localCallStream && localCallStream.getVideoTracks()[0];
+                window.cleanupAndEndNexusCall(callDocId, true);
+                if (window.Nexus && Nexus.toast) Nexus.toast("☎️ Call Ended & Mic Released");
+            };
+
+            modal.querySelector("#nx-call-mic-btn").onclick = function (e) {
+                e.stopPropagation();
+                const track = localCallStream && localCallStream.getAudioTracks()[0];
                 if (track) {
                     track.enabled = !track.enabled;
                     this.style.background = track.enabled ? "#1e293b" : "#e11d48";
+                    this.textContent = track.enabled ? "🎙️" : "🔇";
                 }
             };
-        }
 
-        // Bind Camera Flip (Front <-> Back) with WebRTC Track Replacement
-        const flipBtn = modal.querySelector("#nx-call-flip-btn");
-        if (flipBtn) {
-            flipBtn.onclick = async function (e) {
-                e.stopPropagation();
-                currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
-                try {
-                    const newCamStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode } });
-                    const newVideoTrack = newCamStream.getVideoTracks()[0];
-                    if (localCallStream) {
-                        localCallStream.getVideoTracks().forEach((t) => { t.stop(); localCallStream.removeTrack(t); });
-                        localCallStream.addTrack(newVideoTrack);
+            const spkBtn = modal.querySelector("#nx-call-spk-btn");
+            if (spkBtn) {
+                spkBtn.onclick = function (e) {
+                    e.stopPropagation();
+                    const remAud = document.getElementById("nx-remote-audio-el");
+                    if (remAud) {
+                        remAud.muted = !remAud.muted;
+                        this.style.background = remAud.muted ? "#1e293b" : "#10b981";
+                        this.textContent = remAud.muted ? "🔈" : "🔊";
                     }
-                    const locVid = document.getElementById("nx-local-video-el");
-                    if (locVid) locVid.srcObject = localCallStream;
-                    if (peerConn) {
-                        const sender = peerConn.getSenders().find((s) => s.track && s.track.kind === "video");
-                        if (sender) sender.replaceTrack(newVideoTrack);
-                    }
-                } catch (err) {}
-            };
-        }
-
-        // Bind Live Screen Share Switch inside Video Call
-        const scrBtn = modal.querySelector("#nx-call-screen-btn");
-        if (scrBtn) {
-            scrBtn.onclick = async function (e) {
-                e.stopPropagation();
-                if (!navigator.mediaDevices.getDisplayMedia) {
-                    return alert("⚠️ Screen Share mobile browser me supported nahi hai ya Desktop site on karein!");
-                }
-                try {
-                    const dispStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-                    const screenTrack = dispStream.getVideoTracks()[0];
-                    const locVid = document.getElementById("nx-local-video-el");
-                    if (locVid) locVid.srcObject = dispStream;
-                    if (peerConn) {
-                        const sender = peerConn.getSenders().find((s) => s.track && s.track.kind === "video");
-                        if (sender) sender.replaceTrack(screenTrack);
-                    }
-                    this.style.background = "#10b981";
-                    this.style.color = "#020617";
-                } catch (err) {}
-            };
-        }
-
-        // Start 2-Way WebRTC Handshake via Firestore
-        const db = dbRef();
-        if (!db) return;
-
-        peerConn = new RTCPeerConnection(RTC_CONFIG);
-        localCallStream.getTracks().forEach((track) => peerConn.addTrack(track, localCallStream));
-
-        peerConn.ontrack = (event) => {
-            const remEl = document.getElementById(isVideoLayout ? "nx-remote-video-el" : "nx-remote-audio-el");
-            if (remEl && event.streams && event.streams[0]) {
-                remEl.srcObject = event.streams[0];
-                remEl.play().catch(() => {});
+                };
             }
-        };
 
-        const callRef = db.collection("nexus_calls").doc(callDocId);
-        const candidatesCol = callRef.collection("candidates");
-
-        peerConn.onicecandidate = (event) => {
-            if (event.candidate) {
-                candidatesCol.add({
-                    sender: myUname,
-                    candidate: event.candidate.toJSON(),
-                    createdAt: Date.now()
-                }).catch(() => {});
-            }
-        };
-
-        const startConnectedClock = () => {
-            let sec = 0;
-            clearInterval(callClockTimer);
-            callClockTimer = setInterval(() => {
-                sec++;
-                const m = String(Math.floor(sec / 60)).padStart(2, "0");
-                const s = String(sec % 60).padStart(2, "0");
-                const lbl = document.getElementById("nx-call-state-txt");
-                if (lbl) lbl.textContent = `🟢 Connected ${m}:${s} • ${sessionId}`;
-            }, 1000);
-        };
-
-        if (!isAnswering) {
-            // CALLER FLOW: Create Offer & Ring Partner
-            const offer = await peerConn.createOffer();
-            await peerConn.setLocalDescription(offer);
-
-            await callRef.set({
-                callDocId,
-                sessionId,
-                caller: myUname,
-                callerName: getMyUser(),
-                receiver: partner,
-                mode,
-                offer: { type: offer.type, sdp: offer.sdp },
-                answer: null,
-                status: "ringing",
-                createdAt: Date.now(),
-                updatedAt: Date.now()
-            });
-
-            callDocUnsub = callRef.onSnapshot(async (snap) => {
-                if (!snap.exists) return;
-                const data = snap.data();
-                if (!data) return;
-
-                if (data.status === "ended" || data.status === "declined") {
-                    await window.cleanupAndEndNexusCall(null, false);
-                    if (window.Nexus && Nexus.toast) Nexus.toast("☎️ Call Ended");
-                    return;
-                }
-
-                if (data.answer && peerConn && !peerConn.currentRemoteDescription) {
-                    await peerConn.setRemoteDescription(new RTCSessionDescription(data.answer));
-                    startConnectedClock();
-                }
-            });
-        } else {
-            // RECEIVER FLOW: Accept Offer & Send Answer
-            await peerConn.setRemoteDescription(new RTCSessionDescription(incomingCallData.offer));
-            const answer = await peerConn.createAnswer();
-            await peerConn.setLocalDescription(answer);
-
-            await callRef.set({
-                answer: { type: answer.type, sdp: answer.sdp },
-                status: "connected",
-                updatedAt: Date.now()
-            }, { merge: true });
-
-            startConnectedClock();
-
-            callDocUnsub = callRef.onSnapshot(async (snap) => {
-                if (!snap.exists) return;
-                const d = snap.data();
-                if (d && (d.status === "ended" || d.status === "declined")) {
-                    await window.cleanupAndEndNexusCall(null, false);
-                    if (window.Nexus && Nexus.toast) Nexus.toast("☎️ Call Ended");
-                }
-            });
-        }
-
-        // Listen for Partner's ICE Candidates
-        iceUnsub = candidatesCol.onSnapshot((snap) => {
-            snap.docChanges().forEach((change) => {
-                if (change.type === "added") {
-                    const cData = change.doc.data();
-                    if (cData && cData.sender !== myUname && cData.candidate && peerConn) {
-                        peerConn.addIceCandidate(new RTCIceCandidate(cData.candidate)).catch(() => {});
+            const camBtn = modal.querySelector("#nx-call-cam-btn");
+            if (camBtn) {
+                camBtn.onclick = function (e) {
+                    e.stopPropagation();
+                    const track = localCallStream && localCallStream.getVideoTracks()[0];
+                    if (track) {
+                        track.enabled = !track.enabled;
+                        this.style.background = track.enabled ? "#1e293b" : "#e11d48";
                     }
+                };
+            }
+
+            const flipBtn = modal.querySelector("#nx-call-flip-btn");
+            if (flipBtn) {
+                flipBtn.onclick = async function (e) {
+                    e.stopPropagation();
+                    currentFacingMode = currentFacingMode === "user" ? "environment" : "user";
+                    try {
+                        const newCamStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode } });
+                        const newVideoTrack = newCamStream.getVideoTracks()[0];
+                        if (localCallStream) {
+                            localCallStream.getVideoTracks().forEach((t) => { t.stop(); localCallStream.removeTrack(t); });
+                            localCallStream.addTrack(newVideoTrack);
+                        }
+                        const locVid = document.getElementById("nx-local-video-el");
+                        if (locVid) locVid.srcObject = localCallStream;
+                        if (peerConn) {
+                            const sender = peerConn.getSenders().find((s) => s.track && s.track.kind === "video");
+                            if (sender) sender.replaceTrack(newVideoTrack);
+                        }
+                    } catch (err) {}
+                };
+            }
+
+            const scrBtn = modal.querySelector("#nx-call-screen-btn");
+            if (scrBtn) {
+                scrBtn.onclick = async function (e) {
+                    e.stopPropagation();
+                    if (!navigator.mediaDevices.getDisplayMedia) {
+                        return alert("⚠️ Screen Share mobile browser me supported nahi hai ya Desktop site on karein!");
+                    }
+                    try {
+                        const dispStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                        const screenTrack = dispStream.getVideoTracks()[0];
+                        const locVid = document.getElementById("nx-local-video-el");
+                        if (locVid) locVid.srcObject = dispStream;
+                        if (peerConn) {
+                            const sender = peerConn.getSenders().find((s) => s.track && s.track.kind === "video");
+                            if (sender) sender.replaceTrack(screenTrack);
+                        }
+                        this.style.background = "#10b981";
+                        this.style.color = "#020617";
+                    } catch (err) {}
+                };
+            }
+
+            const db = dbRef();
+            if (!db) return;
+
+            peerConn = new RTCPeerConnection(RTC_CONFIG);
+            localCallStream.getTracks().forEach((track) => peerConn.addTrack(track, localCallStream));
+
+            peerConn.ontrack = (event) => {
+                const remEl = document.getElementById(isVideoLayout ? "nx-remote-video-el" : "nx-remote-audio-el");
+                if (remEl && event.streams && event.streams[0]) {
+                    remEl.srcObject = event.streams[0];
+                    remEl.play().catch(() => {});
                 }
-            });
-        });
-    };
+            };
 
-    // GLOBAL INCOMING CALL LISTENER (RINGS ONLY WHEN receiver === myUsername!)
-    function startGlobalIncomingCallListener() {
-        const db = dbRef();
-        const myUname = getMyUser();
-        if (!db || !myUname || window.__nxIncomingCallBoundFor === myUname) return;
-        window.__nxIncomingCallBoundFor = myUname;
+            const callRef = db.collection("nexus_calls").doc(callDocId);
+            const candidatesCol = callRef.collection("candidates");
 
-        db.collection("nexus_calls")
-            .where("receiver", "==", myUname)
-            .onSnapshot((snap) => {
-                snap.docChanges().forEach((change) => {
-                    const data = change.doc.data();
+            peerConn.onicecandidate = (event) => {
+                if (event.candidate) {
+                    candidatesCol.add({
+                        sender: myUname,
+                        candidate: event.candidate.toJSON(),
+                        createdAt: Date.now()
+                    }).catch(() => {});
+                }
+            };
+
+            const startConnectedClock = () => {
+                let sec = 0;
+                clearInterval(callClockTimer);
+                callClockTimer = setInterval(() => {
+                    sec++;
+                    const m = String(Math.floor(sec / 60)).padStart(2, "0");
+                    const s = String(sec % 60).padStart(2, "0");
+                    const lbl = document.getElementById("nx-call-state-txt");
+                    if (lbl) lbl.textContent = `🟢 Connected ${m}:${s} • ${sessionId}`;
+                }, 1000);
+            };
+
+            if (!isAnswering) {
+                const offer = await peerConn.createOffer();
+                await peerConn.setLocalDescription(offer);
+
+                await callRef.set({
+                    callDocId,
+                    sessionId,
+                    caller: myUname,
+                    callerName: getMyUser(),
+                    receiver: partner,
+                    mode,
+                    offer: { type: offer.type, sdp: offer.sdp },
+                    answer: null,
+                    status: "ringing",
+                    createdAt: Date.now(),
+                    updatedAt: Date.now()
+                });
+
+                callDocUnsub = callRef.onSnapshot(async (snap) => {
+                    if (!snap.exists) return;
+                    const data = snap.data();
                     if (!data) return;
-                    const ageMs = Date.now() - Number(data.updatedAt || data.createdAt || 0);
 
-                    if (data.status === "ringing" && ageMs < 35000 && !document.getElementById("nx-real-call-modal")) {
-                        showIncomingCallRingBanner(Object.assign({}, data, { callDocId: change.doc.id }));
-                    } else if (data.status === "ended" || data.status === "declined") {
-                        stopIncomingRingtone();
-                        document.getElementById("nx-incoming-call-banner")?.remove();
+                    if (data.status === "ended" || data.status === "declined") {
+                        await window.cleanupAndEndNexusCall(null, false);
+                        if (window.Nexus && Nexus.toast) Nexus.toast("☎️ Call Ended");
+                        return;
+                    }
+
+                    if (data.answer && peerConn && !peerConn.currentRemoteDescription) {
+                        await peerConn.setRemoteDescription(new RTCSessionDescription(data.answer));
+                        startConnectedClock();
+                    }
+                });
+            } else {
+                await peerConn.setRemoteDescription(new RTCSessionDescription(incomingCallData.offer));
+                const answer = await peerConn.createAnswer();
+                await peerConn.setLocalDescription(answer);
+
+                await callRef.set({
+                    answer: { type: answer.type, sdp: answer.sdp },
+                    status: "connected",
+                    updatedAt: Date.now()
+                }, { merge: true });
+
+                startConnectedClock();
+
+                callDocUnsub = callRef.onSnapshot(async (snap) => {
+                    if (!snap.exists) return;
+                    const d = snap.data();
+                    if (d && (d.status === "ended" || d.status === "declined")) {
+                        await window.cleanupAndEndNexusCall(null, false);
+                        if (window.Nexus && Nexus.toast) Nexus.toast("☎️ Call Ended");
+                    }
+                });
+            }
+
+            iceUnsub = candidatesCol.onSnapshot((snap) => {
+                snap.docChanges().forEach((change) => {
+                    if (change.type === "added") {
+                        const cData = change.doc.data();
+                        if (cData && cData.sender !== myUname && cData.candidate && peerConn) {
+                            peerConn.addIceCandidate(new RTCIceCandidate(cData.candidate)).catch(() => {});
+                        }
                     }
                 });
             });
-    }
-    setInterval(startGlobalIncomingCallListener, 1500);
+        };
 
-    function showIncomingCallRingBanner(callData) {
-        document.getElementById("nx-incoming-call-banner")?.remove();
-        playIncomingRingtone();
-
-        const caller = callData.caller || "Member";
-        const isVid = callData.mode === "video" || callData.mode === "screen";
-
-        const banner = document.createElement("div");
-        banner.id = "nx-incoming-call-banner";
-        banner.style.cssText = "position:fixed; inset:0; background:rgba(5,8,17,0.96); z-index:200240; display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:42px 24px; color:#fff; font-family:system-ui,sans-serif; text-align:center;";
-
-        banner.innerHTML = `
-            <div>
-                <span style="background:rgba(16,185,129,0.16); color:#34d399; border:1px solid #10b981; padding:5px 14px; border-radius:999px; font-size:12px; font-weight:900;">
-                    🔒 Incoming ${isVid ? "HD Video" : "Voice"} Call • ${callData.sessionId || ""}
-                </span>
-            </div>
-
-            <div>
-                <div style="width:120px; height:120px; border-radius:50%; background:linear-gradient(135deg,#10b981,#0284c7); color:#020617; font-size:48px; font-weight:900; display:flex; align-items:center; justify-content:center; margin:0 auto 18px; border:3px solid #fff; animation:nxCallPulse 1.3s infinite;">
-                    ${caller[0].toUpperCase()}
-                </div>
-                <h2 style="font-size:26px; font-weight:900; color:#f8fafc;">@${escapeText(caller)}</h2>
-                <p style="font-size:14px; color:#38bdf8; font-weight:700; margin-top:6px;">
-                    ${isVid ? "📹 Incoming Video Call..." : "📞 Incoming Audio Call..."}
-                </p>
-            </div>
-
-            <div style="display:flex; gap:36px; align-items:center; margin-bottom:20px;">
-                <button type="button" id="nx-inc-decline" style="width:68px; height:68px; border-radius:50%; background:#e11d48; border:none; color:#fff; font-size:26px; cursor:pointer; box-shadow:0 8px 25px rgba(225,29,72,0.5);">☎️</button>
-                <button type="button" id="nx-inc-accept" style="width:68px; height:68px; border-radius:50%; background:#10b981; border:none; color:#020617; font-size:26px; cursor:pointer; box-shadow:0 8px 25px rgba(16,185,129,0.5);">📞</button>
-            </div>
-        `;
-
-        document.body.appendChild(banner);
-
-        banner.querySelector("#nx-inc-decline").onclick = async () => {
-            stopIncomingRingtone();
-            banner.remove();
+        function startGlobalIncomingCallListener() {
             const db = dbRef();
-            if (db && callData.callDocId) {
-                await db.collection("nexus_calls").doc(callData.callDocId).set({ status: "declined", updatedAt: Date.now() }, { merge: true }).catch(() => {});
-            }
-        };
+            const myUname = getMyUser();
+            if (!db || !myUname || window.__nxIncomingCallBoundFor === myUname) return;
+            window.__nxIncomingCallBoundFor = myUname;
 
-        banner.querySelector("#nx-inc-accept").onclick = () => {
-            stopIncomingRingtone();
-            banner.remove();
-            window.startNexusRealCall(callData.mode || "audio", true, callData);
-        };
-    }
+            db.collection("nexus_calls")
+                .where("receiver", "==", myUname)
+                .onSnapshot((snap) => {
+                    snap.docChanges().forEach((change) => {
+                        const data = change.doc.data();
+                        if (!data) return;
+                        const ageMs = Date.now() - Number(data.updatedAt || data.createdAt || 0);
 
-    // =========================================================================
-    // 4. 100% WORKING YOUTUBE WATCH PARTY SEARCH (CORS-FREE DIRECT YOUTUBE SCRAPER!)
-    //    Fetches directly from YouTube Search HTML via CORS Proxies + Piped API
-    //    so EVERY song, movie, or lecture appears without needing an API key!
-    // =========================================================================
-    async function parseYouTubeHtmlViaProxy(query) {
-        const ytSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&hl=en`;
-        const proxyUrls = [
-            `https://api.allorigins.win/raw?url=${encodeURIComponent(ytSearchUrl)}`,
-            `https://corsproxy.io/?${encodeURIComponent(ytSearchUrl)}`,
-            `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(ytSearchUrl)}`
-        ];
-
-        for (const pUrl of proxyUrls) {
-            try {
-                const res = await fetch(pUrl);
-                if (!res.ok) continue;
-                const html = await res.text();
-                if (!html || !html.includes("videoRenderer")) continue;
-
-                const results = [];
-                const regex = /"videoRenderer":\{"videoId":"([a-zA-Z0-9_-]{11})".*?"title":\{"runs":\[\{"text":"([^"]+)"\}\]/g;
-                let match;
-                const seen = new Set();
-                while ((match = regex.exec(html)) !== null && results.length < 12) {
-                    const vid = match[1];
-                    const rawTitle = match[2].replace(/\\u0026/g, "&").replace(/\\"/g, '"');
-                    if (!seen.has(vid)) {
-                        seen.add(vid);
-                        results.push({
-                            videoId: vid,
-                            title: rawTitle,
-                            channel: "YouTube Official",
-                            thumb: `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`
-                        });
-                    }
-                }
-                if (results.length > 0) return results;
-            } catch (e) {}
+                        if (data.status === "ringing" && ageMs < 35000 && !document.getElementById("nx-real-call-modal")) {
+                            showIncomingCallRingBanner(Object.assign({}, data, { callDocId: change.doc.id }));
+                        } else if (data.status === "ended" || data.status === "declined") {
+                            stopIncomingRingtone();
+                            document.getElementById("nx-incoming-call-banner")?.remove();
+                        }
+                    });
+                });
         }
-        return [];
-    }
+        setInterval(startGlobalIncomingCallListener, 1500);
 
-    window.openNexusYouTubeWatchParty = function () {
-        const existing = document.getElementById("nx-yt-party-search-sheet");
-        if (existing) { existing.remove(); return; }
+        function showIncomingCallRingBanner(callData) {
+            document.getElementById("nx-incoming-call-banner")?.remove();
+            playIncomingRingtone();
 
-        const sessId = window.CURRENT_NXS_SESSION_ID || "NXS-PARTY";
-        const box = document.createElement("div");
-        box.id = "nx-yt-party-search-sheet";
-        box.style.cssText = "position:fixed; top:58px; left:50%; transform:translateX(-50%); width:96%; max-width:560px; background:#0f172a; border:1.5px solid #e11d48; border-radius:20px; padding:12px; z-index:200150; color:#fff; box-shadow:0 18px 50px rgba(0,0,0,0.95);";
+            const caller = callData.caller || "Member";
+            const isVid = callData.mode === "video" || callData.mode === "screen";
 
-        box.innerHTML = `
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-                <div style="display:flex; align-items:center; gap:6px;">
-                    <span style="font-size:14px; font-weight:900; color:#fb7185;">📺 YouTube Watch-Party TV</span>
-                    <span style="background:rgba(16,185,129,0.16); color:#34d399; border:1px solid #10b981; padding:1px 7px; border-radius:99px; font-size:10px; font-weight:800;">🔒 ${sessId}</span>
+            const banner = document.createElement("div");
+            banner.id = "nx-incoming-call-banner";
+            banner.style.cssText = "position:fixed; inset:0; background:rgba(5,8,17,0.96); z-index:200240; display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:42px 24px; color:#fff; font-family:system-ui,sans-serif; text-align:center;";
+
+            banner.innerHTML = `
+                <div>
+                    <span style="background:rgba(16,185,129,0.16); color:#34d399; border:1px solid #10b981; padding:5px 14px; border-radius:999px; font-size:12px; font-weight:900;">
+                        🔒 Incoming ${isVid ? "HD Video" : "Voice"} Call • ${callData.sessionId || ""}
+                    </span>
                 </div>
-                <button type="button" onclick="document.getElementById('nx-yt-party-search-sheet').remove()" style="background:#1e293b; border:none; color:#fff; width:28px; height:28px; border-radius:50%; font-weight:900; cursor:pointer;">✕</button>
-            </div>
 
-            <div style="display:flex; gap:6px; margin-bottom:8px;">
-                <input type="text" id="nx-yt-search-inp" placeholder="Search ANY song, movie, lecture or paste YouTube link..." style="flex:1; padding:10px 12px; border-radius:12px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; outline:none;" />
-                <button type="button" id="nx-yt-search-go" style="padding:10px 15px; border-radius:12px; background:#e11d48; color:#fff; font-weight:900; font-size:12.5px; border:none; cursor:pointer;">Search 🔍</button>
-            </div>
+                <div>
+                    <div style="width:120px; height:120px; border-radius:50%; background:linear-gradient(135deg,#10b981,#0284c7); color:#020617; font-size:48px; font-weight:900; display:flex; align-items:center; justify-content:center; margin:0 auto 18px; border:3px solid #fff; animation:nxCallPulse 1.3s infinite;">
+                        ${caller[0].toUpperCase()}
+                    </div>
+                    <h2 style="font-size:26px; font-weight:900; color:#f8fafc;">@${escapeText(caller)}</h2>
+                    <p style="font-size:14px; color:#38bdf8; font-weight:700; margin-top:6px;">
+                        ${isVid ? "📹 Incoming Video Call..." : "📞 Incoming Audio Call..."}
+                    </p>
+                </div>
 
-            <div id="nx-yt-search-results" style="max-height:220px; overflow-y:auto; display:none; background:#090d16; border-radius:12px; padding:6px; margin-bottom:8px; border:1px solid #1e293b;"></div>
-            <div id="nx-yt-sync-stage" style="width:100%; aspect-ratio:16/9; background:#000; border-radius:12px; overflow:hidden; display:none; border:1px solid #334155;"></div>
-        `;
+                <div style="display:flex; gap:36px; align-items:center; margin-bottom:20px;">
+                    <button type="button" id="nx-inc-decline" style="width:68px; height:68px; border-radius:50%; background:#e11d48; border:none; color:#fff; font-size:26px; cursor:pointer; box-shadow:0 8px 25px rgba(225,29,72,0.5);">☎️</button>
+                    <button type="button" id="nx-inc-accept" style="width:68px; height:68px; border-radius:50%; background:#10b981; border:none; color:#020617; font-size:26px; cursor:pointer; box-shadow:0 8px 25px rgba(16,185,129,0.5);">📞</button>
+                </div>
+            `;
 
-        document.body.appendChild(box);
+            document.body.appendChild(banner);
 
-        const inp = box.querySelector("#nx-yt-search-inp");
-        const btn = box.querySelector("#nx-yt-search-go");
-        const resBox = box.querySelector("#nx-yt-search-results");
+            banner.querySelector("#nx-inc-decline").onclick = async () => {
+                stopIncomingRingtone();
+                banner.remove();
+                const db = dbRef();
+                if (db && callData.callDocId) {
+                    await db.collection("nexus_calls").doc(callData.callDocId).set({ status: "declined", updatedAt: Date.now() }, { merge: true }).catch(() => {});
+                }
+            };
 
-        const runYouTubeSearch = async () => {
-            const q = (inp.value || "").trim();
-            if (!q) return;
+            banner.querySelector("#nx-inc-accept").onclick = () => {
+                stopIncomingRingtone();
+                banner.remove();
+                window.startNexusRealCall(callData.mode || "audio", true, callData);
+            };
+        }
 
-            const linkMatch = q.match(/(?:youtu\.be\/|youtube\.com\/(?:.*v=|.*\/|.*embed\/|.*shorts\/))([^&?/\s]+)/);
-            if (linkMatch && linkMatch[1]) {
-                window.launchNexusSyncedVideo(linkMatch[1], "Shared YouTube Video", false);
-                return;
+        // =========================================================================
+        // 4. OFFICIAL YOUTUBE DATA API v3 + DIRECT YOUTUBE SCRAPER BACKUP
+        // =========================================================================
+        async function parseYouTubeHtmlViaProxy(query) {
+            const ytSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&hl=en`;
+            const proxyUrls = [
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(ytSearchUrl)}`,
+                `https://corsproxy.io/?${encodeURIComponent(ytSearchUrl)}`,
+                `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(ytSearchUrl)}`
+            ];
+
+            for (const pUrl of proxyUrls) {
+                try {
+                    const res = await fetch(pUrl);
+                    if (!res.ok) continue;
+                    const html = await res.text();
+                    if (!html || !html.includes("videoRenderer")) continue;
+
+                    const results = [];
+                    const regex = /"videoRenderer":\{"videoId":"([a-zA-Z0-9_-]{11})".*?"title":\{"runs":\[\{"text":"([^"]+)"\}\]/g;
+                    let match;
+                    const seen = new Set();
+                    while ((match = regex.exec(html)) !== null && results.length < 12) {
+                        const vid = match[1];
+                        const rawTitle = match[2].replace(/\\u0026/g, "&").replace(/\\"/g, '"');
+                        if (!seen.has(vid)) {
+                            seen.add(vid);
+                            results.push({
+                                videoId: vid,
+                                title: rawTitle,
+                                channel: "YouTube Official",
+                                thumb: `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`
+                            });
+                        }
+                    }
+                    if (results.length > 0) return results;
+                } catch (e) {}
             }
+            return [];
+        }
 
-            resBox.style.display = "block";
-            resBox.innerHTML = `<div style="padding:14px; text-align:center; color:#38bdf8; font-size:12.5px; font-weight:800;">🔍 Searching YouTube for "${escapeText(q)}"...</div>`;
+        window.openNexusYouTubeWatchParty = function () {
+            const existing = document.getElementById("nx-yt-party-search-sheet");
+            if (existing) { existing.remove(); return; }
 
-            // 1. Direct YouTube Page Scraper via CORS Proxy (Works 100% for all songs & movies!)
-            let items = await parseYouTubeHtmlViaProxy(q);
+            const sessId = window.CURRENT_NXS_SESSION_ID || "NXS-PARTY";
+            const box = document.createElement("div");
+            box.id = "nx-yt-party-search-sheet";
+            box.style.cssText = "position:fixed; top:58px; left:50%; transform:translateX(-50%); width:96%; max-width:560px; background:#0f172a; border:1.5px solid #e11d48; border-radius:20px; padding:12px; z-index:200150; color:#fff; box-shadow:0 18px 50px rgba(0,0,0,0.95);";
 
-            // 2. Fallback to Google Cloud API if enabled
-            if (items.length === 0) {
+            box.innerHTML = `
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="font-size:14px; font-weight:900; color:#fb7185;">📺 YouTube Watch-Party TV</span>
+                        <span style="background:rgba(16,185,129,0.16); color:#34d399; border:1px solid #10b981; padding:1px 7px; border-radius:99px; font-size:10px; font-weight:800;">🔒 ${sessId}</span>
+                    </div>
+                    <button type="button" onclick="document.getElementById('nx-yt-party-search-sheet').remove()" style="background:#1e293b; border:none; color:#fff; width:28px; height:28px; border-radius:50%; font-weight:900; cursor:pointer;">✕</button>
+                </div>
+
+                <div style="display:flex; gap:6px; margin-bottom:8px;">
+                    <input type="text" id="nx-yt-search-inp" placeholder="Search ANY song, movie, lecture or paste YouTube link..." style="flex:1; padding:10px 12px; border-radius:12px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; outline:none;" />
+                    <button type="button" id="nx-yt-search-go" style="padding:10px 15px; border-radius:12px; background:#e11d48; color:#fff; font-weight:900; font-size:12.5px; border:none; cursor:pointer;">Search 🔍</button>
+                </div>
+
+                <div id="nx-yt-search-results" style="max-height:220px; overflow-y:auto; display:none; background:#090d16; border-radius:12px; padding:6px; margin-bottom:8px; border:1px solid #1e293b;"></div>
+                <div id="nx-yt-sync-stage" style="width:100%; aspect-ratio:16/9; background:#000; border-radius:12px; overflow:hidden; display:none; border:1px solid #334155;"></div>
+            `;
+
+            document.body.appendChild(box);
+
+            const inp = box.querySelector("#nx-yt-search-inp");
+            const btn = box.querySelector("#nx-yt-search-go");
+            const resBox = box.querySelector("#nx-yt-search-results");
+
+            const runYouTubeSearch = async () => {
+                const q = (inp.value || "").trim();
+                if (!q) return;
+
+                const linkMatch = q.match(/(?:youtu\.be\/|youtube\.com\/(?:.*v=|.*\/|.*embed\/|.*shorts\/))([^&?/\s]+)/);
+                if (linkMatch && linkMatch[1]) {
+                    window.launchNexusSyncedVideo(linkMatch[1], "Shared YouTube Video", false);
+                    return;
+                }
+
+                resBox.style.display = "block";
+                resBox.innerHTML = `<div style="padding:14px; text-align:center; color:#38bdf8; font-size:12.5px; font-weight:800;">🔍 Searching YouTube for "${escapeText(q)}"...</div>`;
+
+                let items = [];
                 const apiKey = (window.Nexus && Nexus.config && Nexus.config.apiKey) || "";
+
+                // 1. Primary: Official Google Cloud YouTube Data API v3 (Enabled by You!)
                 if (apiKey) {
                     try {
-                        const r = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=10&q=${encodeURIComponent(q)}&key=${apiKey}`);
+                        const r = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=12&q=${encodeURIComponent(q)}&key=${apiKey}`);
                         const j = await r.json();
                         if (j && Array.isArray(j.items) && j.items.length > 0) {
                             items = j.items.map(x => ({
@@ -4176,296 +4045,300 @@
                         }
                     } catch (e) {}
                 }
+
+                // 2. Automatic Backup: Direct YouTube HTML Scraper via Proxy
+                if (items.length === 0) {
+                    items = await parseYouTubeHtmlViaProxy(q);
+                }
+
+                if (items.length === 0) {
+                    resBox.innerHTML = `<div style="padding:12px; font-size:12px; color:#fda4af;">Network slow. Dobara Search dabayein ya seedhe YouTube link paste karein.</div>`;
+                    return;
+                }
+
+                resBox.innerHTML = items.map(v => `
+                    <div data-yt-vid="${v.videoId}" data-yt-title="${escapeText(v.title || "")}" style="display:flex; align-items:center; gap:10px; padding:7px; border-bottom:1px solid #1e293b; cursor:pointer; border-radius:8px;">
+                        <img src="${v.thumb}" style="width:78px; height:45px; border-radius:6px; object-fit:cover; flex-shrink:0; background:#111;" />
+                        <div style="min-width:0; flex:1;">
+                            <div style="font-size:12.5px; font-weight:800; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeText(v.title)}</div>
+                            <div style="font-size:10.5px; color:#34d399;">▶️ Tap to Play Live in Sync (${sessId})</div>
+                        </div>
+                    </div>
+                `).join("");
+
+                resBox.querySelectorAll("[data-yt-vid]").forEach(row => {
+                    row.onclick = () => {
+                        window.launchNexusSyncedVideo(row.getAttribute("data-yt-vid"), row.getAttribute("data-yt-title"), false);
+                    };
+                });
+            };
+
+            btn.onclick = runYouTubeSearch;
+            inp.onkeydown = (e) => { if (e.key === "Enter") runYouTubeSearch(); };
+        };
+
+        window.launchNexusSyncedVideo = function (videoId, title, isRemoteTrigger) {
+            if (!document.getElementById("nx-yt-party-search-sheet")) {
+                window.openNexusYouTubeWatchParty();
+            }
+            const resBox = document.getElementById("nx-yt-search-results");
+            const stage = document.getElementById("nx-yt-sync-stage");
+            if (resBox) resBox.style.display = "none";
+            if (stage) {
+                stage.style.display = "block";
+                stage.innerHTML = `<iframe width="100%" height="100%" src="https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&enablejsapi=1" frameborder="0" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>`;
+            }
+            const db = dbRef();
+            const myUname = getMyUser();
+            const partner = detectStrictActivePartnerUsername() || window.CURRENT_NXS_PARTNER;
+            if (!isRemoteTrigger && db && myUname && partner) {
+                const rk = "dm_v6_" + [myUname, partner].sort().join("__");
+                db.collection("nexus_watch_sync").doc(rk).set({
+                    videoId, title: title || "YouTube Watch Party", sender: myUname, action: "play", currentTime: 0, updatedAt: Date.now()
+                }, { merge: true }).catch(() => {});
+            }
+        };
+
+        // =========================================================================
+        // 5. FIXED NEXUS OFFICIAL STORY VIEWER (ZERO BLACK SCREEN!)
+        // =========================================================================
+        const storyBlobCache = {};
+
+        function isStoryActive(s) {
+            const now = Date.now();
+            return s && s.isOfficial === true && !s.archived && (Number(s.scheduledAt || 0) <= now) && (Number(s.expiresAt || 0) > now || s.isHighlight === true);
+        }
+
+        async function loadStoryMediaAsPlayableUrl(item, prefix) {
+            const cacheKey = `${item.id}_${prefix}`;
+            if (storyBlobCache[cacheKey]) return storyBlobCache[cacheKey];
+
+            let rawData = item[prefix + "Inline"] || item[prefix + "Url"] || "";
+            const sid = item[prefix + "StreamId"];
+            const total = Number(item[prefix + "TotalChunks"] || 0);
+
+            if (!rawData && sid && total > 0) {
+                const db = dbRef();
+                if (!db) return "";
+                const parts = [];
+                for (let i = 0; i < total; i++) {
+                    const d = await db.collection("nexus_media_chunks").doc(`${sid}_${i}`).get();
+                    if (d.exists && d.data() && d.data().data) parts.push(d.data().data);
+                }
+                rawData = parts.join("");
             }
 
-            if (items.length === 0) {
-                resBox.innerHTML = `<div style="padding:12px; font-size:12px; color:#fda4af;">Network slow. Dobara Search dabayein ya seedhe YouTube link paste karein.</div>`;
+            if (rawData && rawData.startsWith("data:")) {
+                try {
+                    const res = await fetch(rawData);
+                    const blob = await res.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    storyBlobCache[cacheKey] = blobUrl;
+                    return blobUrl;
+                } catch (e) {
+                    return rawData;
+                }
+            }
+            return rawData;
+        }
+
+        let liveStories = [];
+
+        function updateOfficialStoryRing() {
+            const bar = document.getElementById("nx-stories-bar");
+            if (!bar) return;
+            const cards = Array.from(bar.querySelectorAll("div, button, a")).filter(el => {
+                const label = (el.innerText || el.textContent || "").replace(/\s+/g, " ").toLowerCase();
+                return label.includes("nexus") && label.includes("official") && el.clientWidth > 0 && el.clientWidth <= 140;
+            });
+            const officialCard = cards.sort((a, b) => (a.clientWidth * a.clientHeight) - (b.clientWidth * b.clientHeight))[0];
+            if (!officialCard) return;
+
+            const avatar = officialCard.querySelector("img, svg") || officialCard.firstElementChild;
+            if (avatar) {
+                if (liveStories.length > 0) avatar.classList.add("nx-active-story-ring");
+                else avatar.classList.remove("nx-active-story-ring");
+            }
+
+            if (!officialCard.dataset.nxStoryBoundV33) {
+                officialCard.dataset.nxStoryBoundV33 = "1";
+                officialCard.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (liveStories.length > 0) {
+                        window.openNexusOfficialStory();
+                    } else if (window.openOfficialNexusProfileModal) {
+                        window.openOfficialNexusProfileModal();
+                    }
+                }, true);
+            }
+        }
+
+        function initOfficialStoryListener() {
+            const db = dbRef();
+            if (!db) return;
+            db.collection("official_stories").orderBy("timestamp", "desc").limit(50).onSnapshot(snap => {
+                liveStories = [];
+                snap.forEach(d => {
+                    const x = d.data() || {};
+                    x.id = d.id;
+                    if (isStoryActive(x)) liveStories.push(x);
+                });
+                liveStories.sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+                updateOfficialStoryRing();
+            });
+            setInterval(updateOfficialStoryRing, 900);
+        }
+
+        window.openNexusOfficialStory = async function (targetId) {
+            document.getElementById("nx-real-video-story-modal")?.remove();
+            if (!liveStories.length) {
+                if (window.Nexus && Nexus.toast) Nexus.toast("Abhi koi active Nexus Official Story nahi hai.");
                 return;
             }
 
-            resBox.innerHTML = items.map(v => `
-                <div data-yt-vid="${v.videoId}" data-yt-title="${escapeText(v.title || "")}" style="display:flex; align-items:center; gap:10px; padding:7px; border-bottom:1px solid #1e293b; cursor:pointer; border-radius:8px;">
-                    <img src="${v.thumb}" style="width:78px; height:45px; border-radius:6px; object-fit:cover; flex-shrink:0; background:#111;" />
-                    <div style="min-width:0; flex:1;">
-                        <div style="font-size:12.5px; font-weight:800; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeText(v.title)}</div>
-                        <div style="font-size:10.5px; color:#34d399;">▶️ Tap to Play Live in Sync (${sessId})</div>
-                    </div>
-                </div>
-            `).join("");
+            let index = targetId ? Math.max(0, liveStories.findIndex(s => s.id === targetId)) : 0;
+            if (index < 0) index = 0;
 
-            resBox.querySelectorAll("[data-yt-vid]").forEach(row => {
-                row.onclick = () => {
-                    window.launchNexusSyncedVideo(row.getAttribute("data-yt-vid"), row.getAttribute("data-yt-title"), false);
-                };
-            });
-        };
-
-        btn.onclick = runYouTubeSearch;
-        inp.onkeydown = (e) => { if (e.key === "Enter") runYouTubeSearch(); };
-    };
-
-    window.launchNexusSyncedVideo = function (videoId, title, isRemoteTrigger) {
-        if (!document.getElementById("nx-yt-party-search-sheet")) {
-            window.openNexusYouTubeWatchParty();
-        }
-        const resBox = document.getElementById("nx-yt-search-results");
-        const stage = document.getElementById("nx-yt-sync-stage");
-        if (resBox) resBox.style.display = "none";
-        if (stage) {
-            stage.style.display = "block";
-            stage.innerHTML = `<iframe width="100%" height="100%" src="https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1&enablejsapi=1" frameborder="0" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>`;
-        }
-        const db = dbRef();
-        const myUname = getMyUser();
-        const partner = detectStrictActivePartnerUsername() || window.CURRENT_NXS_PARTNER;
-        if (!isRemoteTrigger && db && myUname && partner) {
-            const rk = "dm_v6_" + [myUname, partner].sort().join("__");
-            db.collection("nexus_watch_sync").doc(rk).set({
-                videoId, title: title || "YouTube Watch Party", sender: myUname, action: "play", currentTime: 0, updatedAt: Date.now()
-            }, { merge: true }).catch(() => {});
-        }
-    };
-
-    // =========================================================================
-    // 5. FIXED NEXUS OFFICIAL STORY VIEWER (ZERO BLACK SCREEN!)
-    // =========================================================================
-    const storyBlobCache = {};
-
-    function isStoryActive(s) {
-        const now = Date.now();
-        return s && s.isOfficial === true && !s.archived && (Number(s.scheduledAt || 0) <= now) && (Number(s.expiresAt || 0) > now || s.isHighlight === true);
-    }
-
-    async function loadStoryMediaAsPlayableUrl(item, prefix) {
-        const cacheKey = `${item.id}_${prefix}`;
-        if (storyBlobCache[cacheKey]) return storyBlobCache[cacheKey];
-
-        let rawData = item[prefix + "Inline"] || item[prefix + "Url"] || "";
-        const sid = item[prefix + "StreamId"];
-        const total = Number(item[prefix + "TotalChunks"] || 0);
-
-        if (!rawData && sid && total > 0) {
-            const db = dbRef();
-            if (!db) return "";
-            const parts = [];
-            for (let i = 0; i < total; i++) {
-                const d = await db.collection("nexus_media_chunks").doc(`${sid}_${i}`).get();
-                if (d.exists && d.data() && d.data().data) parts.push(d.data().data);
-            }
-            rawData = parts.join("");
-        }
-
-        if (rawData && rawData.startsWith("data:")) {
-            try {
-                const res = await fetch(rawData);
-                const blob = await res.blob();
-                const blobUrl = URL.createObjectURL(blob);
-                storyBlobCache[cacheKey] = blobUrl;
-                return blobUrl;
-            } catch (e) {
-                return rawData;
-            }
-        }
-        return rawData;
-    }
-
-    let liveStories = [];
-
-    function updateOfficialStoryRing() {
-        const bar = document.getElementById("nx-stories-bar");
-        if (!bar) return;
-        const cards = Array.from(bar.querySelectorAll("div, button, a")).filter(el => {
-            const label = (el.innerText || el.textContent || "").replace(/\s+/g, " ").toLowerCase();
-            return label.includes("nexus") && label.includes("official") && el.clientWidth > 0 && el.clientWidth <= 140;
-        });
-        const officialCard = cards.sort((a, b) => (a.clientWidth * a.clientHeight) - (b.clientWidth * b.clientHeight))[0];
-        if (!officialCard) return;
-
-        const avatar = officialCard.querySelector("img, svg") || officialCard.firstElementChild;
-        if (avatar) {
-            if (liveStories.length > 0) avatar.classList.add("nx-active-story-ring");
-            else avatar.classList.remove("nx-active-story-ring");
-        }
-
-        if (!officialCard.dataset.nxStoryBoundV33) {
-            officialCard.dataset.nxStoryBoundV33 = "1";
-            officialCard.addEventListener("click", (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (liveStories.length > 0) {
-                    window.openNexusOfficialStory();
-                } else if (window.openOfficialNexusProfileModal) {
-                    window.openOfficialNexusProfileModal();
-                }
-            }, true);
-        }
-    }
-
-    function initOfficialStoryListener() {
-        const db = dbRef();
-        if (!db) return;
-        db.collection("official_stories").orderBy("timestamp", "desc").limit(50).onSnapshot(snap => {
-            liveStories = [];
-            snap.forEach(d => {
-                const x = d.data() || {};
-                x.id = d.id;
-                if (isStoryActive(x)) liveStories.push(x);
-            });
-            liveStories.sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
-            updateOfficialStoryRing();
-        });
-        setInterval(updateOfficialStoryRing, 900);
-    }
-
-    window.openNexusOfficialStory = async function (targetId) {
-        document.getElementById("nx-real-video-story-modal")?.remove();
-        if (!liveStories.length) {
-            if (window.Nexus && Nexus.toast) Nexus.toast("Abhi koi active Nexus Official Story nahi hai.");
-            return;
-        }
-
-        let index = targetId ? Math.max(0, liveStories.findIndex(s => s.id === targetId)) : 0;
-        if (index < 0) index = 0;
-
-        const modal = document.createElement("div");
-        modal.id = "nx-real-video-story-modal";
-        modal.innerHTML = `
-            <div class="nxsv-stage" id="nxsv-stage"></div>
-            <div class="nxsv-top">
-                <div class="nxsv-bars">${liveStories.map((_, i) => `<span><i id="nxsv-prog-${i}"></i></span>`).join("")}</div>
-                <div style="display:flex;align-items:center;justify-content:space-between;">
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <img src="${LOGO}" style="width:38px;height:38px;border-radius:50%;border:2px solid #10b981;" />
-                        <div>
-                            <div style="font-weight:900;font-size:14px;">Nexus Official ✓</div>
-                            <div id="nxsv-time" style="font-size:11px;color:#cbd5e1;"></div>
+            const modal = document.createElement("div");
+            modal.id = "nx-real-video-story-modal";
+            modal.innerHTML = `
+                <div class="nxsv-stage" id="nxsv-stage"></div>
+                <div class="nxsv-top">
+                    <div class="nxsv-bars">${liveStories.map((_, i) => `<span><i id="nxsv-prog-${i}"></i></span>`).join("")}</div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <img src="${LOGO}" style="width:38px;height:38px;border-radius:50%;border:2px solid #10b981;" />
+                            <div>
+                                <div style="font-weight:900;font-size:14px;">Nexus Official ✓</div>
+                                <div id="nxsv-time" style="font-size:11px;color:#cbd5e1;"></div>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:6px;">
+                            <button type="button" class="nxsv-btn" id="nxsv-pause">Ⅱ</button>
+                            <button type="button" class="nxsv-btn" id="nxsv-mute">🔊</button>
+                            <button type="button" class="nxsv-btn" id="nxsv-close">✕</button>
                         </div>
                     </div>
-                    <div style="display:flex;gap:6px;">
-                        <button type="button" class="nxsv-btn" id="nxsv-pause">Ⅱ</button>
-                        <button type="button" class="nxsv-btn" id="nxsv-mute">🔊</button>
-                        <button type="button" class="nxsv-btn" id="nxsv-close">✕</button>
+                </div>
+                <div class="nxsv-bottom">
+                    <div id="nxsv-caption" style="text-align:center;margin-bottom:12px;"></div>
+                    <div style="display:flex;gap:8px;justify-content:center;">
+                        <button type="button" class="nxsv-btn" id="nxsv-like">♡ Like</button>
+                        <button type="button" class="nxsv-btn" id="nxsv-share">↗ Share</button>
+                        <button type="button" class="nxsv-btn" id="nxsv-reply">↩ Reply</button>
                     </div>
                 </div>
-            </div>
-            <div class="nxsv-bottom">
-                <div id="nxsv-caption" style="text-align:center;margin-bottom:12px;"></div>
-                <div style="display:flex;gap:8px;justify-content:center;">
-                    <button type="button" class="nxsv-btn" id="nxsv-like">♡ Like</button>
-                    <button type="button" class="nxsv-btn" id="nxsv-share">↗ Share</button>
-                    <button type="button" class="nxsv-btn" id="nxsv-reply">↩ Reply</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-
-        let timer = null, paused = false, muted = false, activeVideo = null, activeAudio = null;
-        const db = dbRef(), uid = getMyUser() || "guest";
-
-        const closeStory = () => {
-            clearTimeout(timer);
-            if (activeVideo) activeVideo.pause();
-            if (activeAudio) activeAudio.pause();
-            modal.remove();
-        };
-
-        modal.querySelector("#nxsv-close").onclick = closeStory;
-        modal.querySelector("#nxsv-pause").onclick = (e) => {
-            e.stopPropagation();
-            paused = !paused;
-            if (activeVideo) { if (paused) activeVideo.pause(); else activeVideo.play().catch(() => {}); }
-            if (activeAudio) { if (paused) activeAudio.pause(); else activeAudio.play().catch(() => {}); }
-            modal.querySelector("#nxsv-pause").textContent = paused ? "▶" : "Ⅱ";
-        };
-        modal.querySelector("#nxsv-mute").onclick = (e) => {
-            e.stopPropagation();
-            muted = !muted;
-            if (activeVideo) activeVideo.muted = muted;
-            if (activeAudio) activeAudio.muted = muted;
-            modal.querySelector("#nxsv-mute").textContent = muted ? "🔇" : "🔊";
-        };
-
-        async function showSlide(i) {
-            clearTimeout(timer);
-            if (activeVideo) { activeVideo.pause(); activeVideo = null; }
-            if (activeAudio) { activeAudio.pause(); activeAudio = null; }
-            if (i < 0) i = 0;
-            if (i >= liveStories.length) { closeStory(); return; }
-            index = i;
-            const s = liveStories[index];
-
-            liveStories.forEach((_, j) => {
-                const bar = modal.querySelector(`#nxsv-prog-${j}`);
-                if (bar) bar.style.width = j < index ? "100%" : "0%";
-            });
-
-            modal.querySelector("#nxsv-time").textContent = new Date(Number(s.timestamp || Date.now())).toLocaleString();
-            modal.querySelector("#nxsv-caption").innerHTML = `
-                <div style="font-weight:900;font-size:19px;color:#fff;text-shadow:0 2px 10px #000;">${escapeText(s.title || "")}</div>
-                <div style="font-size:13.5px;color:#e2e8f0;margin-top:4px;white-space:pre-wrap;">${escapeText(s.caption || s.desc || "")}</div>
             `;
+            document.body.appendChild(modal);
 
-            const stage = modal.querySelector("#nxsv-stage");
-            stage.innerHTML = `<div style="color:#34d399;font-size:13px;font-weight:800;">⏳ Loading Official Story...</div>`;
+            let timer = null, paused = false, muted = false, activeVideo = null, activeAudio = null;
+            const db = dbRef(), uid = getMyUser() || "guest";
 
-            const playableUrl = await loadStoryMediaAsPlayableUrl(s, "media");
-            stage.innerHTML = "";
-            const progBar = modal.querySelector(`#nxsv-prog-${index}`);
+            const closeStory = () => {
+                clearTimeout(timer);
+                if (activeVideo) activeVideo.pause();
+                if (activeAudio) activeAudio.pause();
+                modal.remove();
+            };
 
-            if (s.mediaType === "video" && playableUrl) {
-                const v = document.createElement("video");
-                v.src = playableUrl;
-                v.playsInline = true;
-                v.setAttribute("playsinline", "");
-                v.setAttribute("webkit-playsinline", "");
-                v.autoplay = true;
-                v.muted = muted;
-                stage.appendChild(v);
-                activeVideo = v;
+            modal.querySelector("#nxsv-close").onclick = closeStory;
+            modal.querySelector("#nxsv-pause").onclick = (e) => {
+                e.stopPropagation();
+                paused = !paused;
+                if (activeVideo) { if (paused) activeVideo.pause(); else activeVideo.play().catch(() => {}); }
+                if (activeAudio) { if (paused) activeAudio.pause(); else activeAudio.play().catch(() => {}); }
+                modal.querySelector("#nxsv-pause").textContent = paused ? "▶" : "Ⅱ";
+            };
+            modal.querySelector("#nxsv-mute").onclick = (e) => {
+                e.stopPropagation();
+                muted = !muted;
+                if (activeVideo) activeVideo.muted = muted;
+                if (activeAudio) activeAudio.muted = muted;
+                modal.querySelector("#nxsv-mute").textContent = muted ? "🔇" : "🔊";
+            };
 
-                v.ontimeupdate = () => {
-                    if (v.duration && progBar) {
-                        progBar.style.width = ((v.currentTime / v.duration) * 100) + "%";
-                    }
-                };
-                v.onended = () => showSlide(index + 1);
-                v.play().catch(() => {
-                    v.muted = true;
-                    muted = true;
-                    modal.querySelector("#nxsv-mute").textContent = "🔇";
-                    v.play().catch(() => {});
+            async function showSlide(i) {
+                clearTimeout(timer);
+                if (activeVideo) { activeVideo.pause(); activeVideo = null; }
+                if (activeAudio) { activeAudio.pause(); activeAudio = null; }
+                if (i < 0) i = 0;
+                if (i >= liveStories.length) { closeStory(); return; }
+                index = i;
+                const s = liveStories[index];
+
+                liveStories.forEach((_, j) => {
+                    const bar = modal.querySelector(`#nxsv-prog-${j}`);
+                    if (bar) bar.style.width = j < index ? "100%" : "0%";
                 });
-            } else if (playableUrl) {
-                const im = document.createElement("img");
-                im.src = playableUrl;
-                stage.appendChild(im);
-                let start = Date.now();
-                const tick = () => {
-                    if (!modal.isConnected) return;
-                    if (!paused) {
-                        const pct = Math.min(100, ((Date.now() - start) / 6000) * 100);
-                        if (progBar) progBar.style.width = pct + "%";
-                        if (pct >= 100) { showSlide(index + 1); return; }
-                    }
-                    timer = setTimeout(tick, 100);
-                };
-                tick();
-            }
-        }
 
-        modal.querySelector("#nxsv-stage").onclick = (e) => {
-            if (e.clientX < window.innerWidth / 3) showSlide(index - 1);
-            else showSlide(index + 1);
+                modal.querySelector("#nxsv-time").textContent = new Date(Number(s.timestamp || Date.now())).toLocaleString();
+                modal.querySelector("#nxsv-caption").innerHTML = `
+                    <div style="font-weight:900;font-size:19px;color:#fff;text-shadow:0 2px 10px #000;">${escapeText(s.title || "")}</div>
+                    <div style="font-size:13.5px;color:#e2e8f0;margin-top:4px;white-space:pre-wrap;">${escapeText(s.caption || s.desc || "")}</div>
+                `;
+
+                const stage = modal.querySelector("#nxsv-stage");
+                stage.innerHTML = `<div style="color:#34d399;font-size:13px;font-weight:800;">⏳ Loading Official Story...</div>`;
+
+                const playableUrl = await loadStoryMediaAsPlayableUrl(s, "media");
+                stage.innerHTML = "";
+                const progBar = modal.querySelector(`#nxsv-prog-${index}`);
+
+                if (s.mediaType === "video" && playableUrl) {
+                    const v = document.createElement("video");
+                    v.src = playableUrl;
+                    v.playsInline = true;
+                    v.setAttribute("playsinline", "");
+                    v.setAttribute("webkit-playsinline", "");
+                    v.autoplay = true;
+                    v.muted = muted;
+                    stage.appendChild(v);
+                    activeVideo = v;
+
+                    v.ontimeupdate = () => {
+                        if (v.duration && progBar) {
+                            progBar.style.width = ((v.currentTime / v.duration) * 100) + "%";
+                        }
+                    };
+                    v.onended = () => showSlide(index + 1);
+                    v.play().catch(() => {
+                        v.muted = true;
+                        muted = true;
+                        modal.querySelector("#nxsv-mute").textContent = "🔇";
+                        v.play().catch(() => {});
+                    });
+                } else if (playableUrl) {
+                    const im = document.createElement("img");
+                    im.src = playableUrl;
+                    stage.appendChild(im);
+                    let start = Date.now();
+                    const tick = () => {
+                        if (!modal.isConnected) return;
+                        if (!paused) {
+                            const pct = Math.min(100, ((Date.now() - start) / 6000) * 100);
+                            if (progBar) progBar.style.width = pct + "%";
+                            if (pct >= 100) { showSlide(index + 1); return; }
+                        }
+                        timer = setTimeout(tick, 100);
+                    };
+                    tick();
+                }
+            }
+
+            modal.querySelector("#nxsv-stage").onclick = (e) => {
+                if (e.clientX < window.innerWidth / 3) showSlide(index - 1);
+                else showSlide(index + 1);
+            };
+
+            showSlide(index);
         };
 
-        showSlide(index);
-    };
-
-    window.addEventListener("load", () => {
-        setTimeout(initOfficialStoryListener, 800);
-        setTimeout(startGlobalIncomingCallListener, 1200);
-    });
-})();
-</script>
-    </body>
+        window.addEventListener("load", () => {
+            setTimeout(initOfficialStoryListener, 800);
+            setTimeout(startGlobalIncomingCallListener, 1200);
+        });
+    })();
+    </script>
+</body>
 </html>
