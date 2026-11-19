@@ -1614,5 +1614,562 @@
         document.getElementById("v-user-search").oninput = renderVaultUsersList;
     })();
     </script>
+    <!-- ============================================================================
+     VAULT.HTML REAL 1:1 LIVE + OLD CHAT ENGINE (PASTE JUST BEFORE </body>)
+     Connects directly to real Firestore collection: nexus_private_dms + nexus_chat_media_v6
+     ============================================================================ -->
+<script>
+(function () {
+    if (window.__NX_VAULT_REAL_DM_ENGINE_V2__) return;
+    window.__NX_VAULT_REAL_DM_ENGINE_V2__ = true;
+
+    let db = null;
+    let vaultUsers = [];
+    let recentGlobalMsgs = [];
+    let legacyMediaMsgs = [];
+    let currentRoomMsgs = [];
+    let globalDmUnsub = null;
+    let activePairUnsub = null;
+    let activePairMediaUnsub = null;
+    let selectedPair = null; // { u1, u2, roomKey }
+    let viewMode = "pair"; // "pair" | "global"
+    let activeFilter = "all"; // "all" | "media" | "voice" | "deleted"
+    let searchChatText = "";
+    let initialized = false;
+
+    function norm(u) {
+        return String(u || "").toLowerCase().replace(/^@/, "").trim();
+    }
+
+    function esc(str) {
+        return String(str == null ? "" : str).replace(/[&<>"']/g, (c) => ({
+            "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+        }[c]));
+    }
+
+    function getRoomKey(u1, u2) {
+        return [norm(u1), norm(u2)].sort().join("__");
+    }
+
+    function getSessionCode(u1, u2) {
+        const pair = [norm(u1), norm(u2)].sort().join("::");
+        let h = 2166136261;
+        for (let i = 0; i < pair.length; i++) {
+            h ^= pair.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+        }
+        return "NXS-" + (h >>> 0).toString(16).toUpperCase().padStart(8, "0");
+    }
+
+    function parseTs(m) {
+        if (!m) return 0;
+        const vals = [m.createdAt, m.timestamp, m.sentAt];
+        for (let v of vals) {
+            if (!v) continue;
+            if (typeof v.toMillis === "function") return v.toMillis();
+            if (typeof v === "object" && typeof v.seconds === "number") return v.seconds * 1000;
+            const n = Number(v);
+            if (Number.isFinite(n) && n > 0) return n < 100000000000 ? n * 1000 : n;
+        }
+        return 0;
+    }
+
+    function formatDateLabel(ts) {
+        if (!ts) return "Older";
+        const d = new Date(ts);
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        const diff = Math.round((today - msgDay) / 86400000);
+        if (diff === 0) return "Today";
+        if (diff === 1) return "Yesterday";
+        return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+    }
+
+    function formatTime(ts) {
+        if (!ts) return "";
+        return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+
+    function buildChatsSectionUI() {
+        const sec = document.getElementById("sec-chats");
+        if (!sec) return;
+
+        sec.innerHTML = `
+            <div class="v-card" style="border-color:#10b981; padding:14px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+                    <div>
+                        <h3 style="font-size:15px; font-weight:900; color:#34d399;">🕵️‍♂️ Real 1:1 Live &amp; Old Chat Monitor</h3>
+                        <div style="font-size:11px; color:#94a3b8;">Connected to <code style="color:#38bdf8;">nexus_private_dms</code> (Live + Full History)</div>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <button type="button" id="vdm-mode-pair" class="v-btn" style="background:#10b981; color:#020617; padding:6px 10px;">👥 2-User Chat</button>
+                        <button type="button" id="vdm-mode-global" class="v-btn" style="background:#1e293b; color:#fbbf24; border:1px solid #f59e0b; padding:6px 10px;">🔴 Global Live Feed</button>
+                    </div>
+                </div>
+
+                <!-- Manual 2-User Selector (Loads Old + Live Chat for ANY 2 Users) -->
+                <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:6px; margin-bottom:10px;">
+                    <select id="vdm-user-1" class="v-sel" style="margin-top:0;"><option value="">User 1...</option></select>
+                    <select id="vdm-user-2" class="v-sel" style="margin-top:0;"><option value="">User 2...</option></select>
+                    <button type="button" id="vdm-load-pair-btn" class="v-btn" style="background:#38bdf8; color:#020617;">Load Chat 🔍</button>
+                </div>
+
+                <!-- Auto-Discovered Active & Recent 1:1 Conversations -->
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                    <span style="font-size:10.5px; font-weight:900; color:#38bdf8;">💬 ALL ACTIVE &amp; RECENT 1:1 CONVERSATIONS (<span id="vdm-rooms-cnt">0</span>):</span>
+                    <button type="button" id="vdm-rescan-btn" style="background:none; border:none; color:#34d399; font-size:11px; font-weight:800; cursor:pointer;">🔄 Refresh</button>
+                </div>
+                <div id="vdm-rooms-strip" style="display:flex; gap:7px; overflow-x:auto; padding-bottom:8px; margin-bottom:10px; scrollbar-width:none;">
+                    <span style="font-size:11.5px; color:#64748b;">⏳ Scanning real 1:1 conversations from Firebase...</span>
+                </div>
+
+                <!-- Search & Filter Bar inside Chat -->
+                <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap; align-items:center;">
+                    <input type="text" id="vdm-search-inp" class="v-inp" placeholder="🔍 Search inside messages..." style="margin-top:0; flex:1; min-width:150px; padding:8px 11px; font-size:12px;" />
+                    <div style="display:flex; gap:4px;">
+                        <button type="button" class="vdm-flt-btn v-btn" data-flt="all" style="background:#10b981; color:#020617; padding:6px 9px; font-size:11px;">All</button>
+                        <button type="button" class="vdm-flt-btn v-btn" data-flt="media" style="background:#1e293b; color:#cbd5e1; padding:6px 9px; font-size:11px;">📸 Media</button>
+                        <button type="button" class="vdm-flt-btn v-btn" data-flt="voice" style="background:#1e293b; color:#cbd5e1; padding:6px 9px; font-size:11px;">🎤 Voice</button>
+                        <button type="button" class="vdm-flt-btn v-btn" data-flt="deleted" style="background:#1e293b; color:#cbd5e1; padding:6px 9px; font-size:11px;">🚫 Deleted</button>
+                    </div>
+                </div>
+
+                <!-- Chat Viewer Header -->
+                <div id="vdm-chat-header" style="background:#090d16; border:1px solid #1e293b; border-radius:12px 12px 0 0; padding:9px 12px; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <span style="font-size:12px; font-weight:800; color:#94a3b8;">Select any conversation pill above or pick 2 users</span>
+                    <span id="vdm-chat-stats" style="font-size:11px; color:#38bdf8; font-weight:800;"></span>
+                </div>
+
+                <!-- Live + Old Messages Transcript Container -->
+                <div id="vdm-messages-stage" style="background:#050811; border:1px solid #1e293b; border-top:none; border-radius:0 0 12px 12px; padding:12px; height:470px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
+                    <div style="text-align:center; color:#64748b; font-size:12.5px; margin:auto;">
+                        💬 Kisi bhi 1:1 conversation par tap karein — uski poori <b>Old History + Live Messages</b> real-time mein dikhengi!
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Bind Mode Buttons
+        document.getElementById("vdm-mode-pair").onclick = () => {
+            viewMode = "pair";
+            updateModeButtons();
+            renderMessagesStage();
+        };
+        document.getElementById("vdm-mode-global").onclick = () => {
+            viewMode = "global";
+            updateModeButtons();
+            renderMessagesStage();
+        };
+
+        // Bind Manual Load Button
+        document.getElementById("vdm-load-pair-btn").onclick = () => {
+            const u1 = norm(document.getElementById("vdm-user-1").value);
+            const u2 = norm(document.getElementById("vdm-user-2").value);
+            if (!u1 || !u2) return alert("Pehle User 1 aur User 2 dono select karein!");
+            openLiveAndOldPairChat(u1, u2);
+        };
+
+        // Bind Refresh
+        document.getElementById("vdm-rescan-btn").onclick = () => {
+            renderDiscoveredRoomsStrip();
+            if (selectedPair) openLiveAndOldPairChat(selectedPair.u1, selectedPair.u2);
+        };
+
+        // Bind Search & Filters
+        document.getElementById("vdm-search-inp").oninput = (e) => {
+            searchChatText = norm(e.target.value);
+            renderMessagesStage();
+        };
+        sec.querySelectorAll(".vdm-flt-btn").forEach((btn) => {
+            btn.onclick = () => {
+                activeFilter = btn.getAttribute("data-flt");
+                sec.querySelectorAll(".vdm-flt-btn").forEach((b) => {
+                    b.style.background = "#1e293b";
+                    b.style.color = "#cbd5e1";
+                });
+                btn.style.background = "#10b981";
+                btn.style.color = "#020617";
+                renderMessagesStage();
+            };
+        });
+    }
+
+    function updateModeButtons() {
+        const bPair = document.getElementById("vdm-mode-pair");
+        const bGlob = document.getElementById("vdm-mode-global");
+        if (!bPair || !bGlob) return;
+        if (viewMode === "pair") {
+            bPair.style.background = "#10b981"; bPair.style.color = "#020617"; bPair.style.border = "none";
+            bGlob.style.background = "#1e293b"; bGlob.style.color = "#fbbf24"; bGlob.style.border = "1px solid #f59e0b";
+        } else {
+            bGlob.style.background = "#f59e0b"; bGlob.style.color = "#020617"; bGlob.style.border = "none";
+            bPair.style.background = "#1e293b"; bPair.style.color = "#34d399"; bPair.style.border = "1px solid #10b981";
+        }
+    }
+
+    function populateUserDropdowns() {
+        const s1 = document.getElementById("vdm-user-1");
+        const s2 = document.getElementById("vdm-user-2");
+        if (!s1 || !s2) return;
+        const prev1 = s1.value, prev2 = s2.value;
+        const sorted = [...vaultUsers].sort((a, b) => norm(a.username).localeCompare(norm(b.username)));
+        const opts = sorted.map((u) => `<option value="${esc(norm(u.username))}">@${esc(norm(u.username))} (${esc(u.name || u.username)})</option>`).join("");
+        s1.innerHTML = `<option value="">User 1...</option>` + opts;
+        s2.innerHTML = `<option value="">User 2...</option>` + opts;
+        if (prev1) s1.value = prev1;
+        if (prev2) s2.value = prev2;
+    }
+
+    // Build clickable list of all 1:1 conversations found in nexus_private_dms + nexus_chat_media_v6
+    function renderDiscoveredRoomsStrip() {
+        const strip = document.getElementById("vdm-rooms-strip");
+        const cntEl = document.getElementById("vdm-rooms-cnt");
+        if (!strip) return;
+
+        const roomMap = new Map();
+
+        recentGlobalMsgs.forEach((m) => {
+            const f = norm(m.fromUser);
+            const t = norm(m.toUser);
+            let u1 = f, u2 = t;
+            if ((!u1 || !u2) && m.roomKey && m.roomKey.includes("__")) {
+                const parts = m.roomKey.split("__");
+                u1 = norm(parts[0]);
+                u2 = norm(parts[1]);
+            }
+            if (!u1 || !u2) return;
+            const rk = getRoomKey(u1, u2);
+            const ts = parseTs(m);
+            const preview = m.deleted
+                ? "🚫 Deleted"
+                : m.audioData
+                ? "🎤 Voice Note"
+                : m.videoUrl
+                ? "🎬 Video"
+                : (m.imgUrl || (m.imgUrls && m.imgUrls.length))
+                ? "📸 Photo"
+                : (m.text || "Message");
+
+            if (!roomMap.has(rk)) {
+                roomMap.set(rk, { u1: [u1, u2].sort()[0], u2: [u1, u2].sort()[1], rk, lastTs: ts, lastText: preview, count: 1 });
+            } else {
+                const entry = roomMap.get(rk);
+                entry.count++;
+                if (ts > entry.lastTs) {
+                    entry.lastTs = ts;
+                    entry.lastText = preview;
+                }
+            }
+        });
+
+        legacyMediaMsgs.forEach((m) => {
+            if (!m.roomKey || !m.roomKey.includes("__")) return;
+            const cleanRk = m.roomKey.replace(/^dm_v\d+_/, "");
+            const parts = cleanRk.split("__");
+            if (parts.length !== 2) return;
+            const u1 = norm(parts[0]), u2 = norm(parts[1]);
+            if (!u1 || !u2) return;
+            const rk = getRoomKey(u1, u2);
+            const ts = parseTs(m);
+            if (!roomMap.has(rk)) {
+                roomMap.set(rk, { u1: [u1, u2].sort()[0], u2: [u1, u2].sort()[1], rk, lastTs: ts, lastText: "📎 Media", count: 1 });
+            } else {
+                roomMap.get(rk).count++;
+            }
+        });
+
+        const rooms = Array.from(roomMap.values()).sort((a, b) => b.lastTs - a.lastTs);
+        if (cntEl) cntEl.textContent = String(rooms.length);
+
+        if (!rooms.length) {
+            strip.innerHTML = `<span style="font-size:11.5px; color:#94a3b8;">Abhi koi 1:1 chat record nahi mila. Upar dropdown se koi 2 users select karein.</span>`;
+            return;
+        }
+
+        strip.innerHTML = rooms.map((r) => {
+            const isSel = selectedPair && selectedPair.roomKey === r.rk && viewMode === "pair";
+            const isRecentLive = (Date.now() - r.lastTs) < 120000;
+            return `
+                <button type="button" class="vdm-room-pill" data-u1="${esc(r.u1)}" data-u2="${esc(r.u2)}" style="flex-shrink:0; text-align:left; padding:8px 11px; border-radius:12px; background:${isSel ? "rgba(16,185,129,0.18)" : "#090d16"}; border:1.5px solid ${isSel ? "#10b981" : (isRecentLive ? "#38bdf8" : "#334155")}; color:#fff; cursor:pointer; min-width:170px; max-width:220px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+                        <span style="font-size:11.5px; font-weight:900; color:${isSel ? "#34d399" : "#f8fafc"}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            @${esc(r.u1)} ↔ @${esc(r.u2)}
+                        </span>
+                        ${isRecentLive ? `<span style="width:7px;height:7px;border-radius:50%;background:#10b981;flex-shrink:0;"></span>` : ""}
+                    </div>
+                    <div style="font-size:10px; color:#94a3b8; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        ${esc(r.lastText.slice(0, 32))} • ${formatTime(r.lastTs)}
+                    </div>
+                </button>
+            `;
+        }).join("");
+
+        strip.querySelectorAll(".vdm-room-pill").forEach((pill) => {
+            pill.onclick = () => {
+                openLiveAndOldPairChat(pill.getAttribute("data-u1"), pill.getAttribute("data-u2"));
+            };
+        });
+    }
+
+    // Open FULL OLD + REAL-TIME LIVE Chat between 2 specific users (No composite index needed!)
+    function openLiveAndOldPairChat(u1Raw, u2Raw) {
+        const u1 = norm(u1Raw);
+        const u2 = norm(u2Raw);
+        if (!u1 || !u2 || !db) return;
+
+        const sorted = [u1, u2].sort();
+        const rk = getRoomKey(sorted[0], sorted[1]);
+        selectedPair = { u1: sorted[0], u2: sorted[1], roomKey: rk };
+        viewMode = "pair";
+        updateModeButtons();
+        renderDiscoveredRoomsStrip();
+
+        // Update dropdowns to match selected pair
+        const s1 = document.getElementById("vdm-user-1");
+        const s2 = document.getElementById("vdm-user-2");
+        if (s1) s1.value = sorted[0];
+        if (s2) s2.value = sorted[1];
+
+        const stage = document.getElementById("vdm-messages-stage");
+        if (stage) {
+            stage.innerHTML = `<div style="text-align:center;color:#38bdf8;font-size:12.5px;margin:auto;">⏳ Loading ALL old &amp; live messages between @${esc(sorted[0])} and @${esc(sorted[1])}...</div>`;
+        }
+
+        if (activePairUnsub) { activePairUnsub(); activePairUnsub = null; }
+        if (activePairMediaUnsub) { activePairMediaUnsub(); activePairMediaUnsub = null; }
+
+        let primaryDocs = [];
+        let legacyDocs = [];
+
+        const mergeAndRender = () => {
+            const byId = new Map();
+            primaryDocs.forEach((m) => byId.set("dm_" + m.id, m));
+            legacyDocs.forEach((m) => byId.set("med_" + m.id, m));
+            currentRoomMsgs = Array.from(byId.values()).sort((a, b) => parseTs(a) - parseTs(b));
+            renderMessagesStage(true);
+        };
+
+        // 1. Live + Full Old History Listener on real `nexus_private_dms` collection (NO orderBy so zero index error!)
+        activePairUnsub = db.collection("nexus_private_dms")
+            .where("roomKey", "==", rk)
+            .onSnapshot((snap) => {
+                primaryDocs = [];
+                snap.forEach((doc) => {
+                    const d = doc.data() || {};
+                    primaryDocs.push(Object.assign({ id: doc.id, _col: "nexus_private_dms" }, d));
+                });
+                mergeAndRender();
+            }, (err) => {
+                console.warn("Vault DM pair error:", err);
+            });
+
+        // 2. Also listen to legacy `nexus_chat_media_v6` for older media in this pair
+        const legacyRk = "dm_v6_" + rk;
+        activePairMediaUnsub = db.collection("nexus_chat_media_v6")
+            .where("roomKey", "==", legacyRk)
+            .onSnapshot((snap) => {
+                legacyDocs = [];
+                snap.forEach((doc) => {
+                    const d = doc.data() || {};
+                    legacyDocs.push({
+                        id: doc.id,
+                        _col: "nexus_chat_media_v6",
+                        fromUser: d.sender || sorted[0],
+                        toUser: d.targetPartner || sorted[1],
+                        text: d.viewOnce ? "1️⃣ View-Once Media" : "",
+                        imgUrl: d.mediaType === "image" ? (d.mediaUrl || "") : "",
+                        videoUrl: d.mediaType === "video" ? (d.mediaUrl || "") : "",
+                        audioData: d.mediaType === "audio" ? (d.mediaUrl || "") : "",
+                        viewOnce: Boolean(d.viewOnce),
+                        viewed: Boolean(d.opened),
+                        createdAt: d.createdAt || Date.now()
+                    });
+                });
+                mergeAndRender();
+            }, () => {});
+    }
+
+    function renderMessagesStage(autoScroll) {
+        const stage = document.getElementById("vdm-messages-stage");
+        const header = document.getElementById("vdm-chat-header");
+        if (!stage || !header) return;
+
+        const isGlobal = viewMode === "global";
+        const sourceList = isGlobal ? [...recentGlobalMsgs].sort((a, b) => parseTs(a) - parseTs(b)) : currentRoomMsgs;
+
+        if (isGlobal) {
+            header.innerHTML = `
+                <span style="font-size:12.5px; font-weight:900; color:#fbbf24;">🔴 Global Live 1:1 Feed (All Users Real-Time)</span>
+                <span style="font-size:11px; color:#34d399; font-weight:800;">${sourceList.length} Recent Messages</span>
+            `;
+        } else if (selectedPair) {
+            const sess = getSessionCode(selectedPair.u1, selectedPair.u2);
+            header.innerHTML = `
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <span style="font-size:12.5px; font-weight:900; color:#34d399;">🟢 LIVE + OLD: @${esc(selectedPair.u1)} ↔ @${esc(selectedPair.u2)}</span>
+                    <code style="background:#0f172a; color:#38bdf8; border:1px solid #334155; padding:2px 7px; border-radius:6px; font-size:10.5px;">🔒 ${sess}</code>
+                </div>
+                <span style="font-size:11px; color:#cbd5e1; font-weight:800;">Total: ${sourceList.length} msgs</span>
+            `;
+        } else {
+            return;
+        }
+
+        // Apply filter & search
+        const filtered = sourceList.filter((m) => {
+            if (activeFilter === "media") {
+                if (!(m.imgUrl || (Array.isArray(m.imgUrls) && m.imgUrls.length) || m.videoUrl)) return false;
+            } else if (activeFilter === "voice") {
+                if (!m.audioData) return false;
+            } else if (activeFilter === "deleted") {
+                if (!m.deleted) return false;
+            }
+            if (searchChatText) {
+                const hay = `${m.text || ""} ${m.fromUser || ""} ${m.toUser || ""}`.toLowerCase();
+                if (!hay.includes(searchChatText)) return false;
+            }
+            return true;
+        });
+
+        if (!filtered.length) {
+            stage.innerHTML = `<div style="text-align:center;color:#94a3b8;font-size:12.5px;margin:auto;">Is filter/search mein koi message nahi mila.</div>`;
+            return;
+        }
+
+        const wasNearBottom = (stage.scrollHeight - stage.scrollTop - stage.clientHeight) < 120;
+        let lastDateLbl = "";
+
+        stage.innerHTML = filtered.map((m) => {
+            const ts = parseTs(m);
+            const dateLbl = formatDateLabel(ts);
+            let dividerHtml = "";
+            if (dateLbl !== lastDateLbl) {
+                lastDateLbl = dateLbl;
+                dividerHtml = `<div style="align-self:center; background:#1e293b; color:#93c5fd; font-size:10px; font-weight:800; padding:3px 10px; border-radius:99px; margin:6px 0 2px;">${esc(dateLbl)}</div>`;
+            }
+
+            const fU = norm(m.fromUser);
+            const tU = norm(m.toUser);
+            const isLeft = isGlobal ? true : (selectedPair && fU === selectedPair.u1);
+
+            const pics = (Array.isArray(m.imgUrls) && m.imgUrls.length) ? m.imgUrls : (m.imgUrl ? [m.imgUrl] : []);
+            const photosHtml = pics
+                .filter((u) => typeof u === "string" && u.length > 20)
+                .map((u) => `<img src="${u}" onclick="window.open(this.src)" style="max-width:190px; max-height:190px; border-radius:10px; margin-top:5px; display:block; cursor:pointer; border:1px solid #334155;" />`)
+                .join("");
+
+            const videoHtml = m.videoUrl
+                ? `<video src="${m.videoUrl}" controls playsinline style="max-width:210px; max-height:200px; border-radius:10px; margin-top:5px; display:block; background:#000;"></video>`
+                : "";
+
+            const audioHtml = m.audioData
+                ? `<audio src="${m.audioData}" controls style="height:32px; max-width:210px; margin-top:5px; display:block;"></audio>`
+                : "";
+
+            const stickerHtml = (m.sticker && m.sticker.url)
+                ? `<img src="${esc(m.sticker.url)}" style="width:76px; height:76px; object-fit:contain; margin-top:4px; display:block;" />`
+                : "";
+
+            const replyHtml = m.replyTo
+                ? `<div style="background:rgba(0,0,0,0.3); border-left:3px solid #38bdf8; padding:3px 7px; border-radius:6px; font-size:10.5px; color:#cbd5e1; margin-bottom:4px;">↩️ <b>${esc(m.replyTo.sender || "")}:</b> ${esc(m.replyTo.text || "")}</div>`
+                : "";
+
+            const bodyText = m.deleted
+                ? `<div style="font-size:12px; color:#fda4af; font-style:italic;">🚫 Deleted by @${esc(m.deletedBy || m.fromUser || "user")} ${m.text ? `("${esc(m.text)}")` : ""}</div>`
+                : (m.text ? `<div style="font-size:13px; color:#f8fafc; line-height:1.4; word-break:break-word; white-space:pre-wrap;">${esc(m.text)}</div>` : "");
+
+            const headerMeta = isGlobal
+                ? `<span style="color:#34d399;">@${esc(fU)}</span> <span style="color:#94a3b8;">→</span> <span style="color:#38bdf8;">@${esc(tU)}</span>`
+                : `<span style="color:${isLeft ? "#38bdf8" : "#34d399"};">@${esc(fU)}</span>`;
+
+            return `${dividerHtml}
+                <div style="align-self:${isGlobal ? "stretch" : (isLeft ? "flex-start" : "flex-end")}; max-width:${isGlobal ? "100%" : "86%"}; background:${m.deleted ? "rgba(225,29,72,0.12)" : (isLeft ? "#161f33" : "#064e3b")}; border:1px solid ${m.deleted ? "#e11d48" : (isLeft ? "#26334d" : "#10b981")}; border-radius:14px; padding:8px 11px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:3px; font-size:10.5px; font-weight:900;">
+                        <div>
+                            ${headerMeta}
+                            ${m.viewOnce ? `<span style="background:#0284c7;color:#fff;padding:1px 5px;border-radius:6px;font-size:9px;margin-left:4px;">1️⃣ View-Once ${m.viewed ? "(Opened)" : ""}</span>` : ""}
+                            ${m.reaction ? `<span style="margin-left:4px;">${esc(m.reaction)}</span>` : ""}
+                        </div>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="color:#94a3b8; font-weight:600;">${formatTime(ts)} ${m.seen ? "✓✓" : "✓"}</span>
+                            <button type="button" class="vdm-del-one" data-col="${esc(m._col || "nexus_private_dms")}" data-id="${esc(m.id)}" title="Delete Permanently" style="background:none; border:none; color:#fb7185; font-size:12px; cursor:pointer; padding:0 2px;">🗑️</button>
+                        </div>
+                    </div>
+                    ${replyHtml}
+                    ${bodyText}
+                    ${photosHtml}
+                    ${videoHtml}
+                    ${audioHtml}
+                    ${stickerHtml}
+                </div>
+            `;
+        }).join("");
+
+        stage.querySelectorAll(".vdm-del-one").forEach((btn) => {
+            btn.onclick = async () => {
+                if (!confirm("🗑️ Delete this 1:1 message permanently from database?")) return;
+                const col = btn.getAttribute("data-col");
+                const id = btn.getAttribute("data-id");
+                await db.collection(col).doc(id).delete().catch(() => {});
+            };
+        });
+
+        if (autoScroll || wasNearBottom) {
+            stage.scrollTop = stage.scrollHeight;
+        }
+    }
+
+    function startRealVaultDmEngine() {
+        if (initialized) return;
+        if (typeof firebase === "undefined" || !firebase.apps || !firebase.apps.length) return;
+        const lockEl = document.getElementById("v-pin-lock");
+        if (lockEl && lockEl.style.display !== "none") return;
+
+        initialized = true;
+        db = firebase.firestore();
+        buildChatsSectionUI();
+
+        // 1. Load all registered members for the 2-User dropdowns
+        db.collection("nexus_accounts").limit(150).onSnapshot((snap) => {
+            vaultUsers = [];
+            snap.forEach((d) => {
+                const u = d.data() || {};
+                if (u.username) vaultUsers.push(u);
+            });
+            populateUserDropdowns();
+        }, () => {});
+
+        // 2. Real-time listener on REAL 1:1 DM collection (`nexus_private_dms`)
+        globalDmUnsub = db.collection("nexus_private_dms")
+            .orderBy("createdAt", "desc")
+            .limit(350)
+            .onSnapshot((snap) => {
+                recentGlobalMsgs = [];
+                snap.forEach((d) => {
+                    recentGlobalMsgs.push(Object.assign({ id: d.id, _col: "nexus_private_dms" }, d.data() || {}));
+                });
+                renderDiscoveredRoomsStrip();
+                if (viewMode === "global") renderMessagesStage(false);
+            }, (err) => {
+                console.warn("Global DM listener:", err);
+            });
+
+        // 3. Also load legacy media chats (`nexus_chat_media_v6`) so old media pairs show up too
+        db.collection("nexus_chat_media_v6")
+            .orderBy("createdAt", "desc")
+            .limit(100)
+            .onSnapshot((snap) => {
+                legacyMediaMsgs = [];
+                snap.forEach((d) => {
+                    legacyMediaMsgs.push(Object.assign({ id: d.id, _col: "nexus_chat_media_v6" }, d.data() || {}));
+                });
+                renderDiscoveredRoomsStrip();
+            }, () => {});
+    }
+
+    setInterval(startRealVaultDmEngine, 600);
+})();
+</script>
 </body>
 </html>
