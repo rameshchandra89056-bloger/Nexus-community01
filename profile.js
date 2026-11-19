@@ -3787,3 +3787,213 @@
     setInterval(bindHeaderSearchAndNotifButtons, 700);
     setTimeout(bindHeaderSearchAndNotifButtons, 150);
 })();
+/* ============================================================================
+   PASTE AT THE VERY BOTTOM OF profile.js
+   1. Fixes 3-Dot (⋮) Menu opening behind 1:1 DM Chat (#nx-global-modal z-index 250000)
+   2. Fixes ALL User Profiles opening (Fancy Fonts, Emojis, Short Names & Uncached Users)
+   3. Maps BOTH Nexus.openPublicProfile & Nexus.openUserProfile cleanly
+   ============================================================================ */
+(function () {
+    // 1. Force #nx-global-modal ABOVE 1:1 DM Chat (99992) & DM Inbox (100280)
+    if (!document.getElementById("nx-zindex-dots-fix-v37")) {
+        const zStyle = document.createElement("style");
+        zStyle.id = "nx-zindex-dots-fix-v37";
+        zStyle.textContent = `
+            #nx-global-modal {
+                z-index: 250000 !important;
+            }
+            #nx-public-profile-modal {
+                z-index: 255000 !important;
+            }
+            #nx-sys-post-3dot-sheet,
+            #nx-home-post-admin-sheet {
+                z-index: 256000 !important;
+            }
+        `;
+        document.head.appendChild(zStyle);
+    }
+
+    // 2. Guaranteed 3-Dot (⋮) Click Router inside 1:1 DM Chat & Group Chat
+    document.addEventListener("click", function (e) {
+        const btn = e.target.closest("button");
+        if (!btn) return;
+        const txt = (btn.innerText || "").trim();
+        if (txt !== "⋮" && txt !== "•••") return;
+
+        // Ignore individual message bubbles' "⋯" button
+        if (btn.classList.contains("nx-dm-message-menu-btn") || btn.closest(".nx-dm-bubble-anim")) return;
+
+        const dmRoot = document.getElementById("nx-dm-dedicated-root");
+        const grpRoom = document.getElementById("nx-chat-room");
+
+        if (dmRoot && dmRoot.contains(btn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.NexusDotsMenu && typeof NexusDotsMenu.openDmMenu === "function") {
+                NexusDotsMenu.openDmMenu();
+            } else if (window.NexusDM && typeof NexusDM.openChatMenu === "function") {
+                NexusDM.openChatMenu();
+            }
+            const gModal = document.getElementById("nx-global-modal");
+            if (gModal) {
+                gModal.style.zIndex = "250000";
+                gModal.style.display = "flex";
+            }
+            return;
+        }
+
+        if (grpRoom && grpRoom.contains(btn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.NexusDotsMenu && typeof NexusDotsMenu.openGroupMenu === "function") {
+                NexusDotsMenu.openGroupMenu();
+            }
+            const gModal = document.getElementById("nx-global-modal");
+            if (gModal) {
+                gModal.style.zIndex = "250000";
+                gModal.style.display = "flex";
+            }
+        }
+    }, true);
+
+    // 3. Bulletproof User Profile Resolver (Never Fails on Fancy Fonts, Emojis, Short Names or Unloaded Users!)
+    const origOpenProfile = window.openPublicUserProfileModal;
+
+    function findAnyUserDeep(identifier, fallbackImgSrc) {
+        const pools = [
+            ...((window.Nexus && Array.isArray(Nexus.users)) ? Nexus.users : []),
+            ...((window.Nexus && Array.isArray(Nexus.cloudAccounts)) ? Nexus.cloudAccounts : [])
+        ];
+
+        // A. Match by exact DP image URL (100% foolproof for fancy Unicode/emoji names!)
+        if (fallbackImgSrc && fallbackImgSrc.length > 30) {
+            const dpHit = pools.find(u => u && u.dp && u.dp.slice(0, 120) === fallbackImgSrc.slice(0, 120));
+            if (dpHit) return dpHit;
+        }
+
+        if (identifier && typeof identifier === "object" && identifier.username) {
+            return identifier;
+        }
+
+        const raw = String(identifier || "").trim();
+        const clean = raw.toLowerCase().replace(/^@/, "").replace(/\.+$/, "").trim();
+        if (!clean || clean === "member") return null;
+
+        const alpha = clean.replace(/[^a-z0-9]/g, "");
+
+        // B. Exact match on username or display name
+        let match = pools.find(u =>
+            u && u.username && (
+                u.username.toLowerCase().trim() === clean ||
+                (u.name && u.name.toLowerCase().trim() === clean)
+            )
+        );
+        if (match) return match;
+
+        // C. Partial / alphanumeric match (works even for 2-letter or truncated names)
+        match = pools.find(u => {
+            if (!u || !u.username) return false;
+            const uN = u.username.toLowerCase().trim();
+            const dN = (u.name || "").toLowerCase().trim();
+            const uA = uN.replace(/[^a-z0-9]/g, "");
+            const dA = dN.replace(/[^a-z0-9]/g, "");
+            return (
+                (clean.length >= 2 && (uN.startsWith(clean) || dN.startsWith(clean) || dN.includes(clean))) ||
+                (alpha.length >= 2 && (uA.includes(alpha) || dA.includes(alpha)))
+            );
+        });
+        if (match) return match;
+
+        // D. Search inside Nexus.posts in case user was merged/skipped in Nexus.users
+        const posts = (window.Nexus && Array.isArray(Nexus.posts)) ? Nexus.posts : [];
+        const pHit = posts.find(p =>
+            p && (
+                String(p.username || "").toLowerCase().trim() === clean ||
+                String(p.author || "").toLowerCase().trim() === clean
+            )
+        );
+        if (pHit) {
+            return {
+                username: String(pHit.username || clean).toLowerCase().replace(/^@/, "").trim(),
+                name: pHit.author || pHit.username || raw,
+                bio: pHit.bio || "",
+                dp: pHit.dp || "",
+                followersList: [],
+                followingList: []
+            };
+        }
+
+        // E. Ultimate Fallback: NEVER return null! Create a live shell so profile opens & fetches from Firebase!
+        const safeUname = alpha || clean.replace(/\s+/g, "_");
+        return {
+            username: safeUname,
+            name: raw.replace(/^@/, "") || safeUname,
+            bio: "",
+            dp: fallbackImgSrc || "",
+            followersList: [],
+            followingList: []
+        };
+    }
+
+    if (typeof origOpenProfile === "function") {
+        window.openPublicUserProfileModal = function (targetIdentifier, fallbackImgSrc) {
+            const resolved = findAnyUserDeep(targetIdentifier, fallbackImgSrc);
+            if (!resolved || !resolved.username) return;
+            origOpenProfile(resolved);
+        };
+    }
+
+    // 4. Smart Delegated Click Listener on Home Story Bar (Catches Fancy Names & Truncated Cards!)
+    document.addEventListener("click", function (e) {
+        const storyBar = document.getElementById("nx-stories-bar");
+        if (!storyBar || !storyBar.contains(e.target)) return;
+
+        // Find the tapped story card inside #nx-stories-bar
+        let card = e.target;
+        while (card && card.parentElement !== storyBar) {
+            card = card.parentElement;
+        }
+        if (!card || card === storyBar) return;
+
+        const fullTxt = (card.innerText || "").toLowerCase();
+        // Leave Nexus Official card for the Official Story Viewer
+        if (fullTxt.includes("nexus") && fullTxt.includes("official")) return;
+
+        // Extract username from data-attribute, onclick string, avatar DP, or card text
+        let handle = card.getAttribute("data-username") || "";
+        if (!handle) {
+            const oc = card.getAttribute("onclick") || "";
+            const m = oc.match(/(?:openPublicProfile|openUserProfile|openPublicUserProfileModal)\s*\(\s*['"]([^'"]+)['"]/);
+            if (m && m[1]) handle = m[1];
+        }
+
+        const imgEl = card.querySelector("img");
+        const imgSrc = imgEl ? (imgEl.getAttribute("src") || "") : "";
+
+        if (!handle) {
+            const lines = (card.innerText || "")
+                .split("\n")
+                .map(l => l.trim())
+                .filter(l => l && l !== "Live" && l !== "🟢 Live" && !l.endsWith("ago") && !l.includes("DM Open") && l !== "Official");
+            handle = lines[lines.length - 1] || "";
+        }
+
+        if (handle || imgSrc) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (typeof window.openPublicUserProfileModal === "function") {
+                window.openPublicUserProfileModal(handle, imgSrc);
+            }
+        }
+    }, true);
+
+    // 5. Sync BOTH Nexus.openPublicProfile & Nexus.openUserProfile permanently
+    function syncProfileOpenHooks() {
+        if (window.Nexus && typeof window.openPublicUserProfileModal === "function") {
+            Nexus.openPublicProfile = window.openPublicUserProfileModal;
+            Nexus.openUserProfile = window.openPublicUserProfileModal;
+        }
+    }
+    syncProfileOpenHooks();
+    setInterval(syncProfileOpenHooks, 600);
+})();
