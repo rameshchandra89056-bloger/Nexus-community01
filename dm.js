@@ -784,3 +784,82 @@
         closeDirectChat: function () { this.closeDM(); }
     };
 })();
+/* ============================================================================
+   UNIFIED 3-DOT (⋮) POPUP BRIDGE — RESTORES 100% OLD dotsmenu.js POPUP
+   + APPENDS NEW SUPABASE v3 TOOLS INSIDE THE EXACT SAME MODAL
+   ============================================================================ */
+(function () {
+    function closeUnifiedMenu() {
+        const gm = document.getElementById("nx-global-modal");
+        if (gm) gm.style.display = "none";
+        if (window.NexusDM && typeof NexusDM.closeSheet === "function") NexusDM.closeSheet();
+    }
+    window.__nxCloseUnifiedDmMenu = closeUnifiedMenu;
+
+    function injectV3ToolsIntoOldPopup() {
+        const gm = document.getElementById("nx-global-modal");
+        if (!gm) return;
+        gm.style.zIndex = "265000";
+        gm.style.display = "flex";
+
+        const box = gm.querySelector(".nx-modal-box") || gm.firstElementChild;
+        if (!box) return;
+        box.style.maxHeight = "86dvh";
+        box.style.overflowY = "auto";
+
+        box.querySelector("#nx-v3-merged-tools")?.remove();
+        const partner = (window.NexusDM && NexusDM.activePartner) || window.activeDMUser || "User";
+
+        const wrap = document.createElement("div");
+        wrap.id = "nx-v3-merged-tools";
+        wrap.style.cssText = "margin-top:12px;padding-top:12px;border-top:1.5px dashed #10b981;";
+        wrap.innerHTML = `
+            <div style="font-size:11px;font-weight:900;color:#34d399;letter-spacing:.5px;margin-bottom:8px;text-transform:uppercase;">⚡ Nexus v3 Pro Tools (Supabase Realtime)</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:8px;">
+                <button type="button" onclick="__nxCloseUnifiedDmMenu();NexusDM.startCall('audio')" style="padding:9px 8px;border-radius:11px;background:#090d16;border:1px solid #10b981;color:#34d399;font-size:12px;font-weight:800;cursor:pointer;">📞 HD Voice Call</button>
+                <button type="button" onclick="__nxCloseUnifiedDmMenu();NexusDM.startCall('video')" style="padding:9px 8px;border-radius:11px;background:#090d16;border:1px solid #38bdf8;color:#38bdf8;font-size:12px;font-weight:800;cursor:pointer;">📹 HD Video Call</button>
+                <button type="button" onclick="__nxCloseUnifiedDmMenu();NexusDM.startCall('screen')" style="padding:9px 8px;border-radius:11px;background:#090d16;border:1px solid #334155;color:#e2e8f0;font-size:12px;font-weight:800;cursor:pointer;">🖥️ Screen Share</button>
+                <button type="button" onclick="__nxCloseUnifiedDmMenu();NexusDM.startPomodoroPrompt()" style="padding:9px 8px;border-radius:11px;background:#090d16;border:1px solid #334155;color:#e2e8f0;font-size:12px;font-weight:800;cursor:pointer;">🍅 Study Timer</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+                <button type="button" onclick="__nxCloseUnifiedDmMenu();NexusDM.toggleSearchBar(true)" style="width:100%;text-align:left;padding:9px 11px;border-radius:11px;background:#090d16;border:1px solid #1e293b;color:#f8fafc;font-size:12.5px;font-weight:700;cursor:pointer;">🔍 Search Messages in Chat</button>
+                <button type="button" onclick="NexusDM.cycleDisappearingTimer()" style="width:100%;text-align:left;padding:9px 11px;border-radius:11px;background:#090d16;border:1px solid #1e293b;color:#38bdf8;font-size:12.5px;font-weight:700;cursor:pointer;">⏱️ Toggle Disappearing Timer (Off / 1h / 24h / 7d)</button>
+                <button type="button" onclick="NexusDM.cycleWallpaper()" style="width:100%;text-align:left;padding:9px 11px;border-radius:11px;background:#090d16;border:1px solid #1e293b;color:#f8fafc;font-size:12.5px;font-weight:700;cursor:pointer;">🎨 Change Chat Wallpaper</button>
+                <button type="button" onclick="__nxCloseUnifiedDmMenu();NexusDM.promptPinNotice()" style="width:100%;text-align:left;padding:9px 11px;border-radius:11px;background:#090d16;border:1px solid #1e293b;color:#fbbf24;font-size:12.5px;font-weight:700;cursor:pointer;">📌 Pin Important Notice</button>
+                <button type="button" onclick="__nxCloseUnifiedDmMenu();if(window.NexusSecurity)NexusSecurity.openSecurityCenterModal()" style="width:100%;text-align:left;padding:9px 11px;border-radius:11px;background:#090d16;border:1px solid #1e293b;color:#34d399;font-size:12.5px;font-weight:700;cursor:pointer;">🛡️ Active Devices &amp; E2EE Backup PIN</button>
+                <button type="button" onclick="__nxCloseUnifiedDmMenu();NexusDM.exportChatTxt()" style="width:100%;text-align:left;padding:9px 11px;border-radius:11px;background:#090d16;border:1px solid #1e293b;color:#f8fafc;font-size:12.5px;font-weight:700;cursor:pointer;">📥 Export Chat Notes (.txt)</button>
+                <button type="button" onclick="__nxCloseUnifiedDmMenu();NexusDM.toggleBlockPartner()" style="width:100%;text-align:left;padding:9px 11px;border-radius:11px;background:rgba(244,63,94,.12);border:1px solid rgba(244,63,94,.4);color:#fda4af;font-size:12.5px;font-weight:800;cursor:pointer;">🚫 Block / Unblock @${String(partner).replace(/[<>"']/g, "")}</button>
+            </div>
+        `;
+        box.appendChild(wrap);
+    }
+
+    function hookUnifiedDotsMenu() {
+        if (!window.NexusDM || window.NexusDM.__unifiedDotsPatched) return;
+        window.NexusDM.__unifiedDotsPatched = true;
+        const fallbackSuperMenu = window.NexusDM.openHeaderSuperMenu;
+
+        window.NexusDM.openHeaderSuperMenu = function () {
+            const partner = window.NexusDM.activePartner || window.activeDMUser || window.currentChatUser || "";
+            if (partner) {
+                window.activeDMUser = partner;
+                window.currentChatUser = partner;
+                window.CURRENT_NXS_PARTNER = partner;
+            }
+            if (window.NexusDotsMenu && typeof window.NexusDotsMenu.openDmMenu === "function") {
+                try {
+                    window.NexusDotsMenu.openDmMenu();
+                    injectV3ToolsIntoOldPopup();
+                    return;
+                } catch (err) {
+                    console.warn("dotsmenu.js openDmMenu error:", err);
+                }
+            }
+            if (typeof fallbackSuperMenu === "function") fallbackSuperMenu.call(window.NexusDM);
+        };
+    }
+
+    hookUnifiedDotsMenu();
+    setInterval(hookUnifiedDotsMenu, 500);
+})();
+
