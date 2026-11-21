@@ -444,7 +444,10 @@
         </button>
     </nav>
     <!-- 4. LOAD MASTER SUPABASE SECURITY & E2EE MODULE -->
-    <script type="module" src="nexus-security.js?v=2"></script>
+    <script src="[https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js](https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js)"></script>
+    <script>if (!window.supabase) document.write('<script src="[https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js](https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js)"><\/script>');</script>
+    <script src="nexus-security.js?v=3"></script>
+
 
     <!-- 5. 100% SUPABASE-POWERED NEXUS CORE ENGINE (ZERO FIREBASE QUOTA LIMITS!) -->
     <script>
