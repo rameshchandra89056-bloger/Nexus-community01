@@ -1,138 +1,95 @@
 /* ============================================================================
-   NEXUS OFFICIAL PROFILE.JS (V34 FINAL UNCUT MASTER - PART 1 OF 2)
-   1. Fixes Profile Tab (#tab-profile) Not Opening 100% (Overrides Lock CSS)
-   2. Fixes Duplicate Video Upload & Black Screen Video Player (Blob Stream)
-   3. Kills Stray Voice/Mic Bar at Bottom of Home, Settings & Chat Tabs
-   4. Zero Dummy Songs (Only shows song if user actually saved a song)
-   5. Connects Official YouTube Data API v3 Search + 2-Way WebRTC Calls + Mic Release
+   NEXUS OFFICIAL PROFILE.JS (V41 FINAL UNCUT MASTER — PART 1 OF 2)
+   100% Supabase Native + All Legacy V34-V38 Features Preserved + New Core Suite
    ============================================================================ */
 (function () {
-    if (window.__NEXUS_INSTAGRAM_PROFILE_V34__) return;
-    window.__NEXUS_INSTAGRAM_PROFILE_V34__ = true;
+    if (window.__NEXUS_PROFILE_V41_PART1__) return;
+    window.__NEXUS_PROFILE_V41_PART1__ = true;
 
-    let currentProfileTabMode = "posts"; // 'posts' | 'videos' | 'vault'
-    let currentPublicTabMode = "grid"; // 'grid' | 'feed' | 'videos'
-    let activeSongAudio = null;
-    let activeSongBtn = null;
-    let longPressTimer = null;
-    let lastRenderedHomeHash = "";
+    const normU = (u) => String(u || "").toLowerCase().replace(/^@/, "").trim();
+    const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const getSec = () => window.NexusSecurity || null;
+    const getSb = () => (window.NexusSecurity && window.NexusSecurity.sb) || null;
+
+    const THEME_ACCENTS = {
+        emerald: { name: "Emerald", primary: "#10b981", glow: "#34d399", grad: "linear-gradient(135deg,#10b981,#06b6d4)", bg: "linear-gradient(135deg,#064e3b,#0f172a)" },
+        cyber:   { name: "Cyber Blue", primary: "#38bdf8", glow: "#7dd3fc", grad: "linear-gradient(135deg,#0284c7,#6366f1)", bg: "linear-gradient(135deg,#0c4a6e,#0f172a)" },
+        royal:   { name: "Royal Purple", primary: "#a855f7", glow: "#d8b4fe", grad: "linear-gradient(135deg,#9333ea,#ec4899)", bg: "linear-gradient(135deg,#3b0764,#0f172a)" },
+        gold:    { name: "Sunset Gold", primary: "#f59e0b", glow: "#fcd34d", grad: "linear-gradient(135deg,#f59e0b,#ef4444)", bg: "linear-gradient(135deg,#78350f,#0f172a)" },
+        crimson: { name: "Crimson", primary: "#f43f5e", glow: "#fda4af", grad: "linear-gradient(135deg,#e11d48,#f97316)", bg: "linear-gradient(135deg,#881337,#0f172a)" }
+    };
+
+    function getThemeAccent(key) { return THEME_ACCENTS[key] || THEME_ACCENTS.emerald; }
+
+    function getExtraProfileMeta(uname) {
+        try { return JSON.parse(localStorage.getItem("nx_prof_extra_" + normU(uname || "guest")) || "{}"); }
+        catch (e) { return {}; }
+    }
+
+    function saveExtraProfileMeta(uname, patch) {
+        const k = "nx_prof_extra_" + normU(uname || "guest");
+        const cur = getExtraProfileMeta(uname);
+        const merged = Object.assign({}, cur, patch);
+        try { localStorage.setItem(k, JSON.stringify(merged)); } catch (e) {}
+        return merged;
+    }
+
     const realLastSeenCache = {};
-    const videoBlobCache = {};
     const backStackLayers = [];
+    let lastRenderedHomeHash = "";
 
-    document.getElementById("nx-all-groups-hub")?.remove();
-    document.getElementById("nx-group-chat-fullscreen")?.remove();
-    document.getElementById("nx-missing-posts-restorer-box")?.remove();
+    // Clean legacy rogue shells
+    ["nx-all-groups-hub", "nx-group-chat-fullscreen", "nx-missing-posts-restorer-box", "nx-guaranteed-dm-screen", "nx-official-session-bar"].forEach((id) => {
+        document.getElementById(id)?.remove();
+    });
 
-    // STRICT ANTI-OVERLAP CSS SHIELD + PROFILE TAB UNLOCKER + STRAY MIC KILLER
-    const v34MasterStyle = document.createElement("style");
-    v34MasterStyle.textContent = `
-        #nx-all-groups-hub,
-        #nx-group-chat-fullscreen,
-        #nx-missing-posts-restorer-box,
-        .nx-auto-seen-pill,
-        .nx-dm-open-pill-hidden,
-        .nx-refresh-spam-hidden,
-        body > .nx-voice-note-card,
-        body > audio,
-        #tab-home > audio,
-        #tab-settings > audio,
-        #tab-profile > audio,
-        #nx-floating-voice-btn,
-        .nx-floating-mic-widget {
-            display: none !important;
-        }
-        /* Ensure #tab-profile ALWAYS displays its content when active! */
-        #tab-profile.active {
-            display: block !important;
-            opacity: 1 !important;
-            visibility: visible !important;
-        }
-        #tab-profile.active > #nx-ig-profile-root,
-        #tab-profile.active > #nx-google-auth-hub {
-            display: block !important;
-        }
-        /* Hide legacy overlapping post containers inside #tab-home; keep ONLY Story Bar & Clean Feed */
-        #tab-home > *:not(#nx-stories-bar):not(#nx-clean-home-feed-v31) {
-            display: none !important;
-        }
-        #nx-clean-home-feed-v31 {
-            display: flex !important;
-            flex-direction: column !important;
-            gap: 16px !important;
-            padding: 8px 12px 48px 12px !important;
-            width: 100% !important;
-            box-sizing: border-box !important;
-        }
-        .nx-v31-post-card {
-            position: relative !important;
-            display: flex !important;
-            flex-direction: column !important;
-            width: 100% !important;
-            background: #0f172a !important;
-            border: 1px solid #1e293b !important;
-            border-radius: 20px !important;
-            overflow: hidden !important;
-            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5) !important;
-            margin: 0 !important;
-        }
-        @keyframes nxEqBounce {
-            0%, 100% { height: 4px; }
-            50% { height: 14px; }
-        }
-        .nx-eq-bar {
-            width: 3px;
-            height: 6px;
-            background: #10b981;
-            border-radius: 99px;
-            display: inline-block;
-            animation: nxEqBounce 0.6s infinite ease-in-out;
-        }
-        .nx-eq-bar:nth-child(2) { animation-delay: 0.15s; background: #38bdf8; }
-        .nx-eq-bar:nth-child(3) { animation-delay: 0.3s; }
-        @keyframes nxHeartPop {
-            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
-            40% { transform: translate(-50%, -50%) scale(1.35); opacity: 1; }
-            80% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-            100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0; }
-        }
-    `;
-    document.head.appendChild(v34MasterStyle);
+    // STRICT ANTI-OVERLAP CSS SHIELD + PROFILE TAB UNLOCKER + STRAY MIC KILLER + Z-INDEX SHIELD
+    if (!document.getElementById("nx-profile-v41-style")) {
+        const st = document.createElement("style");
+        st.id = "nx-profile-v41-style";
+        st.textContent = `
+            #nx-all-groups-hub,#nx-group-chat-fullscreen,#nx-missing-posts-restorer-box,
+            .nx-auto-seen-pill,.nx-dm-open-pill-hidden,.nx-refresh-spam-hidden,
+            body > .nx-voice-note-card,body > audio:not(#nx-call-remote-audio),
+            #tab-home > audio,#tab-settings > audio,#tab-profile > audio,
+            #nx-floating-voice-btn,.nx-floating-mic-widget { display:none !important; }
+            #tab-profile.active { display:block !important; opacity:1 !important; visibility:visible !important; }
+            #tab-profile.active > #nx-ig-profile-root,#tab-profile.active > #nx-google-auth-hub { display:block !important; }
+            #tab-home > *:not(#nx-stories-bar):not(#nx-clean-home-feed-v31) { display:none !important; }
+            #nx-clean-home-feed-v31 { display:flex !important; flex-direction:column !important; gap:16px !important; padding:8px 12px 92px !important; width:100% !important; box-sizing:border-box !important; }
+            .nx-v31-post-card { position:relative !important; display:flex !important; flex-direction:column !important; width:100% !important; background:#0f172a !important; border:1px solid #1e293b !important; border-radius:20px !important; overflow:hidden !important; box-shadow:0 10px 28px rgba(0,0,0,.5) !important; margin:0 !important; }
+            #nx-global-modal { z-index:250000 !important; }
+            #nx-public-profile-modal { z-index:255000 !important; }
+            #nx-sys-post-3dot-sheet,#nx-home-post-admin-sheet { z-index:260000 !important; }
+            @keyframes nxEqBounce { 0%,100%{height:4px} 50%{height:14px} }
+            .nx-eq-bar { width:3px; height:6px; background:#10b981; border-radius:99px; display:inline-block; animation:nxEqBounce .6s infinite ease-in-out; }
+            .nx-eq-bar:nth-child(2){ animation-delay:.15s; background:#38bdf8; }
+            .nx-eq-bar:nth-child(3){ animation-delay:.3s; }
+            @keyframes nxHeartPop { 0%{transform:translate(-50%,-50%) scale(0);opacity:0} 40%{transform:translate(-50%,-50%) scale(1.35);opacity:1} 80%{transform:translate(-50%,-50%) scale(1);opacity:1} 100%{transform:translate(-50%,-50%) scale(1.2);opacity:0} }
+        `;
+        document.head.appendChild(st);
+    }
 
+    // 1. ROGUE VOICE BAR & LEGACY "MEMBER FULL PROFILE" POPUP PURGER (PRESERVED!)
     function purgeRogueVoiceAndLegacyPopups() {
-        document.querySelectorAll("body > .nx-voice-note-card, body > audio, #nx-floating-voice-btn, .nx-floating-mic-widget").forEach((el) => {
-            el.remove();
-        });
+        document.querySelectorAll("body > .nx-voice-note-card, body > audio:not(#nx-call-remote-audio), #nx-floating-voice-btn, .nx-floating-mic-widget").forEach((el) => el.remove());
         document.querySelectorAll("div, section").forEach((el) => {
-            if (
-                el.id !== "nx-public-profile-modal" &&
-                el.textContent &&
-                el.textContent.includes("Member Full Profile") &&
-                el.offsetHeight > 80 &&
-                el.offsetWidth < window.innerWidth
-            ) {
-                const match = (el.innerText || "").match(/@([a-zA-Z0-9_.\-]+)/);
-                const uname = match ? match[1] : null;
-                const popupRoot = el.closest(".nx-modal-overlay, [style*='fixed']") || el;
-                popupRoot.remove();
-                if (uname && typeof window.openPublicUserProfileModal === "function") {
-                    window.openPublicUserProfileModal(uname);
-                }
+            if (el.id !== "nx-public-profile-modal" && el.textContent && el.textContent.includes("Member Full Profile") && el.offsetHeight > 80 && el.offsetWidth < window.innerWidth) {
+                const m = (el.innerText || "").match(/@([a-zA-Z0-9_.\-]+)/);
+                const uname = m ? m[1] : null;
+                (el.closest(".nx-modal-overlay, [style*='fixed']") || el).remove();
+                if (uname && typeof window.openPublicUserProfileModal === "function") window.openPublicUserProfileModal(uname);
             }
         });
     }
-    setInterval(purgeRogueVoiceAndLegacyPopups, 500);
+    setInterval(purgeRogueVoiceAndLegacyPopups, 600);
 
-    // =========================================================================
-    // 1. SINGLE-STEP HARDWARE BACK BUTTON ROUTER
-    // =========================================================================
+    // 2. SINGLE-STEP HARDWARE BACK BUTTON ROUTER (PRESERVED!)
     window.__nxPushBackLayer = function (id, closeFn) {
-        const existingIdx = backStackLayers.findIndex((x) => x.id === id);
-        if (existingIdx !== -1) backStackLayers.splice(existingIdx, 1);
+        const idx = backStackLayers.findIndex((x) => x.id === id);
+        if (idx !== -1) backStackLayers.splice(idx, 1);
         backStackLayers.push({ id, closeFn });
-        try {
-            window.history.pushState({ nxLayer: id }, "");
-        } catch (e) {}
+        try { window.history.pushState({ nxLayer: id }, ""); } catch (e) {}
     };
 
     window.addEventListener("popstate", () => {
@@ -140,493 +97,324 @@
             const top = backStackLayers.pop();
             const el = document.getElementById(top.id);
             if (el && el.style.display !== "none") {
-                try {
-                    top.closeFn();
-                } catch (err) {
-                    el.remove();
-                }
+                try { top.closeFn(); } catch (err) { el.remove(); }
                 return;
             }
         }
-
         const openModals = [
-            "nx-hd-media-lightbox",
-            "nx-post-comments-drawer",
-            "nx-follow-list-modal",
-            "nx-qr-share-modal",
-            "nx-sys-post-3dot-sheet",
-            "nx-scrollable-profile-feed-modal",
-            "nx-public-profile-modal",
-            "nx-avatar-zoom-overlay",
-            "nx-official-creator-studio",
-            "nx-core-auth-modal",
-            "nx-ig-submodal",
-            "nx-global-modal"
+            "nx-hd-media-lightbox", "nx-post-comments-drawer", "nx-follow-list-modal",
+            "nx-qr-share-modal", "nx-sys-post-3dot-sheet", "nx-cap-edit-modal",
+            "nx-profile-analytics-modal", "nx-scrollable-profile-feed-modal",
+            "nx-public-profile-modal", "nx-avatar-zoom-overlay", "nx-song-picker-modal",
+            "nx-edit-ig-profile-modal", "nx-real-notif-drawer", "nx-real-search-drawer",
+            "nx-official-creator-studio", "nx-global-modal"
         ];
         for (const mid of openModals) {
             const m = document.getElementById(mid);
-            if (m && m.style.display !== "none") {
-                m.remove();
-                return;
-            }
+            if (m && m.style.display !== "none") { m.remove(); return; }
         }
-
-        const chatBackBtn = Array.from(document.querySelectorAll("button, span, div")).find(
-            (b) =>
-                b.children.length === 0 &&
-                (b.innerText || "").trim() === "←" &&
-                b.getBoundingClientRect().top >= 0 &&
-                b.getBoundingClientRect().top <= 80
-        );
-        if (chatBackBtn) {
-            chatBackBtn.click();
-            try {
-                window.history.pushState({ nxGuard: "home" }, "");
-            } catch (err) {}
-            return;
-        }
-
         const homeTab = document.getElementById("tab-home");
         if (homeTab && !homeTab.classList.contains("active") && window.Nexus && Nexus.switchTab) {
             Nexus.switchTab("tab-home");
-            try {
-                window.history.pushState({ nxGuard: "home" }, "");
-            } catch (err) {}
+            try { window.history.pushState({ nxGuard: "home" }, ""); } catch (err) {}
         }
     });
 
+    // 3. USER, POST & SONG NORMALIZERS (SUPABASE + LEGACY SAFE)
     function cleanUniqueList(arr) {
         if (!Array.isArray(arr)) return [];
-        const seen = new Set();
-        const out = [];
+        const seen = new Set(), out = [];
         arr.forEach((item) => {
-            const s = String(item || "").trim().toLowerCase();
-            if (s && s !== "member" && !seen.has(s)) {
-                seen.add(s);
-                out.push(s);
-            }
+            const s = normU(item);
+            if (s && s !== "member" && !seen.has(s)) { seen.add(s); out.push(s); }
         });
         return out;
     }
 
     function getActiveUser() {
         try {
-            const raw = localStorage.getItem("nx_active_account") || localStorage.getItem("nx_legacy_backup_account");
+            if (window.Nexus && typeof Nexus.getCurrentUser === "function") {
+                const u = Nexus.getCurrentUser();
+                if (u && u.username) return u;
+            }
+            const raw = localStorage.getItem("nx_active_account");
             if (!raw) return null;
             const parsed = JSON.parse(raw);
-            if (parsed && parsed.username) {
-                // Ensure verified flags are synced so Profile Tab never locks out a logged-in user!
-                if (!parsed.googleVerified) parsed.googleVerified = true;
-                if (!parsed.verified) parsed.verified = true;
-                if (!parsed.email) parsed.email = parsed.username.toLowerCase().trim() + "@nexus.app";
-                return parsed;
-            }
-            return null;
-        } catch (e) {
-            return null;
-        }
+            return (parsed && parsed.username) ? parsed : null;
+        } catch (e) { return null; }
     }
 
     function getMyUsername() {
         const me = getActiveUser();
-        return me && me.username ? me.username.toLowerCase().trim() : "";
+        return me && me.username ? normU(me.username) : "";
     }
 
     function isUserVerified() {
         const me = getActiveUser();
-        return Boolean(me && me.username);
+        return Boolean(me && me.username && me.id);
     }
     window.__nxIsUserVerified = isUserVerified;
 
+    function openLoginIfNeeded(mode) {
+        if (window.openNexusSupabaseAuthModal) window.openNexusSupabaseAuthModal(mode || "login");
+        else if (window.NexusSecurity && NexusSecurity.openAdvancedNexusAuthModal) NexusSecurity.openAdvancedNexusAuthModal(mode || "login");
+        else if (window.Nexus && Nexus.switchTab) Nexus.switchTab("tab-profile");
+    }
+
     function isStrictOwnerOfPost(postObj) {
-        if (!postObj || !isUserVerified()) return false;
-        const myKey = getMyUsername();
-        if (!myKey) return false;
-        const pUname = String(postObj.username || "").toLowerCase().trim();
-        if (pUname === "nexus_official" || pUname === "nexus") return false;
-        return Boolean(pUname && pUname === myKey);
+        const me = getActiveUser();
+        if (!postObj || !me) return false;
+        if (me.role === "admin") return true;
+        const myK = normU(me.username);
+        const pU = normU(postObj.username || postObj.author_username);
+        if (pU === "nexus_official" || pU === "nexus") return me.role === "admin";
+        if (pU && pU === myK) return true;
+        if (me.id && postObj.author_id && String(me.id) === String(postObj.author_id)) return true;
+        return false;
     }
 
-    function isRealValidPost(p) {
-        if (!p || typeof p !== "object") return false;
-        const u = String(p.username || "").toLowerCase().trim();
-        const a = String(p.author || p.name || "").toLowerCase().trim();
-        if ((!u && !a) || u === "member" || a === "member") return false;
-
-        const txt = String(p.content || p.text || "").trim();
-        const img = String(p.image || p.videoUrl || "").trim();
-        if (!img && (!txt || txt === "." || txt === "..")) return false;
-        if (window.__nxIsRefreshSpamPost && window.__nxIsRefreshSpamPost(p)) return false;
-        return true;
-    }
-
-    // STRICT REAL SONG GETTER: Never returns any dummy song!
     function getNormalizedProfileSong(userObj) {
         if (!userObj) return null;
-        if (userObj.profileSong && typeof userObj.profileSong === "object" && userObj.profileSong.title && userObj.profileSong.audioUrl) {
-            return userObj.profileSong;
+        let s = userObj.profileSong || userObj.profile_song || null;
+        if (typeof s === "string" && s.startsWith("{")) {
+            try { s = JSON.parse(s); } catch (e) { s = null; }
         }
-        if (typeof userObj.profileSong === "string" && userObj.profileSong.startsWith("{")) {
-            try {
-                const parsed = JSON.parse(userObj.profileSong);
-                if (parsed && parsed.title && parsed.audioUrl) return parsed;
-            } catch (e) {}
+        if (!s && typeof userObj.profileSongJson === "string" && userObj.profileSongJson.startsWith("{")) {
+            try { s = JSON.parse(userObj.profileSongJson); } catch (e) { s = null; }
         }
-        if (typeof userObj.profileSongJson === "string" && userObj.profileSongJson.startsWith("{")) {
-            try {
-                const parsed = JSON.parse(userObj.profileSongJson);
-                if (parsed && parsed.title && parsed.audioUrl) return parsed;
-            } catch (e) {}
+        if (s && s.title && (s.audioUrl || s.previewUrl)) {
+            return {
+                title: s.title,
+                artist: s.artist || "Official Profile Anthem",
+                audioUrl: s.audioUrl || s.previewUrl,
+                coverUrl: s.coverUrl || s.artwork || ""
+            };
         }
         return null;
     }
 
-    // =========================================================================
-    // 2. DIRECT 1:1 PERSONAL DM CHAT LAUNCHER
-    // =========================================================================
-    window.openDirect1to1ChatWithUser = function (targetIdentifier) {
-        if (!isUserVerified()) {
-            if (window.Nexus && Nexus.switchTab) Nexus.switchTab("tab-profile");
-            return;
-        }
-        const uObj =
-            typeof targetIdentifier === "object"
-                ? targetIdentifier
-                : findUserObjectByAnyIdentifier(targetIdentifier) || {
-                      username: String(targetIdentifier || "").toLowerCase().replace(/^@/, "").trim(),
-                      name: String(targetIdentifier || "")
-                  };
-
-        if (!uObj || !uObj.username) return;
-        const targetUname = uObj.username.toLowerCase().trim();
-        const targetDisplay = (uObj.name || uObj.username).trim();
-
-        document.getElementById("nx-public-profile-modal")?.remove();
-        document.getElementById("nx-follow-list-modal")?.remove();
-        document.getElementById("nx-avatar-zoom-overlay")?.remove();
-
-        window.currentChatUser = targetUname;
-        window.activeDMUser = targetUname;
-        window.CURRENT_NXS_PARTNER = targetUname;
-        if (typeof window.getNexusOfficialSessionId === "function") {
-            window.CURRENT_NXS_SESSION_ID = window.getNexusOfficialSessionId(getMyUsername(), targetUname);
-        }
-
-        const directFns = [
-            window.openDirectChat,
-            window.openDMChat,
-            window.openChatWith,
-            window.startDMWith,
-            window.openPrivateChat,
-            window.openUserDM,
-            window.Nexus && window.Nexus.openDM,
-            window.Nexus && window.Nexus.openDirectChat,
-            window.Nexus && window.Nexus.startChat
-        ];
-
-        for (const fn of directFns) {
-            if (typeof fn === "function") {
-                try {
-                    fn(targetUname, uObj);
-                    return;
-                } catch (e) {}
-            }
-        }
-
-        if (window.Nexus && Nexus.switchTab) {
-            Nexus.switchTab("tab-community");
-        }
-
-        const tryClickTargetDmRow = (attempt) => {
-            const msgInp =
-                document.getElementById("nx-dm-input") ||
-                document.querySelector('input[placeholder*="Message"]');
-            if (msgInp && msgInp.offsetParent !== null) return;
-
-            const commTab = document.getElementById("tab-community");
-            if (commTab) {
-                const openDmCardBtn = Array.from(commTab.querySelectorAll("button, div, span, a")).find((el) => {
-                    const txt = (el.innerText || "").trim();
-                    if (txt === "Open →" || txt === "Open ->") {
-                        const pTxt = (el.parentElement && el.parentElement.innerText) || "";
-                        return pTxt.includes("1:1 Personal") || pTxt.includes("Direct Chat");
-                    }
-                    return false;
-                });
-                if (openDmCardBtn && attempt === 1) {
-                    openDmCardBtn.click();
-                }
-            }
-
-            const allClickableRows = Array.from(
-                document.querySelectorAll("[data-dm-user], [data-username], [data-user], button, div")
-            );
-            for (const el of allClickableRows) {
-                const attrU = (
-                    el.getAttribute("data-dm-user") ||
-                    el.getAttribute("data-username") ||
-                    el.getAttribute("data-user") ||
-                    ""
-                )
-                    .toLowerCase()
-                    .trim();
-                if (attrU && attrU === targetUname) {
-                    el.click();
-                    return;
-                }
-
-                if (el.children.length >= 1 && el.children.length <= 6 && el.clientHeight >= 36 && el.clientHeight <= 110) {
-                    const rowTxt = (el.innerText || "").toLowerCase();
-                    if (
-                        (rowTxt.includes("@" + targetUname) || rowTxt.includes(targetDisplay.toLowerCase())) &&
-                        (rowTxt.includes("chat") || rowTxt.includes("online") || rowTxt.includes("seen"))
-                    ) {
-                        const chatBtn =
-                            Array.from(el.querySelectorAll("button, span, div")).find((b) =>
-                                (b.innerText || "").includes("Chat")
-                            ) || el;
-                        chatBtn.click();
-                        return;
-                    }
-                }
-            }
-
-            if (attempt < 5) {
-                setTimeout(() => tryClickTargetDmRow(attempt + 1), 160);
-            }
+    function normalizeSupabaseUser(raw) {
+        if (!raw || typeof raw !== "object") return null;
+        const uname = normU(raw.username || raw.firebase_uid);
+        if (!uname || uname === "member") return null;
+        const lo = raw.last_online ? new Date(raw.last_online).getTime() : Number(raw.lastOnline || 0);
+        const extra = getExtraProfileMeta(uname);
+        return {
+            id: raw.id || "",
+            uid: raw.id || "",
+            username: uname,
+            name: raw.display_name || raw.name || uname,
+            dp: raw.avatar_url || raw.dp || "",
+            coverUrl: raw.cover_url || raw.coverUrl || extra.coverUrl || "",
+            themeColor: raw.theme_color || raw.themeColor || extra.themeColor || "emerald",
+            skillTags: Array.isArray(raw.skill_tags) && raw.skill_tags.length ? raw.skill_tags : (Array.isArray(extra.skillTags) ? extra.skillTags : []),
+            bio: raw.bio || "",
+            moodNote: raw.mood_note || raw.moodNote || "",
+            website: raw.website || "",
+            profileSong: getNormalizedProfileSong(raw),
+            verified: raw.is_verified !== false,
+            role: raw.role || "user",
+            e2ee_public_key: raw.e2ee_public_key || null,
+            followersList: cleanUniqueList(raw.followers_list || raw.followersList || []),
+            followingList: cleanUniqueList(raw.following_list || raw.followingList || []),
+            lastOnline: isNaN(lo) ? 0 : lo,
+            lastSeenAt: isNaN(lo) ? 0 : lo
         };
+    }
 
-        setTimeout(() => tryClickTargetDmRow(1), 60);
-    };
+    function normalizeSupabasePost(raw) {
+        if (!raw || typeof raw !== "object") return null;
+        const uname = normU(raw.author_username || raw.username || raw.author || "member");
+        const contentRaw = String(raw.content !== undefined ? raw.content : (raw.caption || raw.text || "")).trim();
+        const content = contentRaw === "Nexus Post" ? "" : contentRaw;
+        const img = String(raw.image_url || raw.media_url || raw.image || raw.videoUrl || "").trim();
+        const likedBy = cleanUniqueList(raw.likes_list || raw.likedBy || []);
+        const viewedBy = cleanUniqueList(raw.viewedBy || []);
+        const comments = Array.isArray(raw.comments_list) ? raw.comments_list : (Array.isArray(raw.comments) ? raw.comments : []);
+        const createdAt = raw.created_at ? new Date(raw.created_at).getTime() : Number(raw.createdAt || Date.now());
+        return {
+            id: String(raw.id || ""),
+            author_id: raw.author_id || "",
+            username: uname,
+            author: raw.author_name || raw.author || uname,
+            dp: raw.author_dp || raw.dp || "",
+            bio: raw.bio || "",
+            content,
+            text: content,
+            image: img,
+            videoUrl: raw.videoUrl || (raw.media_type === "video" ? img : ""),
+            mediaType: raw.media_type || raw.mediaType || (/\.(mp4|webm|mov)(\?|$)/i.test(img) ? "video" : "image"),
+            likedBy,
+            likes: Math.max(likedBy.length, Number(raw.likes_count || raw.likes || 0)),
+            viewedBy,
+            views: Math.max(viewedBy.length, Number(raw.views_count || raw.views || 1), likedBy.length),
+            comments,
+            pinned: Boolean(raw.is_pinned || raw.pinned),
+            cardGradient: raw.card_gradient || raw.cardGradient || "",
+            songTitle: raw.song_title || raw.songTitle || "",
+            songUrl: raw.song_url || raw.songUrl || "",
+            createdAt: isNaN(createdAt) ? Date.now() : createdAt
+        };
+    }
 
-    // =========================================================================
-    // 3. SINGLE MASTER HOME FEED RENDERER (ZERO OVERLAP + ZERO DUPLICATE VIDEOS!)
-    // =========================================================================
-    async function resolveVideoStreamToUrl(streamRef) {
-        if (!streamRef) return "";
-        if (!streamRef.startsWith("NX_VIDEO_STREAM:")) return streamRef;
-        if (videoBlobCache[streamRef]) return videoBlobCache[streamRef];
-        if (!window.Nexus || !Nexus.db) return "";
+    function isRealValidPost(p) {
+        if (!p || typeof p !== "object") return false;
+        const u = normU(p.username || p.author);
+        if (!u || u === "member") return false;
+        const txt = String(p.content || p.text || "").trim();
+        const img = String(p.image || p.videoUrl || "").trim();
+        if (img.startsWith("NX_VIDEO_STREAM:") && !txt) return false;
+        if (!img && (!txt || txt === "." || txt === ".." || txt === "Nexus Post")) return false;
+        if (window.__nxIsRefreshSpamPost && window.__nxIsRefreshSpamPost(p)) return false;
+        return true;
+    }
 
-        const parts = streamRef.replace("NX_VIDEO_STREAM:", "").split(":");
-        const sid = parts[0];
-        const total = parseInt(parts[1] || "1", 10);
-        const chunks = [];
-        for (let i = 0; i < total; i++) {
-            try {
-                const d = await Nexus.db.collection("nexus_media_chunks").doc(`${sid}_${i}`).get();
-                if (d.exists && d.data() && d.data().data) {
-                    chunks.push(d.data().data);
-                }
-            } catch (e) {}
-        }
-        if (!chunks.length) return "";
-        const fullDataUrl = chunks.join("");
+    // 4. SUPABASE LIVE CLOUD SYNC (REPLACES DEAD FIREBASE REST PATCH)
+    async function syncSupabaseUsersAndPosts(forceRender) {
+        const sb = getSb();
+        if (!sb || !window.Nexus) return;
         try {
-            const res = await fetch(fullDataUrl);
-            const blob = await res.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            videoBlobCache[streamRef] = blobUrl;
-            return blobUrl;
-        } catch (e) {
-            videoBlobCache[streamRef] = fullDataUrl;
-            return fullDataUrl;
-        }
+            const [uRes, pRes] = await Promise.all([
+                sb.from("profiles").select("*").order("last_online", { ascending: false }).limit(160),
+                sb.from("posts").select("*").order("created_at", { ascending: false }).limit(100)
+            ]);
+            if (Array.isArray(uRes.data) && uRes.data.length) {
+                const users = uRes.data.map(normalizeSupabaseUser).filter(Boolean);
+                Nexus.users = users;
+                Nexus.cloudAccounts = users;
+                const me = getActiveUser();
+                if (me && me.id) {
+                    const freshMe = users.find((x) => x.id === me.id);
+                    if (freshMe) {
+                        const mergedMe = Object.assign({}, me, freshMe);
+                        try { localStorage.setItem("nx_active_account", JSON.stringify(mergedMe)); } catch (e) {}
+                    }
+                }
+            }
+            if (Array.isArray(pRes.data)) {
+                const posts = pRes.data.map(normalizeSupabasePost).filter(isRealValidPost);
+                Nexus.posts = posts;
+                window.__NX_INSTANT_POSTS__ = posts;
+            }
+            crossSyncAllFollowersAndSongs();
+            if (forceRender) {
+                renderCleanZeroOverlapHomeFeed(true);
+                const pTab = document.getElementById("tab-profile");
+                if (pTab && pTab.classList.contains("active") && window.renderMyInstagramProfileTab) {
+                    window.renderMyInstagramProfileTab();
+                }
+            }
+        } catch (e) {}
     }
 
-    function renderCleanZeroOverlapHomeFeed(forceRebuild) {
-        const homeTab = document.getElementById("tab-home");
-        if (!homeTab || !window.Nexus || !Array.isArray(Nexus.posts)) return;
-
-        const firstChild = homeTab.firstElementChild;
-        if (firstChild && firstChild.id !== "nx-clean-home-feed-v31" && !document.getElementById("nx-stories-bar")) {
-            firstChild.id = "nx-stories-bar";
-        }
-
-        const seenSigs = new Set();
-        const validPosts = Nexus.posts
-            .filter((p) => {
-                if (!isRealValidPost(p)) return false;
-                const sig = `${p.username}::${(p.content || "").slice(0, 40)}::${(p.image || "").slice(0, 80)}`;
-                if (seenSigs.has(sig)) return false;
-                seenSigs.add(sig);
-                return true;
-            })
-            .sort((a, b) => {
-                if (a.pinned && !b.pinned) return -1;
-                if (!a.pinned && b.pinned) return 1;
-                return Number(b.createdAt || 0) - Number(a.createdAt || 0);
-            });
-
-        const currentHash = validPosts
-            .map(
-                (p) =>
-                    `${p.id}:${p.likes || 0}:${(p.likedBy || []).length}:${(p.comments || []).length}:${p.pinned ? 1 : 0}:${(
-                        p.content || ""
-                    ).slice(0, 15)}:${(p.image || "").slice(0, 30)}`
-            )
-            .join("|");
-
-        let feedBox = document.getElementById("nx-clean-home-feed-v31");
-        if (!feedBox) {
-            feedBox = document.createElement("div");
-            feedBox.id = "nx-clean-home-feed-v31";
-            homeTab.appendChild(feedBox);
-            forceRebuild = true;
-        }
-
-        if (!forceRebuild && currentHash === lastRenderedHomeHash && feedBox.children.length > 0) {
-            return;
-        }
-        lastRenderedHomeHash = currentHash;
-
-        if (!validPosts.length) {
-            feedBox.innerHTML = `<div style="text-align:center; padding:36px 16px; color:#94a3b8; font-size:13px;">⏳ Loading real community posts...</div>`;
-            return;
-        }
-
-        feedBox.innerHTML = buildScrollablePostCardsHtml(validPosts, null);
-        bindRealPostCardEvents(feedBox, validPosts, () => {
-            renderCleanZeroOverlapHomeFeed(true);
-        });
-    }
-    setInterval(() => renderCleanZeroOverlapHomeFeed(false), 450);
-
-    // =========================================================================
-    // 4. FOLLOWERS / FOLLOWING AUTO-CROSS-SYNC ENGINE
-    // =========================================================================
+    // 5. FOLLOWERS / FOLLOWING CROSS-SYNC & PERSISTENCE
     function crossSyncAllFollowersAndSongs() {
         if (!window.Nexus || !Array.isArray(Nexus.users)) return;
-        const userMap = {};
-
-        Nexus.users = Nexus.users.filter((u) => u && u.username && u.username.toLowerCase() !== "member");
-
+        const map = {};
+        Nexus.users = Nexus.users.filter((u) => u && u.username && normU(u.username) !== "member");
         Nexus.users.forEach((u) => {
-            const k = u.username.toLowerCase().trim();
+            const k = normU(u.username);
             u.followersList = cleanUniqueList(u.followersList);
             u.followingList = cleanUniqueList(u.followingList);
             const song = getNormalizedProfileSong(u);
-            if (song) u.profileSong = song;
-            else delete u.profileSong;
-            userMap[k] = u;
+            if (song) u.profileSong = song; else delete u.profileSong;
+            map[k] = u;
         });
-
-        Object.values(userMap).forEach((uA) => {
-            const keyA = uA.username.toLowerCase().trim();
-            (uA.followingList || []).forEach((targetRaw) => {
-                const keyB = String(targetRaw || "").toLowerCase().trim();
-                if (userMap[keyB] && !userMap[keyB].followersList.includes(keyA)) {
-                    userMap[keyB].followersList.push(keyA);
-                }
-            });
-            (uA.followersList || []).forEach((followerRaw) => {
-                const keyF = String(followerRaw || "").toLowerCase().trim();
-                if (userMap[keyF] && !userMap[keyF].followingList.includes(keyA)) {
-                    userMap[keyF].followingList.push(keyA);
-                }
-            });
+        Object.values(map).forEach((uA) => {
+            const kA = normU(uA.username);
+            uA.followingList.forEach((t) => { if (map[t] && !map[t].followersList.includes(kA)) map[t].followersList.push(kA); });
+            uA.followersList.forEach((f) => { if (map[f] && !map[f].followingList.includes(kA)) map[f].followingList.push(kA); });
         });
-
-        const me = getActiveUser();
-        if (me && me.username) {
-            const myK = me.username.toLowerCase().trim();
-            if (userMap[myK]) {
-                me.followersList = cleanUniqueList([...(me.followersList || []), ...(userMap[myK].followersList || [])]);
-                me.followingList = cleanUniqueList([...(me.followingList || []), ...(userMap[myK].followingList || [])]);
-                if (!me.profileSong && userMap[myK].profileSong) {
-                    me.profileSong = userMap[myK].profileSong;
-                }
-            }
-        }
     }
-    setInterval(crossSyncAllFollowersAndSongs, 800);
 
-    // =========================================================================
-    // 5. STRICT REAL TIMESTAMP & STORY BAR ENGINE
-    // =========================================================================
+    async function persistPostUpdate(postObj, patchObj) {
+        const sb = getSb();
+        if (!sb || !postObj || !postObj.id) return;
+        await sb.from("posts").update(patchObj).eq("id", postObj.id).catch(() => {});
+    }
+
+    async function persistFollowToggle(targetUserObj) {
+        const me = getActiveUser(), sb = getSb();
+        if (!me || !me.id || !sb || !targetUserObj) return false;
+        const myK = normU(me.username), targetK = normU(targetUserObj.username);
+        me.followingList = cleanUniqueList(me.followingList || []);
+        targetUserObj.followersList = cleanUniqueList(targetUserObj.followersList || []);
+
+        const adding = !me.followingList.includes(targetK);
+        if (adding) {
+            me.followingList.push(targetK);
+            if (!targetUserObj.followersList.includes(myK)) targetUserObj.followersList.push(myK);
+        } else {
+            me.followingList = me.followingList.filter((x) => x !== targetK);
+            targetUserObj.followersList = targetUserObj.followersList.filter((x) => x !== myK);
+        }
+        try { localStorage.setItem("nx_active_account", JSON.stringify(me)); } catch (e) {}
+        crossSyncAllFollowersAndSongs();
+        await sb.from("profiles").update({ following_list: me.followingList }).eq("id", me.id).catch(() => {});
+        if (targetUserObj.id) {
+            await sb.from("profiles").update({ followers_list: targetUserObj.followersList }).eq("id", targetUserObj.id).catch(() => {});
+        }
+        return adding;
+    }
+
+    // 6. STRICT TIMESTAMP, ONLINE PRESENCE & EXACT USER RESOLVER
     function extractTrueTimestamp(u) {
         if (!u) return 0;
         const now = Date.now();
-        const candidates = [
-            u.lastSeen,
-            u.lastSeenAt,
-            u.lastActive,
-            u.updatedAt,
-            u.lastOnline,
-            u.createdAt,
-            u.joinedAt,
-            u.timestamp,
-            u.verifiedAt
-        ];
-
-        for (let i = 0; i < candidates.length; i++) {
-            const val = Number(candidates[i] || 0);
-            if (val > 1000000000000 && val <= now + 60000) {
-                const diffMin = Math.round((now - val) / 60000);
-                if (diffMin >= 58 && diffMin <= 62 && !u.verifiedAt && !u.lastSeen) {
-                    continue;
-                }
-                return val;
-            }
+        const cands = [u.lastSeen, u.lastSeenAt, u.lastActive, u.updatedAt, u.lastOnline, u.createdAt];
+        for (const v of cands) {
+            const n = Number(v || 0);
+            if (n > 1000000000000 && n <= now + 60000) return n;
         }
-
-        if (u.username && realLastSeenCache[u.username.toLowerCase()]) {
-            return realLastSeenCache[u.username.toLowerCase()];
-        }
-        return 0;
+        return (u.username && realLastSeenCache[normU(u.username)]) || 0;
     }
 
     function isUserTrulyOnlineRightNow(u) {
         if (!u) return false;
-        const myKey = getMyUsername();
-        if (myKey && u.username && u.username.toLowerCase() === myKey) {
-            return true;
-        }
+        if (getMyUsername() && normU(u.username) === getMyUsername()) return true;
         const ts = extractTrueTimestamp(u);
-        if (!ts) return false;
-        const ageMs = Date.now() - ts;
-        return ageMs >= 0 && ageMs <= 90 * 1000;
+        return Boolean(ts && (Date.now() - ts) >= 0 && (Date.now() - ts) <= 120000);
     }
 
     window.formatRealNexusLastSeen = function (ts, isOnline) {
         if (isOnline) return "🟢 Live";
         const num = Number(ts || 0);
         if (!num || num < 1000000000000) return "";
-        const diffSec = Math.max(1, Math.floor((Date.now() - num) / 1000));
-        if (diffSec < 60) return "Just now";
-        if (diffSec < 3600) return Math.floor(diffSec / 60) + "m ago";
-        if (diffSec < 86400) return Math.floor(diffSec / 3600) + "h ago";
-        return Math.floor(diffSec / 86400) + "d ago";
+        const s = Math.max(1, Math.floor((Date.now() - num) / 1000));
+        return s < 60 ? "Just now" : s < 3600 ? Math.floor(s / 60) + "m ago" : s < 86400 ? Math.floor(s / 3600) + "h ago" : Math.floor(s / 86400) + "d ago";
     };
 
-    function findUserObjectByAnyIdentifier(identifier) {
-        if (!identifier || !window.Nexus || !Array.isArray(Nexus.users)) return null;
-        const clean = String(identifier).toLowerCase().replace(/^@/, "").replace(/\.+$/, "").trim();
-        if (!clean || clean === "member") return null;
+    function findUserObjectByAnyIdentifier(identifier, cardImgSrc) {
+        if (identifier && typeof identifier === "object" && identifier.username) return identifier;
+        const pools = [...((window.Nexus && Nexus.users) || []), ...((window.Nexus && Nexus.cloudAccounts) || [])];
+        const raw = String(identifier || "").trim();
+        const clean = raw.toLowerCase().replace(/^@/, "").replace(/\.+$/, "").trim();
+        const alpha = clean.replace(/[^a-z0-9]/g, "");
 
-        const alphaLookup = clean.replace(/[^a-z0-9]/g, "");
-
-        return (
-            Nexus.users.find((u) => {
-                if (!u || !u.username || u.username.toLowerCase() === "member") return false;
-                const uN = (u.username || "").toLowerCase().trim();
-                const dN = (u.name || "").toLowerCase().trim();
-                const uAlpha = uN.replace(/[^a-z0-9]/g, "");
-                const dAlpha = dN.replace(/[^a-z0-9]/g, "");
-                return (
-                    uN === clean ||
-                    dN === clean ||
-                    (clean.length >= 3 && (dN.startsWith(clean) || uN.startsWith(clean))) ||
-                    (alphaLookup.length >= 3 &&
-                        (uAlpha.startsWith(alphaLookup) ||
-                            dAlpha.startsWith(alphaLookup) ||
-                            uN.includes(alphaLookup) ||
-                            dAlpha.includes(alphaLookup)))
-                );
-            }) || null
-        );
+        if (clean && clean !== "member") {
+            const exact = pools.find((u) => u && u.username && (normU(u.username) === clean || normU(u.name) === clean));
+            if (exact) return exact;
+            const partial = pools.find((u) => {
+                if (!u || !u.username) return false;
+                const uN = normU(u.username), dN = normU(u.name);
+                return (clean.length >= 2 && (uN.startsWith(clean) || dN.startsWith(clean))) ||
+                    (alpha.length >= 3 && (uN.replace(/[^a-z0-9]/g, "").startsWith(alpha) || dN.replace(/[^a-z0-9]/g, "").startsWith(alpha)));
+            });
+            if (partial) return partial;
+        }
+        if (cardImgSrc && cardImgSrc.length > 35) {
+            const dpHit = pools.find((u) => u && u.dp && u.dp.slice(0, 120) === cardImgSrc.slice(0, 120));
+            if (dpHit) return dpHit;
+        }
+        if (clean && clean !== "member") {
+            const posts = (window.Nexus && Array.isArray(Nexus.posts)) ? Nexus.posts : [];
+            const pHit = posts.find((p) => p && (normU(p.username) === clean || normU(p.author) === clean));
+            if (pHit) return { username: normU(pHit.username || clean), name: pHit.author || pHit.username || raw, bio: pHit.bio || "", dp: pHit.dp || "", followersList: [], followingList: [] };
+        }
+        return null;
     }
 
+    // 7. UNIFIED STORY BAR PRESENCE SYNC & SINGLE-CARD CLICK HANDLER (PRESERVED!)
     function syncUnifiedStoryBarPresence() {
         document.querySelectorAll("#tab-home span, #tab-home div, #tab-profile span, #tab-profile div").forEach((el) => {
             if (el.children.length === 0 && (el.innerText || "").trim().includes("DM Open")) {
@@ -634,1335 +422,121 @@
                 el.style.display = "none";
             }
         });
-
         const storyBar = document.getElementById("nx-stories-bar") || document.querySelector("#tab-home > div:first-child");
         if (!storyBar || !window.Nexus || !Array.isArray(Nexus.users)) return;
-
         storyBar.querySelectorAll(".nx-auto-seen-pill").forEach((el) => el.remove());
 
         storyBar.querySelectorAll("div, button, a").forEach((card) => {
-            if (card.children.length < 2 || card.clientWidth > 125 || card.clientHeight < 65) return;
-
+            if (card.children.length < 2 || card.clientWidth > 135 || card.clientHeight < 65) return;
             const lines = (card.innerText || "").split("\n").map((l) => l.trim()).filter(Boolean);
             if (!lines.length) return;
-
             const rawName = lines[lines.length - 1].toLowerCase().replace(/\.+$/, "").trim();
-            if (rawName === "member") {
-                card.style.display = "none";
-                return;
-            }
+            if (rawName === "member") { card.style.display = "none"; return; }
             if (!rawName || rawName.includes("nexus")) return;
-
             const matched = findUserObjectByAnyIdentifier(rawName);
             if (!matched) return;
 
             const isLive = isUserTrulyOnlineRightNow(matched);
-            const trueTs = extractTrueTimestamp(matched);
-            const realLabel = isLive ? "🟢 Live" : window.formatRealNexusLastSeen(trueTs, false);
-
+            const realLabel = isLive ? "🟢 Live" : window.formatRealNexusLastSeen(extractTrueTimestamp(matched), false);
             let badgeFound = false;
             card.querySelectorAll("span, div, small").forEach((badge) => {
                 if (badge.children.length > 0 || badge.classList.contains("nx-dm-open-pill-hidden")) return;
                 const bt = (badge.innerText || "").trim();
-                if (
-                    bt.endsWith("ago") ||
-                    bt === "Live" ||
-                    bt === "🟢 Live" ||
-                    bt === "Offline" ||
-                    bt === "Active"
-                ) {
-                    if (badgeFound) {
-                        badge.style.display = "none";
-                        return;
-                    }
+                if (bt.endsWith("ago") || bt === "Live" || bt === "🟢 Live" || bt === "Offline" || bt === "Active") {
+                    if (badgeFound) { badge.style.display = "none"; return; }
                     badgeFound = true;
-
-                    if (!isLive && !realLabel && bt !== "1h ago" && bt.endsWith("ago")) {
-                        return;
-                    }
-
                     if (isLive) {
                         badge.innerText = "🟢 Live";
-                        badge.style.background = "#064e3b";
-                        badge.style.border = "1.5px solid #10b981";
-                        badge.style.color = "#34d399";
-                        badge.style.borderRadius = "999px";
-                        badge.style.padding = "1px 7px";
-                        badge.style.fontWeight = "900";
-                        badge.style.display = "inline-block";
+                        badge.style.cssText = "background:#064e3b;border:1.5px solid #10b981;color:#34d399;border-radius:999px;padding:1px 7px;font-weight:900;display:inline-block;";
                     } else if (realLabel) {
                         badge.innerText = realLabel;
-                        badge.style.background = "#0f172a";
-                        badge.style.border = "1px solid #38bdf8";
-                        badge.style.color = "#e0f2fe";
-                        badge.style.borderRadius = "999px";
-                        badge.style.padding = "1px 7px";
-                        badge.style.display = "inline-block";
+                        badge.style.cssText = "background:#0f172a;border:1px solid #38bdf8;color:#e0f2fe;border-radius:999px;padding:1px 7px;display:inline-block;";
                     }
                 }
             });
-
-            if (!card.dataset.v31CaptureBound) {
-                card.dataset.v31CaptureBound = "1";
-                card.addEventListener(
-                    "click",
-                    (ev) => {
-                        ev.stopPropagation();
-                        ev.preventDefault();
-                        window.openPublicUserProfileModal(matched);
-                    },
-                    true
-                );
-            }
         });
     }
-    setInterval(syncUnifiedStoryBarPresence, 500);
+    setInterval(syncUnifiedStoryBarPresence, 600);
 
-    // =========================================================================
-    // 6. 🖼️ OFFICIAL NEXUS HD MEDIA LIGHTBOX VIEWER
-    // =========================================================================
+    document.addEventListener("click", (e) => {
+        const storyBar = document.getElementById("nx-stories-bar");
+        if (!storyBar || !storyBar.contains(e.target)) return;
+        let el = e.target, singleCard = null;
+        while (el && el !== storyBar) {
+            const r = el.getBoundingClientRect();
+            const imgs = el.querySelectorAll("img").length;
+            if (r.width >= 44 && r.width <= 135 && r.height >= 50 && r.height <= 165 && imgs <= 1) singleCard = el;
+            else if (r.width > 150) break;
+            el = el.parentElement;
+        }
+        if (!singleCard) return;
+        const fullTxt = (singleCard.innerText || "").toLowerCase();
+        if (fullTxt.includes("nexus") && fullTxt.includes("official")) return;
+        let handle = singleCard.getAttribute("data-username") || "";
+        const imgEl = singleCard.querySelector("img");
+        const imgSrc = imgEl ? (imgEl.getAttribute("src") || "") : "";
+        if (!handle) {
+            const lines = (singleCard.innerText || "").split("\n").map((l) => l.trim()).filter((l) => l && !l.endsWith("ago") && l !== "Live" && l !== "🟢 Live" && l !== "Official" && !l.includes("DM Open"));
+            handle = lines[lines.length - 1] || "";
+        }
+        if (handle || imgSrc) {
+            e.preventDefault(); e.stopPropagation();
+            if (typeof window.openPublicUserProfileModal === "function") window.openPublicUserProfileModal(handle, imgSrc);
+        }
+    }, true);
+
+    // 8. DIRECT 1:1 DM LAUNCHER & GROUP/DM ⋮ 3-DOT CAPTURE ROUTER (NO DOUBLE MENU!)
+    window.openDirect1to1ChatWithUser = function (targetIdentifier) {
+        if (!isUserVerified()) return openLoginIfNeeded("login");
+        const uObj = findUserObjectByAnyIdentifier(targetIdentifier) || { username: normU(targetIdentifier), name: String(targetIdentifier || "") };
+        if (!uObj || !uObj.username) return;
+        const tU = normU(uObj.username);
+        ["nx-public-profile-modal", "nx-follow-list-modal", "nx-avatar-zoom-overlay"].forEach((id) => document.getElementById(id)?.remove());
+        window.CURRENT_NXS_PARTNER = tU;
+        if (window.NexusDM && typeof NexusDM.openDirectChat === "function") {
+            NexusDM.openDirectChat(tU, uObj.name || tU, uObj.dp || "");
+        }
+    };
+
+    document.addEventListener("click", function (e) {
+        const btn = e.target.closest("button");
+        if (!btn) return;
+        const txt = (btn.innerText || "").trim();
+        if (txt !== "⋮" && txt !== "•••") return;
+        if (btn.classList.contains("nx-dm-message-menu-btn") || btn.closest(".nx-dm-bubble-anim")) return;
+
+        const dmRoot = document.getElementById("nx-dm-dedicated-root");
+        const grpRoom = document.getElementById("nx-chat-room");
+        if (dmRoot && dmRoot.contains(btn)) {
+            e.preventDefault(); e.stopPropagation();
+            if (window.NexusDM && typeof NexusDM.openHeaderSuperMenu === "function") NexusDM.openHeaderSuperMenu();
+            return;
+        }
+        if (grpRoom && grpRoom.contains(btn)) {
+            e.preventDefault(); e.stopPropagation();
+            if (window.NexusDotsMenu && typeof NexusDotsMenu.openGroupMenu === "function") NexusDotsMenu.openGroupMenu();
+            const gModal = document.getElementById("nx-global-modal");
+            if (gModal) { gModal.style.zIndex = "250000"; gModal.style.display = "flex"; }
+        }
+    }, true);
+
+    // 9. CUSTOM OFFICIAL VIDEO PLAYER + VIEWPORT AUTO-PAUSE + CLEAN HOME FEED
     async function recordRealPostView(postObj) {
         const myKey = getMyUsername();
         if (!postObj || !postObj.id || !myKey) return;
-        const viewedArr = cleanUniqueList(postObj.viewedBy || []);
-        if (!viewedArr.includes(myKey)) {
-            viewedArr.push(myKey);
-            postObj.viewedBy = viewedArr;
-            postObj.views = Math.max(Number(postObj.views || 0) + 1, viewedArr.length);
-            if (window.Nexus && Nexus.db) {
-                await Nexus.db
-                    .collection("nexus_real_posts")
-                    .doc(postObj.id)
-                    .set({ viewedBy: viewedArr, views: postObj.views }, { merge: true })
-                    .catch(() => {});
-            }
+        const arr = cleanUniqueList(postObj.viewedBy || []);
+        if (!arr.includes(myKey)) {
+            arr.push(myKey);
+            postObj.viewedBy = arr;
+            postObj.views = Math.max(Number(postObj.views || 0) + 1, arr.length);
+            persistPostUpdate(postObj, { views_count: postObj.views });
         }
-    }
-
-    window.openNexusHdMediaLightbox = function (imgSrc, postObj) {
-        if (!imgSrc || String(imgSrc).startsWith("NX_VIDEO_STREAM:")) return;
-        document.getElementById("nx-hd-media-lightbox")?.remove();
-
-        window.__nxPushBackLayer("nx-hd-media-lightbox", () => {
-            document.getElementById("nx-hd-media-lightbox")?.remove();
-        });
-
-        const p =
-            postObj ||
-            ((window.Nexus && Array.isArray(Nexus.posts))
-                ? Nexus.posts.find((x) => x && x.image && x.image.slice(0, 120) === imgSrc.slice(0, 120))
-                : null) || {
-                author: "Mohit_01",
-                username: "mohiy",
-                content: "",
-                likes: 1,
-                likedBy: [],
-                viewedBy: [],
-                comments: [],
-                views: 1
-            };
-
-        recordRealPostView(p);
-
-        let zoomLevel = 1;
-        let lastTapTime = 0;
-
-        const overlay = document.createElement("div");
-        overlay.id = "nx-hd-media-lightbox";
-        overlay.style.cssText =
-            "position:fixed; inset:0; background:rgba(2,6,23,0.97); z-index:200130; display:flex; flex-direction:column; justify-content:space-between; color:#fff; user-select:none; backdrop-filter:blur(12px);";
-
-        const renderLightboxUI = () => {
-            const myKey = getMyUsername();
-            const likedByArr = cleanUniqueList(p.likedBy || []);
-            const isLiked = Boolean(myKey && likedByArr.includes(myKey));
-            const likesCount = Math.max(likedByArr.length, Number(p.likes || 0));
-            const commentsCount = Array.isArray(p.comments) ? p.comments.length : 0;
-            const viewsCount = Math.max(cleanUniqueList(p.viewedBy || []).length, Number(p.views || 1), likesCount);
-
-            overlay.innerHTML = `
-                <div style="padding:12px 16px; background:rgba(9,13,22,0.92); border-bottom:1px solid #1e293b; display:flex; align-items:center; justify-content:space-between; z-index:10;">
-                    <div style="display:flex; align-items:center; gap:10px; cursor:pointer;" id="nx-lb-author-trigger">
-                        <button type="button" id="nx-lb-close" style="background:#1e293b; border:none; color:#f8fafc; width:32px; height:32px; border-radius:50%; font-size:16px; font-weight:900; cursor:pointer;">←</button>
-                        <div>
-                            <div style="font-size:14px; font-weight:900; color:#f8fafc;">${p.author || p.username} ✅</div>
-                            <div style="font-size:11px; color:#34d399;">@${p.username} • Double-Tap Photo to ❤️ Like</div>
-                        </div>
-                    </div>
-
-                    <div style="display:flex; align-items:center; gap:7px;">
-                        <button type="button" id="nx-lb-zoom-btn" style="padding:6px 11px; border-radius:10px; background:#1e293b; border:1px solid #334155; color:#38bdf8; font-size:11.5px; font-weight:900; cursor:pointer;">
-                            🔍 ${zoomLevel}x
-                        </button>
-                        <a href="${imgSrc}" download="nexus_hd_post.jpg" style="padding:6px 11px; border-radius:10px; background:#1e293b; border:1px solid #334155; color:#34d399; font-size:12px; font-weight:900; text-decoration:none;">
-                            ⬇️ Save
-                        </a>
-                    </div>
-                </div>
-
-                <div id="nx-lb-stage" style="flex:1; position:relative; display:flex; align-items:center; justify-content:center; overflow:auto; padding:10px;">
-                    <img id="nx-lb-main-img" src="${imgSrc}" style="max-width:100%; max-height:74dvh; border-radius:14px; object-fit:contain; transition:transform 0.2s ease; transform:scale(${zoomLevel}); cursor:grab; box-shadow:0 16px 50px rgba(0,0,0,0.85);" />
-                    <div id="nx-lb-heart-pop" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:86px; pointer-events:none; z-index:20; filter:drop-shadow(0 8px 25px rgba(244,63,94,0.8));">
-                        ❤️
-                    </div>
-                </div>
-
-                <div style="padding:12px 16px 20px; background:rgba(9,13,22,0.95); border-top:1px solid #1e293b; z-index:10;">
-                    ${
-                        p.content || p.text
-                            ? `<div style="font-size:13px; color:#e2e8f0; margin-bottom:10px; max-height:60px; overflow-y:auto; line-height:1.4;">${
-                                  p.content || p.text
-                              }</div>`
-                            : ""
-                    }
-                    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                        <button type="button" id="nx-lb-like-btn" style="padding:8px 15px; border-radius:999px; background:${
-                            isLiked ? "rgba(244,63,94,0.2)" : "#1e293b"
-                        }; border:1px solid ${isLiked ? "#f43f5e" : "#334155"}; color:${
-                isLiked ? "#f43f5e" : "#f8fafc"
-            }; font-size:13px; font-weight:900; cursor:pointer; display:flex; align-items:center; gap:6px;">
-                            <span>${isLiked ? "❤️" : "🤍"}</span> <span>${likesCount}</span>
-                        </button>
-
-                        <button type="button" id="nx-lb-comment-btn" style="padding:8px 15px; border-radius:999px; background:#1e293b; border:1px solid #334155; color:#f8fafc; font-size:13px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:6px;">
-                            <span>💬</span> <span>${commentsCount}</span>
-                        </button>
-
-                        <button type="button" id="nx-lb-views-btn" style="padding:8px 14px; border-radius:999px; background:#1e293b; border:1px solid #334155; color:#94a3b8; font-size:12.5px; font-weight:800; cursor:pointer;">
-                            👁️ ${viewsCount}
-                        </button>
-
-                        <button type="button" id="nx-lb-vault-btn" style="padding:8px 14px; border-radius:999px; background:#1e293b; border:1px solid #334155; color:#fbbf24; font-size:12.5px; font-weight:900; cursor:pointer;">
-                            ⚡ Vault
-                        </button>
-
-                        <button type="button" id="nx-lb-share-btn" style="padding:8px 15px; border-radius:999px; background:#10b981; border:none; color:#020617; font-size:12.5px; font-weight:900; cursor:pointer;">
-                            Share 🔗
-                        </button>
-                    </div>
-                </div>
-            `;
-
-            overlay.querySelector("#nx-lb-close").onclick = (e) => {
-                e.stopPropagation();
-                overlay.remove();
-            };
-
-            overlay.querySelector("#nx-lb-author-trigger").onclick = (e) => {
-                if (e.target.id === "nx-lb-close") return;
-                overlay.remove();
-                if (p.username) window.openPublicUserProfileModal(p.username);
-            };
-
-            overlay.querySelector("#nx-lb-zoom-btn").onclick = () => {
-                zoomLevel = zoomLevel === 1 ? 2 : zoomLevel === 2 ? 3 : 1;
-                const imgEl = overlay.querySelector("#nx-lb-main-img");
-                if (imgEl) imgEl.style.transform = `scale(${zoomLevel})`;
-                overlay.querySelector("#nx-lb-zoom-btn").innerText = `🔍 ${zoomLevel}x`;
-            };
-
-            const toggleLikeNow = async (forceLikeOnly) => {
-                if (!isUserVerified()) return;
-                const myK = getMyUsername();
-                if (!myK) return;
-                let arr = cleanUniqueList(p.likedBy || []);
-                if (arr.includes(myK)) {
-                    if (forceLikeOnly) return;
-                    arr = arr.filter((u) => u !== myK);
-                    p.likes = Math.max(0, arr.length);
-                } else {
-                    arr.push(myK);
-                    p.likes = Math.max(Number(p.likes || 0) + 1, arr.length);
-                }
-                p.likedBy = arr;
-                renderLightboxUI();
-                renderCleanZeroOverlapHomeFeed(true);
-                if (window.Nexus && Nexus.db && p.id) {
-                    await Nexus.db.collection("nexus_real_posts").doc(p.id).set({ likedBy: arr, likes: p.likes }, { merge: true }).catch(() => {});
-                }
-            };
-
-            const stageEl = overlay.querySelector("#nx-lb-stage");
-            stageEl.onclick = () => {
-                const now = Date.now();
-                if (now - lastTapTime < 320) {
-                    const heart = overlay.querySelector("#nx-lb-heart-pop");
-                    if (heart) {
-                        heart.style.display = "block";
-                        heart.style.animation = "nxHeartPop 0.75s ease forwards";
-                    }
-                    try {
-                        if (navigator.vibrate) navigator.vibrate(25);
-                    } catch (err) {}
-                    setTimeout(() => toggleLikeNow(true), 250);
-                }
-                lastTapTime = now;
-            };
-
-            overlay.querySelector("#nx-lb-like-btn").onclick = () => toggleLikeNow(false);
-            overlay.querySelector("#nx-lb-comment-btn").onclick = () => {
-                window.openRealPostCommentsDrawer(p, () => {
-                    renderLightboxUI();
-                    renderCleanZeroOverlapHomeFeed(true);
-                });
-            };
-            overlay.querySelector("#nx-lb-views-btn").onclick = () => {
-                const viewers = cleanUniqueList([...(p.viewedBy || []), ...(p.likedBy || []), p.username || "mohiy"]);
-                openFollowersFollowingModal("👁️ Post Viewed By", viewers);
-            };
-            overlay.querySelector("#nx-lb-vault-btn").onclick = () => {
-                let sv = JSON.parse(localStorage.getItem("nx_saved_posts") || "[]");
-                if (!sv.some((x) => x && x.id === p.id)) {
-                    sv.unshift(p);
-                    localStorage.setItem("nx_saved_posts", JSON.stringify(sv.slice(0, 50)));
-                }
-                if (window.Nexus && Nexus.toast) Nexus.toast("⚡ Saved to Nexus Vault!");
-            };
-            overlay.querySelector("#nx-lb-share-btn").onclick = () => {
-                const url = `https://nexus-community01.vercel.app/?post=${encodeURIComponent(p.id || "")}`;
-                if (navigator.share) {
-                    navigator.share({ title: "Nexus Post", url }).catch(() => {});
-                } else {
-                    navigator.clipboard?.writeText(url);
-                    if (window.Nexus && Nexus.toast) Nexus.toast("🔗 Post Link Copied!");
-                }
-            };
-        };
-
-        renderLightboxUI();
-        document.body.appendChild(overlay);
-    };
-
-    // =========================================================================
-    // 7. 👥 FULL-SCREEN INSTAGRAM FOLLOWERS / FOLLOWING / VIEWERS MODAL
-    // =========================================================================
-    window.openFullScreenConnectionsModal = function (targetUserObj, initialTab) {
-        crossSyncAllFollowersAndSongs();
-        const userObj = targetUserObj || getActiveUser() || { username: "mohiy", name: "Mohit_01" };
-        let activeTab = initialTab || "followers";
-
-        document.getElementById("nx-follow-list-modal")?.remove();
-        window.__nxPushBackLayer("nx-follow-list-modal", () => {
-            document.getElementById("nx-follow-list-modal")?.remove();
-        });
-
-        const modal = document.createElement("div");
-        modal.id = "nx-follow-list-modal";
-        modal.style.cssText =
-            "position:fixed; inset:0; background:#090d16; z-index:200125; display:flex; flex-direction:column; color:#fff; max-width:600px; margin:0 auto; box-shadow:0 0 60px rgba(0,0,0,0.95);";
-
-        const renderConnectionsUI = (searchQuery = "") => {
-            const me = getActiveUser();
-            const myKey = getMyUsername();
-            const myFollowing = cleanUniqueList((me && me.followingList) || []);
-
-            const followersArr = cleanUniqueList(userObj.followersList || []);
-            const followingArr = cleanUniqueList(userObj.followingList || []);
-            const customArr = cleanUniqueList(userObj.customList || []);
-
-            const rawList =
-                activeTab === "custom"
-                    ? customArr
-                    : activeTab === "following"
-                    ? followingArr
-                    : followersArr;
-
-            const q = searchQuery.toLowerCase().trim();
-            const filteredList = rawList.filter((u) => !q || u.includes(q));
-
-            const allUsers = (window.Nexus && Array.isArray(Nexus.users)) ? Nexus.users : [];
-            const suggestedUsers = allUsers
-                .filter(
-                    (u) =>
-                        u &&
-                        u.username &&
-                        u.username.toLowerCase() !== "member" &&
-                        !rawList.includes(u.username.toLowerCase()) &&
-                        u.username.toLowerCase() !== myKey
-                )
-                .slice(0, 12);
-
-            const buildUserRow = (uname) => {
-                const uObj = findUserObjectByAnyIdentifier(uname) || { username: uname, name: uname };
-                const uKey = (uObj.username || uname).toLowerCase().trim();
-                const iFollowThem = myFollowing.includes(uKey);
-                const isLive = isUserTrulyOnlineRightNow(uObj);
-                const song = getNormalizedProfileSong(uObj);
-
-                const av = uObj.dp
-                    ? `<img src="${uObj.dp}" loading="lazy" decoding="async" style="width:46px; height:46px; border-radius:50%; object-fit:cover; border:2px solid ${
-                          isLive ? "#10b981" : "#334155"
-                      }; flex-shrink:0;" />`
-                    : `<div style="width:46px; height:46px; border-radius:50%; background:linear-gradient(135deg,#10b981,#0284c7); color:#020617; font-weight:900; font-size:17px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${(
-                          uObj.name || uKey
-                      )[0].toUpperCase()}</div>`;
-
-                return `
-                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 14px; border-radius:16px; background:#0f172a; border:1px solid #1e293b; margin-bottom:8px;">
-                        <div data-view-u="${uKey}" style="display:flex; align-items:center; gap:11px; min-width:0; flex:1; cursor:pointer;">
-                            ${av}
-                            <div style="min-width:0; flex:1;">
-                                <div style="display:flex; align-items:center; gap:5px;">
-                                    <span style="font-size:14px; font-weight:900; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${
-                                        uObj.name || uKey
-                                    }</span>
-                                    <span style="background:#10b981; color:#020617; font-size:9px; font-weight:900; padding:1px 5px; border-radius:99px;">✓</span>
-                                    ${isLive ? `<span style="width:7px; height:7px; border-radius:50%; background:#10b981;"></span>` : ""}
-                                </div>
-                                <div style="font-size:11.5px; color:#38bdf8; font-weight:700;">@${uKey}</div>
-                                <div style="font-size:11px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                                    ${song ? "🎵 " + song.title : uObj.bio || ""}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
-                            ${
-                                uKey !== myKey
-                                    ? `<button type="button" data-f-toggle="${uKey}" style="padding:7px 13px; border-radius:10px; background:${
-                                          iFollowThem ? "#1e293b" : "#10b981"
-                                      }; color:${iFollowThem ? "#f8fafc" : "#020617"}; border:${
-                                          iFollowThem ? "1px solid #334155" : "none"
-                                      }; font-size:12px; font-weight:900; cursor:pointer;">
-                                          ${iFollowThem ? "Following ✓" : "Follow"}
-                                      </button>
-                                      <button type="button" data-dm-u="${uKey}" style="padding:7px 10px; border-radius:10px; background:#1e293b; border:1px solid #334155; color:#38bdf8; font-size:12px; cursor:pointer;" title="Direct Message">
-                                          💬
-                                      </button>`
-                                    : `<span style="font-size:11px; font-weight:800; color:#34d399; padding:6px 10px;">You</span>`
-                            }
-                        </div>
-                    </div>
-                `;
-            };
-
-            modal.innerHTML = `
-                <div style="padding:13px 16px; background:#0b1120; border-bottom:1px solid #1e293b; display:flex; align-items:center; justify-content:space-between;">
-                    <div style="display:flex; align-items:center; gap:12px;">
-                        <button type="button" id="nx-close-fl-modal" style="background:none; border:none; color:#f8fafc; font-size:21px; font-weight:900; cursor:pointer;">←</button>
-                        <div>
-                            <div style="font-size:16px; font-weight:900; color:#f8fafc;">@${userObj.username || "nexus"}</div>
-                            <div style="font-size:11px; color:#34d399; font-weight:700;">Official Nexus Connections</div>
-                        </div>
-                    </div>
-                </div>
-
-                ${
-                    activeTab !== "custom"
-                        ? `<div style="display:grid; grid-template-columns:1fr 1fr; background:#0b1120; border-bottom:1px solid #1e293b;">
-                               <button type="button" data-ctab="followers" style="padding:12px; background:none; border:none; border-bottom:2.5px solid ${
-                                   activeTab === "followers" ? "#10b981" : "transparent"
-                               }; color:${activeTab === "followers" ? "#f8fafc" : "#64748b"}; font-weight:900; font-size:13px; cursor:pointer;">
-                                   👥 ${followersArr.length} Followers
-                               </button>
-                               <button type="button" data-ctab="following" style="padding:12px; background:none; border:none; border-bottom:2.5px solid ${
-                                   activeTab === "following" ? "#10b981" : "transparent"
-                               }; color:${activeTab === "following" ? "#f8fafc" : "#64748b"}; font-weight:900; font-size:13px; cursor:pointer;">
-                                   ✨ ${followingArr.length} Following
-                               </button>
-                           </div>`
-                        : `<div style="padding:10px 16px; background:#0b1120; border-bottom:1px solid #1e293b; font-size:13.5px; font-weight:900; color:#38bdf8;">
-                               ${userObj.customTitle || "Members"} (${customArr.length})
-                           </div>`
-                }
-
-                <div style="padding:10px 14px; background:#090d16;">
-                    <input type="text" id="nx-conn-search-inp" value="${searchQuery}" placeholder="🔍 Search @username or name..." style="width:100%; padding:10px 14px; border-radius:12px; background:#0f172a; border:1px solid #1e293b; color:#fff; font-size:13px; outline:none;" />
-                </div>
-
-                <div style="flex:1; overflow-y:auto; padding:6px 14px 40px;">
-                    ${
-                        filteredList.length
-                            ? filteredList.map((u) => buildUserRow(u)).join("")
-                            : `<div style="text-align:center; padding:22px 12px; background:#0f172a; border:1px dashed #334155; border-radius:16px; margin-bottom:16px;">
-                                   <div style="font-size:24px; margin-bottom:4px;">👥</div>
-                                   <div style="font-size:13.5px; font-weight:800; color:#f8fafc;">No ${activeTab} yet</div>
-                                   <div style="font-size:11.5px; color:#94a3b8; margin-top:2px;">Connect with active Nexus members below!</div>
-                               </div>`
-                    }
-
-                    ${
-                        suggestedUsers.length
-                            ? `<div style="font-size:11.5px; font-weight:900; color:#38bdf8; text-transform:uppercase; letter-spacing:0.5px; margin:16px 4px 10px;">
-                                   🌟 Suggested Active Members for You
-                               </div>
-                               ${suggestedUsers.map((u) => buildUserRow(u.username)).join("")}`
-                            : ""
-                    }
-                </div>
-            `;
-
-            modal.querySelector("#nx-close-fl-modal").onclick = () => modal.remove();
-
-            modal.querySelectorAll("[data-ctab]").forEach((b) => {
-                b.onclick = () => {
-                    activeTab = b.getAttribute("data-ctab");
-                    renderConnectionsUI("");
-                };
-            });
-
-            const sInp = modal.querySelector("#nx-conn-search-inp");
-            if (sInp) {
-                sInp.oninput = () => renderConnectionsUI(sInp.value);
-            }
-
-            modal.querySelectorAll("[data-view-u]").forEach((row) => {
-                row.onclick = () => {
-                    const targetU = row.getAttribute("data-view-u");
-                    modal.remove();
-                    window.openPublicUserProfileModal(targetU);
-                };
-            });
-
-            modal.querySelectorAll("[data-dm-u]").forEach((btn) => {
-                btn.onclick = (e) => {
-                    e.stopPropagation();
-                    const targetU = btn.getAttribute("data-dm-u");
-                    window.openDirect1to1ChatWithUser(targetU);
-                };
-            });
-
-            modal.querySelectorAll("[data-f-toggle]").forEach((btn) => {
-                btn.onclick = async (e) => {
-                    e.stopPropagation();
-                    if (!isUserVerified()) return;
-                    const targetU = btn.getAttribute("data-f-toggle");
-                    const curMe = getActiveUser();
-                    if (!curMe || !curMe.username || !targetU) return;
-                    const myK = curMe.username.toLowerCase().trim();
-                    const tObj = findUserObjectByAnyIdentifier(targetU) || { username: targetU, followersList: [] };
-
-                    curMe.followingList = cleanUniqueList(curMe.followingList || []);
-                    tObj.followersList = cleanUniqueList(tObj.followersList || []);
-
-                    if (curMe.followingList.includes(targetU)) {
-                        curMe.followingList = curMe.followingList.filter((x) => x !== targetU);
-                        tObj.followersList = tObj.followersList.filter((x) => x !== myK);
-                    } else {
-                        curMe.followingList.push(targetU);
-                        tObj.followersList.push(myK);
-                    }
-
-                    localStorage.setItem("nx_active_account", JSON.stringify(curMe));
-                    crossSyncAllFollowersAndSongs();
-                    renderConnectionsUI(sInp ? sInp.value : "");
-
-                    if (window.Nexus && Nexus.db) {
-                        await Promise.allSettled([
-                            Nexus.db.collection("nexus_accounts").doc(targetU).set({ followersList: tObj.followersList }, { merge: true }),
-                            Nexus.db.collection("nexus_accounts").doc(myK).set({ followingList: curMe.followingList }, { merge: true })
-                        ]);
-                    }
-                };
-            });
-        };
-
-        renderConnectionsUI("");
-        document.body.appendChild(modal);
-    };
-
-    function openFollowersFollowingModal(title, usernameList) {
-        window.openFullScreenConnectionsModal(
-            { username: "nexus", customTitle: title, customList: usernameList },
-            "custom"
-        );
-    }
-    // =========================================================================
-    // 8. REAL COMMENTS DRAWER, QR DIGITAL ID & SONG PICKER (PART 2 OF 2)
-    // =========================================================================
-    window.openPostLikersModal = function (postObj) {
-        if (!postObj) return;
-        const likers = cleanUniqueList(postObj.likedBy || []);
-        openFollowersFollowingModal("❤️ Liked by", likers);
-    };
-
-    window.openRealPostCommentsDrawer = function (postObj, onCommentChange) {
-        if (!postObj) return;
-        document.getElementById("nx-post-comments-drawer")?.remove();
-
-        window.__nxPushBackLayer("nx-post-comments-drawer", () => {
-            document.getElementById("nx-post-comments-drawer")?.remove();
-        });
-
-        const modal = document.createElement("div");
-        modal.id = "nx-post-comments-drawer";
-        modal.style.cssText =
-            "position:fixed; inset:0; background:rgba(2,6,23,0.9); z-index:200135; display:flex; align-items:flex-end; justify-content:center; backdrop-filter:blur(6px);";
-
-        const renderCommentsContent = () => {
-            const comments = Array.isArray(postObj.comments) ? postObj.comments : [];
-            const myKey = getMyUsername();
-            const isPostOwner = isStrictOwnerOfPost(postObj);
-
-            const listHtml = comments.length
-                ? comments
-                      .map((c, idx) => {
-                          const cUser = (c.username || c.author || "mohiy").toLowerCase().trim();
-                          const canDelComment = isPostOwner || (myKey && cUser === myKey);
-                          const uMatch = findUserObjectByAnyIdentifier(cUser);
-                          const av =
-                              (uMatch && uMatch.dp) || c.dp
-                                  ? `<img src="${(uMatch && uMatch.dp) || c.dp}" loading="lazy" style="width:34px; height:34px; border-radius:50%; object-fit:cover; flex-shrink:0;" />`
-                                  : `<div style="width:34px; height:34px; border-radius:50%; background:#10b981; color:#020617; font-weight:900; font-size:13px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${(
-                                        c.author ||
-                                        c.username ||
-                                        "U"
-                                    )[0].toUpperCase()}</div>`;
-
-                          const tStr = window.formatRealNexusLastSeen(c.createdAt || c.time, false) || "Just now";
-
-                          return `
-                              <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:10px 12px; border-radius:14px; background:#090d16; border:1px solid #1e293b; margin-bottom:8px;">
-                                  <div style="display:flex; align-items:flex-start; gap:10px; min-width:0; flex:1;">
-                                      ${av}
-                                      <div style="min-width:0; flex:1;">
-                                          <div style="display:flex; align-items:center; gap:6px;">
-                                              <span data-c-user="${cUser}" style="font-size:12.5px; font-weight:900; color:#34d399; cursor:pointer;">@${
-                              c.username || c.author
-                          }</span>
-                                              <span style="font-size:10px; color:#64748b;">• ${tStr}</span>
-                                          </div>
-                                          <div style="font-size:13px; color:#f1f5f9; margin-top:3px; line-height:1.4; word-break:break-word;">${
-                                              c.text || c.content || ""
-                                          }</div>
-                                      </div>
-                                  </div>
-                                  ${
-                                      canDelComment
-                                          ? `<button type="button" data-del-cidx="${idx}" style="background:none; border:none; color:#f43f5e; font-size:12px; font-weight:800; cursor:pointer; padding:4px;">🗑️</button>`
-                                          : ""
-                                  }
-                              </div>
-                          `;
-                      })
-                      .join("")
-                : `<div style="text-align:center; padding:32px 12px; color:#64748b; font-size:13px;">💬 No comments yet. Be the first to comment!</div>`;
-
-            modal.innerHTML = `
-                <div style="background:#0f172a; border-top:1.5px solid #10b981; border-radius:24px 24px 0 0; width:100%; max-width:600px; max-height:84dvh; display:flex; flex-direction:column; padding:16px 16px 22px; color:#fff; box-shadow:0 -16px 50px rgba(0,0,0,0.95);">
-                    <div style="width:42px; height:4px; background:#334155; border-radius:999px; margin:0 auto 12px;"></div>
-                    <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #1e293b; margin-bottom:10px;">
-                        <h3 style="font-size:15.5px; font-weight:900; color:#f8fafc;">💬 Comments (${comments.length})</h3>
-                        <button type="button" id="nx-close-comments-drawer" style="width:30px; height:30px; border-radius:50%; background:#1e293b; border:none; color:#cbd5e1; font-weight:900; cursor:pointer;">✕</button>
-                    </div>
-
-                    <div style="flex:1; overflow-y:auto; max-height:52dvh; padding-right:2px;">
-                        ${listHtml}
-                    </div>
-
-                    <div style="display:flex; gap:8px; margin-top:12px; padding-top:10px; border-top:1px solid #1e293b;">
-                        <input type="text" id="nx-new-comment-inp" placeholder="Add a real comment..." style="flex:1; padding:11px 14px; border-radius:999px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; outline:none;" />
-                        <button type="button" id="nx-send-comment-btn" style="padding:11px 18px; border-radius:999px; background:#10b981; color:#020617; font-weight:900; font-size:12.5px; border:none; cursor:pointer;">Post</button>
-                    </div>
-                </div>
-            `;
-
-            modal.querySelector("#nx-close-comments-drawer").onclick = () => modal.remove();
-
-            modal.querySelectorAll("[data-c-user]").forEach((el) => {
-                el.onclick = () => {
-                    const u = el.getAttribute("data-c-user");
-                    modal.remove();
-                    window.openPublicUserProfileModal(u);
-                };
-            });
-
-            modal.querySelectorAll("[data-del-cidx]").forEach((btn) => {
-                btn.onclick = async () => {
-                    const cIdx = Number(btn.getAttribute("data-del-cidx"));
-                    postObj.comments.splice(cIdx, 1);
-                    if (window.Nexus && Nexus.db && postObj.id) {
-                        await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ comments: postObj.comments }, { merge: true }).catch(() => {});
-                    }
-                    renderCommentsContent();
-                    if (onCommentChange) onCommentChange();
-                };
-            });
-
-            const cInp = modal.querySelector("#nx-new-comment-inp");
-            const cBtn = modal.querySelector("#nx-send-comment-btn");
-
-            const submitComment = async () => {
-                if (!isUserVerified()) {
-                    modal.remove();
-                    if (window.Nexus) Nexus.switchTab("tab-profile");
-                    return;
-                }
-                const txt = (cInp.value || "").trim();
-                if (!txt) return;
-                const me = getActiveUser();
-                if (!me || !me.username) return;
-
-                if (!Array.isArray(postObj.comments)) postObj.comments = [];
-                postObj.comments.push({
-                    username: me.username,
-                    author: me.name || me.username,
-                    dp: me.dp || "",
-                    text: txt,
-                    createdAt: Date.now()
-                });
-
-                cInp.value = "";
-                renderCommentsContent();
-                if (onCommentChange) onCommentChange();
-
-                if (window.Nexus && Nexus.db && postObj.id) {
-                    await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ comments: postObj.comments }, { merge: true }).catch(() => {});
-                }
-            };
-
-            cBtn.onclick = submitComment;
-            cInp.onkeydown = (e) => {
-                if (e.key === "Enter") submitComment();
-            };
-        };
-
-        renderCommentsContent();
-        document.body.appendChild(modal);
-        modal.onclick = (e) => {
-            if (e.target === modal) modal.remove();
-        };
-    };
-
-    window.openProfileQrShareModal = function (userObj) {
-        if (!userObj || !userObj.username) return;
-        document.getElementById("nx-qr-share-modal")?.remove();
-
-        window.__nxPushBackLayer("nx-qr-share-modal", () => {
-            document.getElementById("nx-qr-share-modal")?.remove();
-        });
-
-        const profileUrl = `https://nexus-community01.vercel.app/?user=${encodeURIComponent(userObj.username)}`;
-        const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&bgcolor=090d16&color=10b981&data=${encodeURIComponent(profileUrl)}`;
-
-        const modal = document.createElement("div");
-        modal.id = "nx-qr-share-modal";
-        modal.style.cssText =
-            "position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:200110; display:flex; align-items:center; justify-content:center; padding:18px; backdrop-filter:blur(8px);";
-
-        modal.innerHTML = `
-            <div style="background:linear-gradient(155deg,#0f172a,#090d16); border:2px solid #10b981; border-radius:26px; width:100%; max-width:350px; padding:24px 20px; text-align:center; color:#fff; box-shadow:0 24px 60px rgba(0,0,0,0.95);">
-                <div style="font-size:11px; font-weight:900; color:#34d399; letter-spacing:1px; margin-bottom:4px;">⚡ NEXUS OFFICIAL DIGITAL ID</div>
-                <h3 style="font-size:19px; font-weight:900; color:#f8fafc;">${userObj.name || userObj.username} ✅</h3>
-                <div style="font-size:12.5px; color:#38bdf8; font-weight:700; margin-bottom:16px;">@${userObj.username}</div>
-
-                <div style="background:#090d16; border:1.5px solid #1e293b; border-radius:20px; padding:16px; display:inline-block; margin-bottom:16px;">
-                    <img src="${qrApiUrl}" alt="QR Code" style="width:185px; height:185px; display:block; border-radius:10px;" />
-                </div>
-
-                <p style="font-size:11.5px; color:#94a3b8; margin-bottom:16px;">
-                    Scan this QR code with any phone camera to open <strong style="color:#fff;">@${userObj.username}</strong>'s profile directly!
-                </p>
-
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                    <button type="button" id="nx-qr-copy-link" style="padding:11px; border-radius:12px; background:#10b981; color:#020617; font-weight:900; font-size:12.5px; border:none; cursor:pointer;">
-                        🔗 Share / Copy
-                    </button>
-                    <button type="button" id="nx-qr-close" style="padding:11px; border-radius:12px; background:#1e293b; color:#cbd5e1; font-weight:800; font-size:12.5px; border:1px solid #334155; cursor:pointer;">
-                        Close
-                    </button>
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-        modal.querySelector("#nx-qr-close").onclick = () => modal.remove();
-        modal.onclick = (e) => {
-            if (e.target === modal) modal.remove();
-        };
-
-        modal.querySelector("#nx-qr-copy-link").onclick = () => {
-            if (navigator.share) {
-                navigator.share({
-                    title: `@${userObj.username} on Nexus`,
-                    text: `🔥 Connect with @${userObj.username} on Nexus Community: `,
-                    url: profileUrl
-                }).catch(() => {});
-            } else {
-                navigator.clipboard?.writeText(profileUrl);
-                if (window.Nexus && Nexus.toast) Nexus.toast("✅ Profile Link Copied!");
-            }
-        };
-    };
-
-    window.togglePlayProfileSong = function (audioUrl, btnEl) {
-        if (!audioUrl) return;
-        if (activeSongAudio && activeSongAudio.src === audioUrl && !activeSongAudio.paused) {
-            activeSongAudio.pause();
-            if (btnEl) btnEl.innerHTML = "▶️ Play";
-            return;
-        }
-        if (activeSongAudio) {
-            activeSongAudio.pause();
-            if (activeSongBtn) activeSongBtn.innerHTML = "▶️ Play";
-        }
-        activeSongAudio = new Audio(audioUrl);
-        activeSongBtn = btnEl;
-        if (btnEl) btnEl.innerHTML = "⏸️ Playing";
-        activeSongAudio.play().catch(() => {
-            if (btnEl) btnEl.innerHTML = "▶️ Play";
-        });
-        activeSongAudio.onended = () => {
-            if (btnEl) btnEl.innerHTML = "▶️ Play";
-        };
-    };
-
-    function buildProfileSongPlayerCardHtml(songObj, playBtnId, changeBtnId) {
-        if (!songObj || !songObj.title || !songObj.audioUrl) return "";
-        return `
-            <div style="margin-top:10px; padding:9px 12px; border-radius:14px; background:linear-gradient(90deg,#090d16,#0f172a); border:1.5px solid rgba(16,185,129,0.5); display:flex; align-items:center; justify-content:space-between; gap:10px; box-shadow:0 6px 18px rgba(0,0,0,0.4);">
-                <div style="display:flex; align-items:center; gap:10px; min-width:0;">
-                    ${
-                        songObj.coverUrl
-                            ? `<img src="${songObj.coverUrl}" loading="lazy" style="width:36px; height:36px; border-radius:9px; object-fit:cover; border:1px solid #10b981; flex-shrink:0;" />`
-                            : `<span style="font-size:18px;">🎵</span>`
-                    }
-                    <div style="min-width:0;">
-                        <div style="display:flex; align-items:center; gap:6px;">
-                            <span style="display:inline-flex; align-items:flex-end; gap:2px; height:14px;">
-                                <i class="nx-eq-bar"></i><i class="nx-eq-bar"></i><i class="nx-eq-bar"></i>
-                            </span>
-                            <span style="font-size:12.5px; font-weight:900; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${songObj.title}</span>
-                        </div>
-                        <div style="font-size:10.5px; color:#34d399; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${
-                            songObj.artist || "Official Profile Anthem"
-                        }</div>
-                    </div>
-                </div>
-                <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
-                    <button type="button" id="${playBtnId}" style="padding:6px 12px; border-radius:999px; background:#10b981; color:#020617; font-weight:900; font-size:11.5px; border:none; cursor:pointer;">▶️ Play</button>
-                    ${
-                        changeBtnId
-                            ? `<button type="button" id="${changeBtnId}" style="padding:6px 9px; border-radius:999px; background:#1e293b; color:#38bdf8; font-weight:800; font-size:11px; border:1px solid #334155; cursor:pointer;" title="Change Song">🎵</button>`
-                            : ""
-                    }
-                </div>
-            </div>
-        `;
-    }
-
-    window.openProfileSongPickerModal = function () {
-        document.getElementById("nx-song-picker-modal")?.remove();
-        window.__nxPushBackLayer("nx-song-picker-modal", () => {
-            if (activeSongAudio) activeSongAudio.pause();
-            document.getElementById("nx-song-picker-modal")?.remove();
-        });
-
-        const modal = document.createElement("div");
-        modal.id = "nx-song-picker-modal";
-        modal.style.cssText =
-            "position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:200080; display:flex; align-items:flex-end; justify-content:center; backdrop-filter:blur(6px);";
-
-        modal.innerHTML = `
-            <div style="background:#0f172a; border-top:1.5px solid #10b981; border-radius:24px 24px 0 0; width:100%; max-width:600px; max-height:86dvh; display:flex; flex-direction:column; padding:18px 16px 26px; color:#fff; box-shadow:0 -14px 45px rgba(0,0,0,0.9);">
-                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-                    <div>
-                        <h3 style="font-size:16.5px; font-weight:900; color:#f8fafc;">🎵 Add Music to Your Profile</h3>
-                        <p style="font-size:11px; color:#94a3b8;">Visible & playable for EVERY member who visits your profile!</p>
-                    </div>
-                    <button type="button" id="nx-close-song-modal" style="width:30px; height:30px; border-radius:50%; background:#1e293b; border:none; color:#cbd5e1; font-weight:900; cursor:pointer;">✕</button>
-                </div>
-
-                <div style="display:flex; gap:8px; margin-bottom:12px;">
-                    <input type="text" id="nx-song-search-inp" placeholder="Search song or artist (e.g. Saiyaara, Arijit Singh)..." style="flex:1; padding:11px 14px; border-radius:12px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; outline:none;" />
-                    <button type="button" id="nx-song-search-btn" style="padding:11px 16px; border-radius:12px; background:#10b981; color:#020617; font-weight:900; font-size:12.5px; border:none; cursor:pointer;">Search 🔍</button>
-                </div>
-
-                <div id="nx-song-results-box" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; min-height:220px; max-height:52dvh;">
-                    <div style="text-align:center; padding:28px 12px; color:#64748b; font-size:12.5px;">
-                        🎶 Type any song name above and tap Search to preview & add it to your Profile!
-                    </div>
-                </div>
-
-                <button type="button" id="nx-remove-profile-song" style="margin-top:10px; padding:9px; border-radius:11px; background:rgba(244,63,94,0.12); border:1px solid rgba(244,63,94,0.35); color:#fb7185; font-size:12px; font-weight:800; cursor:pointer;">
-                    🗑️ Remove Current Profile Song
-                </button>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-        modal.querySelector("#nx-close-song-modal").onclick = () => {
-            if (activeSongAudio) activeSongAudio.pause();
-            modal.remove();
-        };
-
-        const searchInp = modal.querySelector("#nx-song-search-inp");
-        const searchBtn = modal.querySelector("#nx-song-search-btn");
-        const resBox = modal.querySelector("#nx-song-results-box");
-
-        const executeSongSearch = async () => {
-            const q = (searchInp.value || "").trim();
-            if (!q) return;
-            resBox.innerHTML = `<div style="text-align:center; padding:24px; color:#38bdf8; font-weight:800; font-size:13px;">⏳ Searching "${q}"...</div>`;
-
-            try {
-                const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&limit=14`);
-                const data = await res.json();
-                const tracks = (data && data.results) || [];
-
-                if (!tracks.length) {
-                    resBox.innerHTML = `<div style="text-align:center; padding:24px; color:#f43f5e; font-size:12.5px;">No songs found for "${q}".</div>`;
-                    return;
-                }
-
-                resBox.innerHTML = tracks
-                    .filter((t) => t && t.previewUrl)
-                    .map(
-                        (t, idx) => `
-                        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 11px; border-radius:14px; background:#090d16; border:1px solid #1e293b;">
-                            <div style="display:flex; align-items:center; gap:10px; min-width:0; flex:1;">
-                                <img src="${t.artworkUrl100 || ""}" loading="lazy" style="width:42px; height:42px; border-radius:10px; object-fit:cover; flex-shrink:0;" />
-                                <div style="min-width:0; flex:1;">
-                                    <div style="font-size:13px; font-weight:800; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${t.trackName || "Song"}</div>
-                                    <div style="font-size:11px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${t.artistName || "Artist"}</div>
-                                </div>
-                            </div>
-                            <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
-                                <button type="button" data-prev-url="${t.previewUrl}" style="padding:6px 10px; border-radius:9px; background:#1e293b; border:1px solid #334155; color:#38bdf8; font-size:11px; font-weight:800; cursor:pointer;">▶️</button>
-                                <button type="button" data-select-idx="${idx}" style="padding:6px 12px; border-radius:9px; background:#10b981; border:none; color:#020617; font-size:11.5px; font-weight:900; cursor:pointer;">Add ✓</button>
-                            </div>
-                        </div>
-                    `
-                    )
-                    .join("");
-
-                resBox.querySelectorAll("[data-prev-url]").forEach((b) => {
-                    b.onclick = () => window.togglePlayProfileSong(b.getAttribute("data-prev-url"), b);
-                });
-
-                resBox.querySelectorAll("[data-select-idx]").forEach((b) => {
-                    b.onclick = async () => {
-                        const track = tracks[Number(b.getAttribute("data-select-idx"))];
-                        if (!track) return;
-                        const me = getActiveUser();
-                        if (!me || !me.username) return;
-                        const myKey = me.username.toLowerCase().trim();
-
-                        const songObj = {
-                            title: track.trackName || "Song",
-                            artist: track.artistName || "Artist",
-                            audioUrl: track.previewUrl,
-                            coverUrl: track.artworkUrl100 || ""
-                        };
-
-                        me.profileSong = songObj;
-                        me.profileSongJson = JSON.stringify(songObj);
-                        localStorage.setItem("nx_active_account", JSON.stringify(me));
-
-                        if (window.Nexus && Array.isArray(Nexus.users)) {
-                            const myEntry = Nexus.users.find((u) => u && u.username && u.username.toLowerCase() === myKey);
-                            if (myEntry) {
-                                myEntry.profileSong = songObj;
-                                myEntry.profileSongJson = me.profileSongJson;
-                            }
-                        }
-
-                        if (window.Nexus && Nexus.db) {
-                            await Nexus.db
-                                .collection("nexus_accounts")
-                                .doc(myKey)
-                                .set({ profileSong: songObj, profileSongJson: me.profileSongJson }, { merge: true })
-                                .catch(() => {});
-                        }
-                        if (activeSongAudio) activeSongAudio.pause();
-                        modal.remove();
-                        renderMyInstagramProfileTab();
-                        if (window.Nexus && Nexus.toast) Nexus.toast("🎵 Song Added & Synced for All Users!");
-                    };
-                });
-            } catch (err) {
-                resBox.innerHTML = `<div style="text-align:center; padding:24px; color:#f43f5e; font-size:12.5px;">Network slow, please tap Search again.</div>`;
-            }
-        };
-
-        searchBtn.onclick = executeSongSearch;
-        searchInp.onkeydown = (e) => {
-            if (e.key === "Enter") executeSongSearch();
-        };
-
-        modal.querySelector("#nx-remove-profile-song").onclick = async () => {
-            const me = getActiveUser();
-            if (!me || !me.username) return;
-            delete me.profileSong;
-            delete me.profileSongJson;
-            localStorage.setItem("nx_active_account", JSON.stringify(me));
-            if (window.Nexus && Nexus.db) {
-                await Nexus.db.collection("nexus_accounts").doc(me.username.toLowerCase().trim()).set({ profileSong: null, profileSongJson: "" }, { merge: true }).catch(() => {});
-            }
-            modal.remove();
-            renderMyInstagramProfileTab();
-            if (window.Nexus && Nexus.toast) Nexus.toast("🗑️ Profile Song Removed");
-        };
-    };
-
-    // =========================================================================
-    // 9. 📱 ZERO-OVERLAP POST CARDS BUILDER (HOME FEED & PROFILE FEED)
-    // =========================================================================
-    function openSystematicPostThreeDotSheet(postObj, onUpdateCallback) {
-        document.getElementById("nx-sys-post-3dot-sheet")?.remove();
-        window.__nxPushBackLayer("nx-sys-post-3dot-sheet", () => {
-            document.getElementById("nx-sys-post-3dot-sheet")?.remove();
-        });
-
-        const isMyOwnPost = isStrictOwnerOfPost(postObj);
-
-        const sheet = document.createElement("div");
-        sheet.id = "nx-sys-post-3dot-sheet";
-        sheet.style.cssText =
-            "position:fixed; inset:0; background:rgba(2,6,23,0.88); z-index:200110; display:flex; align-items:flex-end; justify-content:center; backdrop-filter:blur(5px);";
-
-        const btnStyle =
-            "width:100%; text-align:left; padding:13px 16px; background:#090d16; border:1px solid #1e293b; border-radius:13px; color:#f8fafc; font-size:13.5px; font-weight:800; display:flex; align-items:center; gap:11px; cursor:pointer; margin-bottom:7px;";
-
-        sheet.innerHTML = `
-            <div style="background:#0f172a; border-top:1.5px solid #334155; border-radius:24px 24px 0 0; width:100%; max-width:600px; padding:18px 16px 26px; color:#fff; box-shadow:0 -14px 45px rgba(0,0,0,0.95);">
-                <div style="width:42px; height:4px; background:#334155; border-radius:999px; margin:0 auto 14px;"></div>
-                <div style="font-size:12px; font-weight:900; color:#38bdf8; text-transform:uppercase; letter-spacing:0.6px; margin-bottom:10px; padding:0 4px;">
-                    ⚡ Nexus Official Post Options
-                </div>
-
-                <button type="button" id="nx-3d-vault" style="${btnStyle}">
-                    <span>⚡</span> <span>Save to Nexus Vault (Cloud Bookmark)</span>
-                </button>
-                <button type="button" id="nx-3d-share" style="${btnStyle}">
-                    <span>🔗</span> <span>Share Direct Post Link</span>
-                </button>
-
-                ${
-                    isMyOwnPost
-                        ? `
-                    <button type="button" id="nx-3d-pin" style="${btnStyle} color:#fbbf24; border-color:rgba(251,191,36,0.35);">
-                        <span>📌</span> <span>${postObj.pinned ? "Unpin from Your Profile" : "Pin to Top of Your Profile"}</span>
-                    </button>
-                    <button type="button" id="nx-3d-edit-cap" style="${btnStyle} color:#34d399; border-color:rgba(16,185,129,0.35);">
-                        <span>✏️</span> <span>Edit Your Post Caption</span>
-                    </button>
-                    <label for="nx-inp-3d-replace" style="${btnStyle} color:#38bdf8; border-color:rgba(56,189,248,0.35);">
-                        <span>🖼️</span> <span>Replace Your Post Photo or Video</span>
-                    </label>
-                    <input type="file" id="nx-inp-3d-replace" accept="image/*,video/*" style="display:none;" />
-                    <button type="button" id="nx-3d-del" style="${btnStyle} color:#f43f5e; border-color:rgba(244,63,94,0.4); background:rgba(244,63,94,0.1);">
-                        <span>🗑️</span> <span>Delete Your Post Permanently</span>
-                    </button>
-                `
-                        : ""
-                }
-
-                <button type="button" id="nx-3d-cancel" style="width:100%; padding:12px; border-radius:13px; background:#1e293b; border:none; color:#94a3b8; font-weight:900; font-size:13px; cursor:pointer; margin-top:4px;">
-                    Cancel
-                </button>
-            </div>
-        `;
-
-        document.body.appendChild(sheet);
-        sheet.querySelector("#nx-3d-cancel").onclick = () => sheet.remove();
-        sheet.onclick = (e) => {
-            if (e.target === sheet) sheet.remove();
-        };
-
-        sheet.querySelector("#nx-3d-vault").onclick = () => {
-            let saved = [];
-            try {
-                saved = JSON.parse(localStorage.getItem("nx_saved_posts") || "[]");
-            } catch (e) {}
-            if (!saved.some((x) => x && x.id === postObj.id)) {
-                saved.unshift(postObj);
-                localStorage.setItem("nx_saved_posts", JSON.stringify(saved.slice(0, 50)));
-            }
-            sheet.remove();
-            if (window.Nexus && Nexus.toast) Nexus.toast("⚡ Saved to Nexus Vault!");
-        };
-
-        sheet.querySelector("#nx-3d-share").onclick = () => {
-            const url = `https://nexus-community01.vercel.app/?post=${encodeURIComponent(postObj.id || "")}`;
-            if (navigator.share) {
-                navigator.share({ title: "Nexus Post", text: postObj.content || "Check out this post on Nexus:", url }).catch(() => {});
-            } else {
-                navigator.clipboard?.writeText(url);
-                if (window.Nexus && Nexus.toast) Nexus.toast("🔗 Post Link Copied!");
-            }
-            sheet.remove();
-        };
-
-        if (isMyOwnPost) {
-            sheet.querySelector("#nx-3d-pin").onclick = async () => {
-                postObj.pinned = !postObj.pinned;
-                if (window.Nexus && Nexus.db && postObj.id) {
-                    await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ pinned: postObj.pinned }, { merge: true }).catch(() => {});
-                }
-                sheet.remove();
-                renderCleanZeroOverlapHomeFeed(true);
-                if (onUpdateCallback) onUpdateCallback();
-                if (window.Nexus && Nexus.toast) Nexus.toast(postObj.pinned ? "📌 Pinned to Profile!" : "Unpinned Post");
-            };
-
-            sheet.querySelector("#nx-3d-edit-cap").onclick = () => {
-                sheet.remove();
-                openInlineCaptionEditorModal(postObj, onUpdateCallback);
-            };
-
-            const repInp = sheet.querySelector("#nx-inp-3d-replace");
-            repInp.onchange = async (e) => {
-                const file = e.target.files && e.target.files[0];
-                if (!file) return;
-                sheet.remove();
-                if (window.Nexus && Nexus.toast) Nexus.toast("⏳ Updating Post Media...");
-
-                if (file.type.startsWith("video/") && typeof window.__nxUploadVideoForPost === "function") {
-                    window.__nxUploadVideoForPost(file, async (videoRef) => {
-                        postObj.image = videoRef;
-                        postObj.videoUrl = videoRef;
-                        postObj.mediaType = "video";
-                        if (window.Nexus && Nexus.db && postObj.id) {
-                            await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ image: videoRef, videoUrl: videoRef, mediaType: "video" }, { merge: true }).catch(() => {});
-                        }
-                        renderCleanZeroOverlapHomeFeed(true);
-                        if (onUpdateCallback) onUpdateCallback();
-                        if (window.Nexus && Nexus.toast) Nexus.toast("🎬 Post Video Updated!");
-                    });
-                } else if (window.Nexus && Nexus.compressImage) {
-                    Nexus.compressImage(file, 780, 0.72, async (b64) => {
-                        postObj.image = b64;
-                        postObj.mediaType = "image";
-                        if (window.Nexus && Nexus.db && postObj.id) {
-                            await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ image: b64, mediaType: "image" }, { merge: true }).catch(() => {});
-                        }
-                        renderCleanZeroOverlapHomeFeed(true);
-                        if (onUpdateCallback) onUpdateCallback();
-                        if (window.Nexus && Nexus.toast) Nexus.toast("📸 Post Photo Updated!");
-                    });
-                }
-            };
-
-            sheet.querySelector("#nx-3d-del").onclick = async () => {
-                if (!confirm("🗑️ Delete your post permanently?")) return;
-                if (window.__nxMarkPostDeletedLocally && postObj.id) {
-                    window.__nxMarkPostDeletedLocally(postObj.id);
-                }
-                if (window.Nexus && Nexus.db && postObj.id) {
-                    await Nexus.db.collection("nexus_real_posts").doc(postObj.id).delete().catch(() => {});
-                }
-                sheet.remove();
-                document.getElementById("nx-scrollable-profile-feed-modal")?.remove();
-                renderCleanZeroOverlapHomeFeed(true);
-                renderMyInstagramProfileTab();
-                if (window.Nexus && Nexus.toast) Nexus.toast("🗑️ Your Post Deleted!");
-            };
-        }
-    }
-
-    function openInlineCaptionEditorModal(postObj, onUpdateCallback) {
-        if (!isStrictOwnerOfPost(postObj)) return;
-        document.getElementById("nx-cap-edit-modal")?.remove();
-        const modal = document.createElement("div");
-        modal.id = "nx-cap-edit-modal";
-        modal.style.cssText =
-            "position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:200115; display:flex; align-items:center; justify-content:center; padding:16px;";
-
-        modal.innerHTML = `
-            <div style="background:#0f172a; border:1.5px solid #10b981; border-radius:22px; width:100%; max-width:410px; padding:18px; color:#fff;">
-                <h3 style="font-size:15px; font-weight:900; color:#34d399; margin-bottom:10px;">✏️ Edit Your Post Caption</h3>
-                <textarea id="nx-new-cap-txt" rows="4" style="width:100%; padding:11px 13px; border-radius:12px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13.5px; outline:none; resize:none;">${
-                    postObj.content || postObj.text || ""
-                }</textarea>
-                <div style="display:flex; gap:8px; margin-top:12px;">
-                    <button type="button" id="nx-save-cap-btn" style="flex:1; padding:11px; border-radius:12px; background:#10b981; color:#020617; font-weight:900; font-size:13px; border:none; cursor:pointer;">💾 Save Caption</button>
-                    <button type="button" id="nx-cancel-cap-btn" style="padding:11px 16px; border-radius:12px; background:#1e293b; color:#cbd5e1; font-weight:800; font-size:13px; border:none; cursor:pointer;">Cancel</button>
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-        modal.querySelector("#nx-cancel-cap-btn").onclick = () => modal.remove();
-        modal.querySelector("#nx-save-cap-btn").onclick = async () => {
-            const newTxt = (modal.querySelector("#nx-new-cap-txt").value || "").trim();
-            postObj.content = newTxt;
-            postObj.text = newTxt;
-            if (window.Nexus && Nexus.db && postObj.id) {
-                await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ content: newTxt, text: newTxt }, { merge: true }).catch(() => {});
-            }
-            modal.remove();
-            renderCleanZeroOverlapHomeFeed(true);
-            if (onUpdateCallback) onUpdateCallback();
-            renderMyInstagramProfileTab();
-            if (window.Nexus && Nexus.toast) Nexus.toast("✅ Caption Updated!");
-        };
-    }
-
-    function buildScrollablePostCardsHtml(postsArray, ownerUserObj) {
-        const myKey = getMyUsername();
-
-        return postsArray
-            .map((p, idx) => {
-                recordRealPostView(p);
-
-                const pOwnerName = p.author || (ownerUserObj && (ownerUserObj.name || ownerUserObj.username)) || "Mohit_01";
-                const pOwnerUname = p.username || (ownerUserObj && ownerUserObj.username) || "mohiy";
-                const uMatch = findUserObjectByAnyIdentifier(pOwnerUname);
-                const dpUrl = (ownerUserObj && ownerUserObj.dp) || (uMatch && uMatch.dp) || p.dp || "";
-                const authorBio = (uMatch && uMatch.bio) || p.bio || "";
-
-                const img = p.image || p.videoUrl || "";
-                const isVid =
-                    p.mediaType === "video" ||
-                    String(img).startsWith("data:video/") ||
-                    String(img).startsWith("blob:") ||
-                    String(img).startsWith("NX_VIDEO_STREAM:") ||
-                    String(img).match(/\.(mp4|webm|mov)(\?|$)/i);
-
-                const av = dpUrl
-                    ? `<img src="${dpUrl}" loading="lazy" decoding="async" style="width:40px; height:40px; border-radius:50%; object-fit:cover; border:1.5px solid #10b981; flex-shrink:0;" />`
-                    : `<div style="width:40px; height:40px; border-radius:50%; background:#10b981; color:#020617; font-weight:900; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${pOwnerName[0].toUpperCase()}</div>`;
-
-                let mediaHtml = "";
-                if (img) {
-                    if (isVid) {
-                        const cachedBlob = videoBlobCache[img] || "";
-                        mediaHtml = `
-                            <div class="nx-official-video-player" style="position:relative;width:100%;background:#000;border-top:1px solid #1e293b;border-bottom:1px solid #1e293b;overflow:hidden;">
-                                <video class="nx-official-video" data-stream-ref="${
-                                    String(img).startsWith("NX_VIDEO_STREAM:") ? img : ""
-                                }" src="${
-                                    cachedBlob || (String(img).startsWith("NX_VIDEO_STREAM:") ? "" : img)
-                                }" playsinline webkit-playsinline muted autoplay preload="auto" disablepictureinpicture controlslist="nodownload noplaybackrate" style="width:100%;max-height:460px;min-height:220px;display:block;object-fit:contain;background:#000;"></video>
-                                <button type="button" data-nx-video-center-play aria-label="Play video" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:62px;height:62px;border:1px solid rgba(255,255,255,.35);border-radius:50%;background:rgba(15,23,42,.84);color:#fff;font-size:25px;font-weight:900;display:flex;align-items:center;justify-content:center;z-index:3;">▶</button>
-                                <div style="position:absolute;left:0;right:0;bottom:0;padding:34px 12px 10px;background:linear-gradient(transparent,rgba(0,0,0,.9));display:flex;align-items:center;gap:8px;z-index:4;">
-                                    <button type="button" data-nx-video-play aria-label="Play or pause" style="border:0;background:transparent;color:#fff;font-size:18px;font-weight:900;padding:5px;">▶</button>
-                                    <span data-nx-video-time style="color:#fff;font-size:11px;font-weight:700;min-width:68px;">0:00 / 0:00</span>
-                                    <input data-nx-video-seek aria-label="Seek video" type="range" min="0" max="1000" value="0" style="flex:1;min-width:24px;accent-color:#10b981;height:4px;">
-                                    <button type="button" data-nx-video-mute aria-label="Unmute video" style="border:0;background:transparent;color:#fff;font-size:17px;padding:5px;">🔇</button>
-                                    <button type="button" data-nx-video-fullscreen aria-label="Fullscreen" style="border:0;background:transparent;color:#fff;font-size:19px;padding:5px;">⛶</button>
-                                </div>
-                            </div>
-                        `;
-                    } else {
-                        mediaHtml = `
-                            <div class="nx-feed-photo-open" data-fidx="${idx}" style="position:relative; width:100%; background:#090d16; border-top:1px solid #1e293b; border-bottom:1px solid #1e293b; cursor:pointer;">
-                                <img src="${img}" loading="lazy" decoding="async" style="width:100%; max-height:520px; object-fit:cover; display:block;" />
-                                <span style="position:absolute; top:12px; right:12px; background:rgba(9,13,22,0.85); border:1px solid #38bdf8; color:#e0f2fe; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:800;">🔍 Full View</span>
-                            </div>
-                        `;
-                    }
-                }
-
-                const postSongHtml = (p.songUrl && p.songTitle)
-                    ? `<div class="nx-real-post-song-bar" data-song-url="${p.songUrl}" style="margin:6px 14px; padding:7px 12px; border-radius:12px; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.35); display:flex; align-items:center; justify-content:space-between; cursor:pointer;">
-                           <span style="font-size:12px; font-weight:800; color:#34d399; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">🎵 ${p.songTitle}</span>
-                           <span class="nx-ps-state" style="background:#10b981; color:#020617; padding:2px 9px; border-radius:99px; font-size:11px; font-weight:900;">▶ Play</span>
-                       </div>`
-                    : "";
-
-                const likedByArr = cleanUniqueList(p.likedBy || []);
-                const isLikedByMe = Boolean(myKey && likedByArr.includes(myKey));
-                const realLikesCount = Math.max(likedByArr.length, Number(p.likes || 0));
-
-                const viewedByArr = cleanUniqueList(p.viewedBy || []);
-                const realViewsCount = Math.max(viewedByArr.length, Number(p.views || 1), realLikesCount);
-
-                const commentsArr = Array.isArray(p.comments) ? p.comments : [];
-                const timeLabel = window.formatRealNexusLastSeen(p.createdAt, false) || "Recent";
-
-                const firstLikerName = likedByArr[0] || pOwnerUname;
-                const likedByBannerHtml =
-                    realLikesCount > 0
-                        ? `<div class="nx-real-likers-bar" data-fidx="${idx}" style="margin:10px 14px 2px; padding:8px 12px; border-radius:12px; background:rgba(244,63,94,0.12); border:1px solid rgba(244,63,94,0.3); display:flex; align-items:center; justify-content:space-between; cursor:pointer;">
-                               <span style="font-size:12px; font-weight:800; color:#fda4af;">
-                                   ❤️ Liked by <strong>@${firstLikerName}</strong>${
-                              realLikesCount > 1 ? ` + ${realLikesCount - 1} others` : ""
-                          }
-                               </span>
-                               <span style="font-size:11.5px; font-weight:900; color:#38bdf8;">View All →</span>
-                           </div>`
-                        : "";
-
-                const btnPillStyle =
-                    "padding:7px 12px; border-radius:999px; background:#1e293b; border:1px solid #334155; color:#cbd5e1; font-size:12px; font-weight:800; display:inline-flex; align-items:center; gap:5px; cursor:pointer;";
-
-                return `
-                    <article id="nx-feed-post-card-${idx}" class="nx-v31-post-card">
-                        <div style="padding:12px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
-                            <div data-card-author="${pOwnerUname}" style="display:flex; align-items:center; gap:10px; min-width:0; flex:1; cursor:pointer;">
-                                ${av}
-                                <div style="min-width:0; flex:1;">
-                                    <div style="font-size:14px; font-weight:900; color:#f8fafc; display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
-                                        <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${pOwnerName}</span>
-                                        <span style="background:#10b981; color:#020617; font-size:9.5px; font-weight:900; padding:1px 5px; border-radius:99px;">✓</span>
-                                        ${
-                                            p.pinned
-                                                ? `<span style="background:rgba(245,158,11,0.18); border:1px solid #fbbf24; color:#fbbf24; font-size:9.5px; padding:1px 6px; border-radius:99px;">📌 PINNED</span>`
-                                                : ""
-                                        }
-                                    </div>
-                                    <div style="font-size:11px; color:#38bdf8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${
-                                        authorBio ? authorBio + " • " : "@" + pOwnerUname + " • "
-                                    }${timeLabel}</div>
-                                </div>
-                            </div>
-                            <button type="button" class="nx-feed-card-3dot" data-fidx="${idx}" style="width:34px; height:34px; border-radius:50%; background:#1e293b; border:1px solid #334155; color:#f8fafc; font-size:17px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-                                ⋮
-                            </button>
-                        </div>
-
-                        ${postSongHtml}
-
-                        ${
-                            p.content || p.text
-                                ? `<div style="padding:${
-                                      p.cardGradient ? "28px 18px" : "2px 15px 12px"
-                                  }; background:${p.cardGradient || "transparent"}; text-align:${
-                                      p.cardGradient ? "center" : "left"
-                                  }; font-size:${p.cardGradient ? "17px" : "13.5px"}; font-weight:${
-                                      p.cardGradient ? "900" : "500"
-                                  }; color:#f1f5f9; line-height:1.5; white-space:pre-line; word-break:break-word;">${
-                                      p.content || p.text
-                                  }</div>`
-                                : ""
-                        }
-
-                        ${mediaHtml}
-
-                        ${likedByBannerHtml}
-
-                        <div style="padding:10px 12px 12px; display:flex; align-items:center; justify-content:space-between; gap:6px; flex-wrap:wrap;">
-                            <button type="button" class="nx-feed-like-btn" data-fidx="${idx}" style="${btnPillStyle} ${
-                    isLikedByMe
-                        ? "background:rgba(244,63,94,0.18); border-color:#f43f5e; color:#f43f5e;"
-                        : ""
-                }">
-                                <span>${isLikedByMe ? "❤️" : "🤍"}</span>
-                                <span class="nx-like-num">${realLikesCount}</span>
-                            </button>
-
-                            <button type="button" class="nx-feed-comment-btn" data-fidx="${idx}" style="${btnPillStyle}">
-                                <span>💬</span>
-                                <span class="nx-comment-num">${commentsArr.length}</span>
-                            </button>
-
-                            <button type="button" class="nx-feed-views-btn" data-fidx="${idx}" style="${btnPillStyle}" title="See who viewed this post">
-                                <span>👁️</span>
-                                <span>${realViewsCount}</span>
-                            </button>
-
-                            <button type="button" class="nx-feed-save-btn" data-fidx="${idx}" style="${btnPillStyle}" title="Save to Nexus Vault">
-                                <span>⚡</span>
-                            </button>
-
-                            <button type="button" class="nx-feed-share-btn" data-fidx="${idx}" style="${btnPillStyle} color:#38bdf8;">
-                                <span>Share</span>
-                            </button>
-                        </div>
-                    </article>
-                `;
-            })
-            .join("");
     }
 
     const feedVideoViewportObserver = new IntersectionObserver((entries) => {
         entries.forEach((entry) => {
             const v = entry.target;
-            if (!entry.isIntersecting && !v.paused) {
-                v.pause();
-            }
+            if (!entry.isIntersecting && !v.paused) v.pause();
         });
     }, { threshold: 0.35 });
 
@@ -1971,7 +545,6 @@
         containerEl.querySelectorAll(".nx-official-video-player").forEach((player) => {
             if (player.dataset.nxVideoControlsBound === "1") return;
             player.dataset.nxVideoControlsBound = "1";
-
             const video = player.querySelector("video.nx-official-video");
             const playButtons = player.querySelectorAll("[data-nx-video-play], [data-nx-video-center-play]");
             const centerButton = player.querySelector("[data-nx-video-center-play]");
@@ -1982,2248 +555,250 @@
             if (!video) return;
 
             feedVideoViewportObserver.observe(video);
-
-            const formatTime = (value) => {
-                if (!Number.isFinite(value)) return "0:00";
-                const seconds = Math.max(0, Math.floor(value));
-                return Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
+            const fmtT = (val) => {
+                if (!Number.isFinite(val)) return "0:00";
+                const s = Math.max(0, Math.floor(val));
+                return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
             };
-
             const update = () => {
-                const duration = Number.isFinite(video.duration) ? video.duration : 0;
-                if (seek && duration > 0) seek.value = String(Math.round((video.currentTime / duration) * 1000));
-                if (timeLabel) timeLabel.textContent = formatTime(video.currentTime) + " / " + formatTime(duration);
-                player.querySelectorAll("[data-nx-video-play]").forEach((button) => {
-                    button.textContent = video.paused ? "▶" : "Ⅱ";
-                });
+                const dur = Number.isFinite(video.duration) ? video.duration : 0;
+                if (seek && dur > 0) seek.value = String(Math.round((video.currentTime / dur) * 1000));
+                if (timeLabel) timeLabel.textContent = fmtT(video.currentTime) + " / " + fmtT(dur);
+                player.querySelectorAll("[data-nx-video-play]").forEach((b) => { b.textContent = video.paused ? "▶" : "Ⅱ"; });
                 if (centerButton) centerButton.style.display = video.paused ? "flex" : "none";
                 if (muteButton) muteButton.textContent = video.muted ? "🔇" : "🔊";
             };
-
-            const togglePlay = async (event) => {
-                if (event) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                }
+            const togglePlay = async (ev) => {
+                if (ev) { ev.preventDefault(); ev.stopPropagation(); }
                 if (video.paused) {
-                    document.querySelectorAll("video.nx-official-video").forEach((other) => {
-                        if (other !== video) other.pause();
-                    });
-                    try {
-                        await video.play();
-                    } catch (error) {}
-                } else {
-                    video.pause();
-                }
+                    document.querySelectorAll("video.nx-official-video").forEach((other) => { if (other !== video) other.pause(); });
+                    try { await video.play(); } catch (e) {}
+                } else video.pause();
                 update();
             };
-
-            playButtons.forEach((button) => button.addEventListener("click", togglePlay));
+            playButtons.forEach((b) => b.addEventListener("click", togglePlay));
             video.addEventListener("click", togglePlay);
-            video.addEventListener("play", update);
-            video.addEventListener("pause", update);
-            video.addEventListener("timeupdate", update);
-            video.addEventListener("loadedmetadata", update);
-            video.addEventListener("durationchange", update);
-            video.addEventListener("ended", update);
-            video.addEventListener("volumechange", update);
-
+            ["play", "pause", "timeupdate", "loadedmetadata", "durationchange", "ended", "volumechange"].forEach((evt) => video.addEventListener(evt, update));
             if (seek) {
-                seek.addEventListener("input", (event) => {
-                    event.stopPropagation();
-                    if (Number.isFinite(video.duration) && video.duration > 0) {
-                        video.currentTime = (Number(seek.value) / 1000) * video.duration;
-                    }
+                seek.addEventListener("input", (ev) => {
+                    ev.stopPropagation();
+                    if (Number.isFinite(video.duration) && video.duration > 0) video.currentTime = (Number(seek.value) / 1000) * video.duration;
                     update();
                 });
-                seek.addEventListener("click", (event) => event.stopPropagation());
+                seek.addEventListener("click", (ev) => ev.stopPropagation());
             }
-
-            if (muteButton) {
-                muteButton.addEventListener("click", (event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    video.muted = !video.muted;
-                    update();
-                });
-            }
-
-            if (fullscreenButton) {
-                fullscreenButton.addEventListener("click", async (event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    try {
-                        if (document.fullscreenElement) await document.exitFullscreen();
-                        else if (player.requestFullscreen) await player.requestFullscreen();
-                    } catch (error) {}
-                });
-            }
-
+            if (muteButton) muteButton.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); video.muted = !video.muted; update(); });
+            if (fullscreenButton) fullscreenButton.addEventListener("click", async (ev) => {
+                ev.preventDefault(); ev.stopPropagation();
+                try { if (document.fullscreenElement) await document.exitFullscreen(); else if (player.requestFullscreen) await player.requestFullscreen(); } catch (e) {}
+            });
             update();
         });
     }
 
-    function bindRealPostCardEvents(containerEl, postsArray, refreshViewFn) {
+    function buildScrollablePostCardsHtml(postsArray, ownerUserObj) {
+        const myKey = getMyUsername();
+        return postsArray.map((p, idx) => {
+            recordRealPostView(p);
+            const pOwnerName = p.author || (ownerUserObj && (ownerUserObj.name || ownerUserObj.username)) || "Member";
+            const pOwnerUname = normU(p.username || (ownerUserObj && ownerUserObj.username) || "member");
+            const uMatch = findUserObjectByAnyIdentifier(pOwnerUname);
+            const dpUrl = (ownerUserObj && ownerUserObj.dp) || (uMatch && uMatch.dp) || p.dp || "";
+            const authorBio = (uMatch && uMatch.bio) || p.bio || "";
+            const img = p.image || p.videoUrl || "";
+            const isVid = p.mediaType === "video" || /^data:video\/|^blob:/i.test(img) || /\.(mp4|webm|mov)(\?|$)/i.test(img);
+
+            const av = dpUrl
+                ? `<img src="${esc(dpUrl)}" loading="lazy" decoding="async" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:1.5px solid #10b981;flex-shrink:0;">`
+                : `<div style="width:40px;height:40px;border-radius:50%;background:#10b981;color:#020617;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${esc(pOwnerName[0].toUpperCase())}</div>`;
+
+            let mediaHtml = "";
+            if (img && !String(img).startsWith("NX_VIDEO_STREAM:")) {
+                if (isVid) {
+                    mediaHtml = `<div class="nx-official-video-player" style="position:relative;width:100%;background:#000;border-top:1px solid #1e293b;border-bottom:1px solid #1e293b;overflow:hidden;">
+                        <video class="nx-official-video" src="${esc(img)}" playsinline webkit-playsinline muted preload="metadata" disablepictureinpicture controlslist="nodownload noplaybackrate" style="width:100%;max-height:460px;min-height:220px;display:block;object-fit:contain;background:#000;"></video>
+                        <button type="button" data-nx-video-center-play style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:62px;height:62px;border:1px solid rgba(255,255,255,.35);border-radius:50%;background:rgba(15,23,42,.84);color:#fff;font-size:25px;font-weight:900;display:flex;align-items:center;justify-content:center;z-index:3;cursor:pointer;">▶</button>
+                        <div style="position:absolute;left:0;right:0;bottom:0;padding:34px 12px 10px;background:linear-gradient(transparent,rgba(0,0,0,.9));display:flex;align-items:center;gap:8px;z-index:4;">
+                            <button type="button" data-nx-video-play style="border:0;background:transparent;color:#fff;font-size:18px;font-weight:900;padding:5px;cursor:pointer;">▶</button>
+                            <span data-nx-video-time style="color:#fff;font-size:11px;font-weight:700;min-width:68px;">0:00 / 0:00</span>
+                            <input data-nx-video-seek type="range" min="0" max="1000" value="0" style="flex:1;min-width:24px;accent-color:#10b981;height:4px;">
+                            <button type="button" data-nx-video-mute style="border:0;background:transparent;color:#fff;font-size:17px;padding:5px;cursor:pointer;">🔇</button>
+                            <button type="button" data-nx-video-fullscreen style="border:0;background:transparent;color:#fff;font-size:19px;padding:5px;cursor:pointer;">⛶</button>
+                        </div>
+                    </div>`;
+                } else {
+                    mediaHtml = `<div class="nx-feed-photo-open" data-fidx="${idx}" style="position:relative;width:100%;background:#090d16;border-top:1px solid #1e293b;border-bottom:1px solid #1e293b;cursor:pointer;">
+                        <img src="${esc(img)}" loading="lazy" decoding="async" style="width:100%;max-height:520px;object-fit:cover;display:block;">
+                        <span style="position:absolute;top:12px;right:12px;background:rgba(9,13,22,.85);border:1px solid #38bdf8;color:#e0f2fe;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:800;">🔍 Full View</span>
+                    </div>`;
+                }
+            }
+
+            const postSongHtml = (p.songUrl && p.songTitle)
+                ? `<div class="nx-real-post-song-bar" data-song-url="${esc(p.songUrl)}" style="margin:6px 14px;padding:7px 12px;border-radius:12px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.35);display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+                       <span style="font-size:12px;font-weight:800;color:#34d399;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">🎵 ${esc(p.songTitle)}</span>
+                       <span class="nx-ps-state" style="background:#10b981;color:#020617;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:900;">▶ Play</span>
+                   </div>` : "";
+
+            const likedByArr = cleanUniqueList(p.likedBy || []);
+            const isLikedByMe = Boolean(myKey && likedByArr.includes(myKey));
+            const realLikesCount = Math.max(likedByArr.length, Number(p.likes || 0));
+            const realViewsCount = Math.max(cleanUniqueList(p.viewedBy || []).length, Number(p.views || 1), realLikesCount);
+            const commentsArr = Array.isArray(p.comments) ? p.comments : [];
+            const timeLabel = window.formatRealNexusLastSeen(p.createdAt, false) || "Recent";
+            const likedBanner = realLikesCount > 0
+                ? `<div class="nx-real-likers-bar" data-fidx="${idx}" style="margin:10px 14px 2px;padding:8px 12px;border-radius:12px;background:rgba(244,63,94,.12);border:1px solid rgba(244,63,94,.3);display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+                       <span style="font-size:12px;font-weight:800;color:#fda4af;">❤️ Liked by <strong>@${esc(likedByArr[0] || pOwnerUname)}</strong>${realLikesCount > 1 ? ` + ${realLikesCount - 1} others` : ""}</span>
+                       <span style="font-size:11.5px;font-weight:900;color:#38bdf8;">View All →</span>
+                   </div>` : "";
+
+            const bp = "padding:7px 12px;border-radius:999px;background:#1e293b;border:1px solid #334155;color:#cbd5e1;font-size:12px;font-weight:800;display:inline-flex;align-items:center;gap:5px;cursor:pointer;";
+            return `<article id="nx-feed-post-card-${idx}" class="nx-v31-post-card">
+                <div style="padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                    <div data-card-author="${esc(pOwnerUname)}" style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;cursor:pointer;">
+                        ${av}
+                        <div style="min-width:0;flex:1;">
+                            <div style="font-size:14px;font-weight:900;color:#f8fafc;display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+                                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(pOwnerName)}</span>
+                                <span style="background:#10b981;color:#020617;font-size:9.5px;font-weight:900;padding:1px 5px;border-radius:99px;">✓</span>
+                                ${p.pinned ? `<span style="background:rgba(245,158,11,.18);border:1px solid #fbbf24;color:#fbbf24;font-size:9.5px;padding:1px 6px;border-radius:99px;">📌 PINNED</span>` : ""}
+                            </div>
+                            <div style="font-size:11px;color:#38bdf8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${authorBio ? esc(authorBio) + " • " : "@" + esc(pOwnerUname) + " • "}${esc(timeLabel)}</div>
+                        </div>
+                    </div>
+                    <button type="button" class="nx-feed-card-3dot" data-fidx="${idx}" style="width:34px;height:34px;border-radius:50%;background:#1e293b;border:1px solid #334155;color:#f8fafc;font-size:17px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">⋮</button>
+                </div>
+                ${postSongHtml}
+                ${p.content ? `<div style="padding:${p.cardGradient ? "28px 18px" : "2px 15px 12px"};background:${p.cardGradient || "transparent"};text-align:${p.cardGradient ? "center" : "left"};font-size:${p.cardGradient ? "17px" : "13.5px"};font-weight:${p.cardGradient ? "900" : "500"};color:#f1f5f9;line-height:1.5;white-space:pre-line;word-break:break-word;">${esc(p.content)}</div>` : ""}
+                ${mediaHtml}
+                ${likedBanner}
+                <div style="padding:10px 12px 12px;display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;">
+                    <button type="button" class="nx-feed-like-btn" data-fidx="${idx}" style="${bp}${isLikedByMe ? "background:rgba(244,63,94,.18);border-color:#f43f5e;color:#f43f5e;" : ""}"><span>${isLikedByMe ? "❤️" : "🤍"}</span><span>${realLikesCount}</span></button>
+                    <button type="button" class="nx-feed-comment-btn" data-fidx="${idx}" style="${bp}"><span>💬</span><span>${commentsArr.length}</span></button>
+                    <button type="button" class="nx-feed-views-btn" data-fidx="${idx}" style="${bp}"><span>👁️</span><span>${realViewsCount}</span></button>
+                    <button type="button" class="nx-feed-save-btn" data-fidx="${idx}" style="${bp}" title="Save to Vault"><span>⚡</span></button>
+                    <button type="button" class="nx-feed-share-btn" data-fidx="${idx}" style="${bp}color:#38bdf8;"><span>Share</span></button>
+                </div>
+            </article>`;
+        }).join("");
+    }
+
+    function bindRealPostCardEvents(containerEl, postsArray, refreshFn) {
         if (!containerEl) return;
         bindNexusOfficialVideoControls(containerEl);
-
-        containerEl.querySelectorAll("video[data-stream-ref]").forEach((v) => {
-            const ref = v.getAttribute("data-stream-ref");
-            if (ref && !v.getAttribute("src")) {
-                resolveVideoStreamToUrl(ref).then((playableUrl) => {
-                    if (playableUrl) v.src = playableUrl;
-                });
-            }
-        });
 
         containerEl.querySelectorAll(".nx-real-post-song-bar").forEach((bar) => {
             bar.onclick = (e) => {
                 e.stopPropagation();
-                const sUrl = bar.getAttribute("data-song-url");
-                const pill = bar.querySelector(".nx-ps-state");
-                window.togglePlayProfileSong(sUrl, pill);
+                if (window.togglePlayProfileSong) window.togglePlayProfileSong(bar.getAttribute("data-song-url"), bar.querySelector(".nx-ps-state"));
             };
         });
-
         containerEl.querySelectorAll("[data-card-author]").forEach((el) => {
-            el.onclick = (e) => {
-                e.stopPropagation();
-                window.openPublicUserProfileModal(el.getAttribute("data-card-author"));
-            };
+            el.onclick = (e) => { e.stopPropagation(); if (window.openPublicUserProfileModal) window.openPublicUserProfileModal(el.getAttribute("data-card-author")); };
         });
-
         containerEl.querySelectorAll(".nx-feed-photo-open").forEach((wrap) => {
             wrap.onclick = (e) => {
                 e.stopPropagation();
                 const p = postsArray[Number(wrap.getAttribute("data-fidx"))];
-                if (p && p.image) window.openNexusHdMediaLightbox(p.image, p);
+                if (p && p.image && window.openNexusHdMediaLightbox) window.openNexusHdMediaLightbox(p.image, p);
             };
         });
-
         containerEl.querySelectorAll(".nx-feed-card-3dot").forEach((btn) => {
             btn.onclick = (e) => {
                 e.stopPropagation();
                 const p = postsArray[Number(btn.getAttribute("data-fidx"))];
-                if (p) openSystematicPostThreeDotSheet(p, refreshViewFn);
+                if (p && window.openSystematicPostThreeDotSheet) window.openSystematicPostThreeDotSheet(p, refreshFn);
             };
         });
-
         containerEl.querySelectorAll(".nx-feed-like-btn").forEach((btn) => {
             btn.onclick = async (e) => {
                 e.stopPropagation();
-                if (!isUserVerified()) {
-                    if (window.Nexus) Nexus.switchTab("tab-profile");
-                    return;
-                }
-                const p = postsArray[Number(btn.getAttribute("data-fidx"))];
-                const myKey = getMyUsername();
+                if (!isUserVerified()) return openLoginIfNeeded("login");
+                const p = postsArray[Number(btn.getAttribute("data-fidx"))], myKey = getMyUsername();
                 if (!p || !myKey) return;
-
-                let likedArr = cleanUniqueList(p.likedBy || []);
-                if (likedArr.includes(myKey)) {
-                    likedArr = likedArr.filter((u) => u !== myKey);
-                    p.likes = Math.max(0, likedArr.length);
-                } else {
-                    likedArr.push(myKey);
-                    p.likes = Math.max(Number(p.likes || 0) + 1, likedArr.length);
-                }
-                p.likedBy = likedArr;
-
-                if (refreshViewFn) refreshViewFn();
-                if (window.Nexus && Nexus.db && p.id) {
-                    await Nexus.db
-                        .collection("nexus_real_posts")
-                        .doc(p.id)
-                        .set({ likedBy: likedArr, likes: p.likes }, { merge: true })
-                        .catch(() => {});
-                }
+                let arr = cleanUniqueList(p.likedBy || []);
+                if (arr.includes(myKey)) arr = arr.filter((u) => u !== myKey); else arr.push(myKey);
+                p.likedBy = arr; p.likes = arr.length;
+                if (refreshFn) refreshFn();
+                await persistPostUpdate(p, { likes_list: arr });
             };
         });
-
         containerEl.querySelectorAll(".nx-real-likers-bar").forEach((bar) => {
-            bar.onclick = (e) => {
-                e.stopPropagation();
-                const p = postsArray[Number(bar.getAttribute("data-fidx"))];
-                if (p) window.openPostLikersModal(p);
-            };
+            bar.onclick = (e) => { e.stopPropagation(); const p = postsArray[Number(bar.getAttribute("data-fidx"))]; if (p && window.openPostLikersModal) window.openPostLikersModal(p); };
         });
-
         containerEl.querySelectorAll(".nx-feed-comment-btn").forEach((btn) => {
-            btn.onclick = (e) => {
-                e.stopPropagation();
-                const p = postsArray[Number(btn.getAttribute("data-fidx"))];
-                if (p) window.openRealPostCommentsDrawer(p, refreshViewFn);
-            };
+            btn.onclick = (e) => { e.stopPropagation(); const p = postsArray[Number(btn.getAttribute("data-fidx"))]; if (p && window.openRealPostCommentsDrawer) window.openRealPostCommentsDrawer(p, refreshFn); };
         });
-
         containerEl.querySelectorAll(".nx-feed-views-btn").forEach((btn) => {
             btn.onclick = (e) => {
                 e.stopPropagation();
                 const p = postsArray[Number(btn.getAttribute("data-fidx"))];
-                if (!p) return;
-                const viewers = cleanUniqueList([...(p.viewedBy || []), ...(p.likedBy || []), p.username || "mohiy"]);
-                openFollowersFollowingModal("👁️ Post Viewed By", viewers);
+                if (p && window.openFollowersFollowingModal) window.openFollowersFollowingModal("👁️ Post Viewed By", cleanUniqueList([...(p.viewedBy || []), ...(p.likedBy || []), p.username]));
             };
         });
-
         containerEl.querySelectorAll(".nx-feed-save-btn").forEach((btn) => {
             btn.onclick = (e) => {
                 e.stopPropagation();
-                const p = postsArray[Number(btn.getAttribute("data-fidx"))];
-                if (!p) return;
-                let sv = [];
-                try {
-                    sv = JSON.parse(localStorage.getItem("nx_saved_posts") || "[]");
-                } catch (err) {}
-                if (!sv.some((x) => x && x.id === p.id)) {
-                    sv.unshift(p);
-                    localStorage.setItem("nx_saved_posts", JSON.stringify(sv.slice(0, 50)));
-                }
+                const p = postsArray[Number(btn.getAttribute("data-fidx"))]; if (!p) return;
+                let sv = []; try { sv = JSON.parse(localStorage.getItem("nx_saved_posts") || "[]"); } catch (err) {}
+                if (!sv.some((x) => x && x.id === p.id)) { sv.unshift(p); localStorage.setItem("nx_saved_posts", JSON.stringify(sv.slice(0, 50))); }
                 if (window.Nexus && Nexus.toast) Nexus.toast("⚡ Saved to Nexus Vault!");
             };
         });
-
         containerEl.querySelectorAll(".nx-feed-share-btn").forEach((btn) => {
             btn.onclick = (e) => {
                 e.stopPropagation();
                 const p = postsArray[Number(btn.getAttribute("data-fidx"))];
-                const url = `https://nexus-community01.vercel.app/?post=${encodeURIComponent((p && p.id) || "")}`;
-                if (navigator.share) {
-                    navigator.share({
-                        title: `Post by @${(p && p.username) || "mohiy"}`,
-                        text: (p && (p.content || p.text)) || "Check out this post on Nexus Community:",
-                        url: url
-                    }).catch(() => {});
-                } else {
-                    navigator.clipboard?.writeText(url);
-                    if (window.Nexus && Nexus.toast) Nexus.toast("🔗 Direct Post Link Copied!");
-                }
+                const url = `${location.origin}${location.pathname}?post=${encodeURIComponent((p && p.id) || "")}`;
+                if (navigator.share) navigator.share({ title: `Post by @${(p && p.username) || "nexus"}`, text: (p && p.content) || "Nexus Community Post", url }).catch(() => {});
+                else { navigator.clipboard?.writeText(url); if (window.Nexus && Nexus.toast) Nexus.toast("🔗 Post Link Copied!"); }
             };
         });
     }
 
-    window.openScrollableProfilePostsFeed = function (postsArray, startIdx, ownerUserObj) {
-        if (!Array.isArray(postsArray) || !postsArray.length) return;
-        document.getElementById("nx-scrollable-profile-feed-modal")?.remove();
-
-        window.__nxPushBackLayer("nx-scrollable-profile-feed-modal", () => {
-            document.getElementById("nx-scrollable-profile-feed-modal")?.remove();
-        });
-
-        const modal = document.createElement("div");
-        modal.id = "nx-scrollable-profile-feed-modal";
-        modal.style.cssText =
-            "position:fixed; inset:0; background:#090d16; z-index:200090; overflow-y:auto; color:#fff; max-width:600px; margin:0 auto; box-shadow:0 0 60px rgba(0,0,0,0.95); scroll-behavior:smooth;";
-
-        const renderFeedCards = () => {
-            const curScroll = modal.scrollTop;
-            const ownerUname = (ownerUserObj && ownerUserObj.username) || "mohiy";
-            modal.innerHTML = `
-                <div style="position:sticky; top:0; z-index:20; background:rgba(11,17,32,0.96); border-bottom:1px solid #1e293b; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; backdrop-filter:blur(8px);">
-                    <div style="display:flex; align-items:center; gap:12px;">
-                        <button type="button" id="nx-close-scrollable-feed" style="background:none; border:none; color:#f8fafc; font-size:21px; font-weight:900; cursor:pointer;">←</button>
-                        <div>
-                            <div style="font-size:15.5px; font-weight:900; color:#f8fafc;">Posts (${postsArray.length})</div>
-                            <div style="font-size:11px; color:#34d399; font-weight:700;">@${ownerUname} • 100% Real Live Feed</div>
-                        </div>
-                    </div>
-                </div>
-                <div style="display:flex; flex-direction:column; gap:16px; padding:12px 12px 60px;">
-                    ${buildScrollablePostCardsHtml(postsArray, ownerUserObj)}
-                </div>
-            `;
-
-            modal.querySelector("#nx-close-scrollable-feed").onclick = () => modal.remove();
-            bindRealPostCardEvents(modal, postsArray, renderFeedCards);
-            if (curScroll > 0) modal.scrollTop = curScroll;
-        };
-
-        renderFeedCards();
-        document.body.appendChild(modal);
-
-        setTimeout(() => {
-            const targetCard = document.getElementById(`nx-feed-post-card-${startIdx}`);
-            if (targetCard) {
-                targetCard.scrollIntoView({ behavior: "instant", block: "start" });
-            }
-        }, 40);
-    };
-
-    // =========================================================================
-    // 10. COMPLETE FULL-SCREEN PUBLIC PROFILE & AVATAR ZOOM
-    // =========================================================================
-    window.openAvatarLongPressZoomModal = function (userObj) {
-        if (!userObj || !userObj.username) return;
-        document.getElementById("nx-avatar-zoom-overlay")?.remove();
-
-        window.__nxPushBackLayer("nx-avatar-zoom-overlay", () => {
-            if (activeSongAudio) activeSongAudio.pause();
-            document.getElementById("nx-avatar-zoom-overlay")?.remove();
-        });
-
-        const isLive = isUserTrulyOnlineRightNow(userObj);
-        const trueTs = extractTrueTimestamp(userObj);
-        const seenText = window.formatRealNexusLastSeen(trueTs, isLive) || "Verified";
-        const song = getNormalizedProfileSong(userObj);
-
-        const avatarHtml = userObj.dp
-            ? `<img src="${userObj.dp}" style="width:220px; height:220px; border-radius:50%; object-fit:cover; border:4px solid #10b981; box-shadow:0 20px 60px rgba(0,0,0,0.95);" />`
-            : `<div style="width:220px; height:220px; border-radius:50%; background:linear-gradient(135deg,#10b981,#0284c7); color:#020617; font-size:78px; font-weight:900; display:flex; align-items:center; justify-content:center; border:4px solid #fff; box-shadow:0 20px 60px rgba(0,0,0,0.95);">${(
-                  userObj.name || userObj.username
-              )[0].toUpperCase()}</div>`;
-
-        const overlay = document.createElement("div");
-        overlay.id = "nx-avatar-zoom-overlay";
-        overlay.style.cssText =
-            "position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:200095; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; backdrop-filter:blur(10px);";
-
-        overlay.innerHTML = `
-            ${
-                userObj.moodNote
-                    ? `<div style="background:#1e293b; border:1.5px solid #38bdf8; color:#f8fafc; padding:7px 16px; border-radius:18px; font-size:13px; font-weight:800; margin-bottom:-12px; z-index:5;">💭 ${userObj.moodNote}</div>`
-                    : ""
-            }
-            ${avatarHtml}
-            <h3 style="font-size:20px; font-weight:900; color:#f8fafc; margin-top:14px;">
-                ${userObj.name || userObj.username} ✅
-            </h3>
-            <div style="font-size:13px; color:#34d399; font-weight:700; margin-top:2px;">
-                @${userObj.username} • ${isLive ? "🟢 Online Now" : seenText}
-            </div>
-            ${
-                userObj.bio
-                    ? `<p style="font-size:12.5px; color:#cbd5e1; max-width:300px; text-align:center; margin-top:6px;">${userObj.bio}</p>`
-                    : ""
-            }
-            ${
-                song
-                    ? `<div style="margin-top:10px; max-width:310px; width:100%;">${buildProfileSongPlayerCardHtml(
-                          song,
-                          "nx-zoom-song-play",
-                          ""
-                      )}</div>`
-                    : ""
-            }
-            <div style="display:flex; gap:10px; margin-top:18px; width:100%; max-width:310px;">
-                <button type="button" id="nx-zoom-open-profile" style="flex:1; padding:11px; border-radius:13px; background:#10b981; color:#020617; font-weight:900; font-size:13px; border:none; cursor:pointer;">
-                    👤 View Full Profile
-                </button>
-                <button type="button" id="nx-zoom-close" style="padding:11px 16px; border-radius:13px; background:#1e293b; color:#cbd5e1; font-weight:800; font-size:13px; border:1px solid #334155; cursor:pointer;">
-                    Close
-                </button>
-            </div>
-        `;
-
-        document.body.appendChild(overlay);
-        const zPlay = overlay.querySelector("#nx-zoom-song-play");
-        if (zPlay && song) {
-            zPlay.onclick = (e) => {
-                e.stopPropagation();
-                window.togglePlayProfileSong(song.audioUrl, zPlay);
-            };
-        }
-        overlay.querySelector("#nx-zoom-open-profile").onclick = (e) => {
-            e.stopPropagation();
-            if (activeSongAudio) activeSongAudio.pause();
-            overlay.remove();
-            window.openPublicUserProfileModal(userObj);
-        };
-        overlay.querySelector("#nx-zoom-close").onclick = () => {
-            if (activeSongAudio) activeSongAudio.pause();
-            overlay.remove();
-        };
-        overlay.onclick = (e) => {
-            if (e.target === overlay) {
-                if (activeSongAudio) activeSongAudio.pause();
-                overlay.remove();
-            }
-        };
-    };
-
-    window.openPublicUserProfileModal = function (targetIdentifier) {
-        crossSyncAllFollowersAndSongs();
-        const userObj =
-            typeof targetIdentifier === "object"
-                ? targetIdentifier
-                : findUserObjectByAnyIdentifier(targetIdentifier);
-        if (!userObj || !userObj.username || userObj.username.toLowerCase() === "member") return;
-
-        document.getElementById("nx-public-profile-modal")?.remove();
-        currentPublicTabMode = "grid";
-
-        window.__nxPushBackLayer("nx-public-profile-modal", () => {
-            if (activeSongAudio) activeSongAudio.pause();
-            document.getElementById("nx-public-profile-modal")?.remove();
-        });
-
-        const targetKey = userObj.username.toLowerCase().trim();
-
-        const modal = document.createElement("div");
-        modal.id = "nx-public-profile-modal";
-        modal.style.cssText =
-            "position:fixed; inset:0; background:#090d16; z-index:200075; overflow-y:auto; color:#fff; max-width:600px; margin:0 auto; box-shadow:0 0 60px rgba(0,0,0,0.95);";
-
-        const renderPublicProfileContent = () => {
-            const me = getActiveUser();
-            const myUname = me && me.username ? me.username.toLowerCase().trim() : "";
-            const isFollowing = (userObj.followersList || []).map((x) => String(x).toLowerCase()).includes(myUname);
-
-            const myFollowing = cleanUniqueList((me && me.followingList) || []);
-            const theirFollowers = cleanUniqueList(userObj.followersList || []);
-            const mutuals = theirFollowers.filter((u) => myFollowing.includes(u) && u !== myUname);
-
-            const userPosts = ((window.Nexus && Nexus.posts) || []).filter((p) => {
-                if (!isRealValidPost(p)) return false;
-                const pU = (p.username || "").toLowerCase().trim();
-                const pA = (p.author || "").toLowerCase().trim();
-                return pU === targetKey || pA === (userObj.name || "").toLowerCase().trim();
-            });
-
-            const userVideos = userPosts.filter(
-                (p) =>
-                    p.mediaType === "video" ||
-                    String(p.image || "").startsWith("data:video/") ||
-                    String(p.image || "").startsWith("blob:") ||
-                    String(p.image || "").startsWith("NX_VIDEO_STREAM:")
-            );
-
-            const isLive = isUserTrulyOnlineRightNow(userObj);
-            const trueTs = extractTrueTimestamp(userObj);
-            const seenText = window.formatRealNexusLastSeen(trueTs, false);
-            const partnerSong = getNormalizedProfileSong(userObj);
-
-            const dpHtml = userObj.dp
-                ? `<img src="${userObj.dp}" id="nx-pub-dp-img" style="width:86px; height:86px; border-radius:50%; object-fit:cover; border:3px solid ${
-                      isLive ? "#10b981" : "#38bdf8"
-                  }; padding:2px; background:#090d16; cursor:pointer;" />`
-                : `<div id="nx-pub-dp-img" style="width:86px; height:86px; border-radius:50%; background:linear-gradient(135deg,#10b981,#0284c7); color:#020617; font-size:34px; font-weight:900; display:flex; align-items:center; justify-content:center; border:3px solid #34d399; cursor:pointer;">${(
-                      userObj.name || userObj.username
-                  )[0].toUpperCase()}</div>`;
-
-            const songBannerHtml = buildProfileSongPlayerCardHtml(partnerSong, "nx-pub-play-song", "");
-
-            const mutualHtml = mutuals.length
-                ? `<div style="font-size:11px; color:#94a3b8; margin-top:6px;">
-                       👥 Followed by <strong style="color:#f8fafc;">@${mutuals[0]}</strong>${
-                      mutuals.length > 1 ? ` and ${mutuals.length - 1} others you follow` : ""
-                  }
-                   </div>`
-                : "";
-
-            let tabBodyHtml = "";
-            if (currentPublicTabMode === "feed") {
-                tabBodyHtml = userPosts.length
-                    ? `<div style="display:flex; flex-direction:column; gap:16px; padding:12px;">${buildScrollablePostCardsHtml(
-                          userPosts,
-                          userObj
-                      )}</div>`
-                    : `<div style="text-align:center; padding:36px 12px; color:#64748b; font-size:13px;">📷 No posts shared yet.</div>`;
-            } else {
-                const listToGrid = currentPublicTabMode === "videos" ? userVideos : userPosts;
-                tabBodyHtml = listToGrid.length
-                    ? `<div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:3px; margin-top:2px;">
-                           ${listToGrid
-                               .map((p, idx) => {
-                                   const img = p.image || p.videoUrl || "";
-                                   if (img && !String(img).startsWith("NX_VIDEO_STREAM:")) {
-                                       return `<div class="nx-pub-grid-item" data-pidx="${idx}" style="aspect-ratio:1/1; background:#090d16; overflow:hidden; position:relative; cursor:pointer;">
-                                                   <img src="${img}" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover; display:block;" />
-                                               </div>`;
-                                   }
-                                   return `<div class="nx-pub-grid-item" data-pidx="${idx}" style="aspect-ratio:1/1; background:#0f172a; border:1px solid #1e293b; padding:8px; display:flex; align-items:center; justify-content:center; text-align:center; font-size:10.5px; color:#cbd5e1; cursor:pointer; overflow:hidden;">
-                                               ${(p.content || p.text || "Post").slice(0, 55)}
-                                           </div>`;
-                               })
-                               .join("")}
-                       </div>`
-                    : `<div style="text-align:center; padding:36px 12px; color:#64748b; font-size:13px;">📷 No posts shared yet.</div>`;
-            }
-
-            modal.innerHTML = `
-                <div style="position:sticky; top:0; background:rgba(11,17,32,0.96); border-bottom:1px solid #1e293b; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; z-index:20; backdrop-filter:blur(8px);">
-                    <div style="display:flex; align-items:center; gap:12px;">
-                        <button type="button" id="nx-close-pub-profile" style="background:none; border:none; color:#f8fafc; font-size:21px; font-weight:900; cursor:pointer;">←</button>
-                        <div>
-                            <div style="font-size:16px; font-weight:900; color:#f8fafc;">
-                                @${userObj.username} ✅
-                            </div>
-                            <div style="font-size:11px; color:${isLive ? "#34d399" : "#94a3b8"}; font-weight:700;">
-                                ${isLive ? "🟢 Online Now" : seenText ? "Last seen " + seenText : "Verified Member"}
-                            </div>
-                        </div>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:7px;">
-                        <button type="button" id="nx-pub-call-btn" title="Voice Call" style="padding:7px 10px; border-radius:10px; background:#1e293b; border:1px solid #334155; color:#34d399; font-size:12px; cursor:pointer;">📞</button>
-                        <button type="button" id="nx-pub-vidcall-btn" title="Video Call" style="padding:7px 10px; border-radius:10px; background:#1e293b; border:1px solid #334155; color:#38bdf8; font-size:12px; cursor:pointer;">📹</button>
-                        <button type="button" id="nx-pub-qr-btn" title="QR Code & Share" style="padding:7px 10px; border-radius:10px; background:#1e293b; border:1px solid #334155; color:#f8fafc; font-size:11.5px; font-weight:800; cursor:pointer;">📱 QR</button>
-                    </div>
-                </div>
-
-                <div style="padding:16px 16px 10px;">
-                    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:14px;">
-                        <div style="display:flex; flex-direction:column; align-items:center; width:92px; flex-shrink:0;">
-                            ${dpHtml}
-                            <div style="font-size:13.5px; font-weight:900; color:#f8fafc; margin-top:7px; text-align:center; line-height:1.2;">${
-                                userObj.name || userObj.username
-                            }</div>
-                        </div>
-
-                        <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
-                            <div style="display:grid; grid-template-columns:repeat(3, 1fr); text-align:center; background:#0f172a; border:1px solid #1e293b; border-radius:14px; padding:8px 4px;">
-                                <div id="nx-pub-posts-stat" style="cursor:pointer;">
-                                    <div style="font-size:17px; font-weight:900; color:#f8fafc;">${userPosts.length}</div>
-                                    <div style="font-size:11px; color:#94a3b8;">posts</div>
-                                </div>
-                                <div id="nx-pub-followers-btn" style="cursor:pointer;">
-                                    <div id="nx-pub-followers-cnt" style="font-size:17px; font-weight:900; color:#f8fafc;">${(userObj.followersList || []).length}</div>
-                                    <div style="font-size:11px; color:#38bdf8; font-weight:700;">followers</div>
-                                </div>
-                                <div id="nx-pub-following-btn" style="cursor:pointer;">
-                                    <div style="font-size:17px; font-weight:900; color:#f8fafc;">${(userObj.followingList || []).length}</div>
-                                    <div style="font-size:11px; color:#38bdf8; font-weight:700;">following</div>
-                                </div>
-                            </div>
-
-                            <div style="background:linear-gradient(145deg,#0f172a,#090d16); border:1px solid #1e293b; border-radius:14px; padding:9px 11px;">
-                                <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:${
-                                    userObj.bio ? "4px" : "0"
-                                };">
-                                    <span style="font-size:10px; font-weight:900; color:#38bdf8; background:rgba(56,189,248,0.14); padding:2px 7px; border-radius:6px;">
-                                        🛡️ @${userObj.username}
-                                    </span>
-                                    <span style="font-size:10px; font-weight:800; color:${isLive ? "#34d399" : "#94a3b8"};">
-                                        ${isLive ? "🟢 Online Now" : seenText || "Verified ✓"}
-                                    </span>
-                                </div>
-                                ${
-                                    userObj.bio
-                                        ? `<div style="font-size:12px; color:#e2e8f0; line-height:1.4; white-space:pre-line;">${userObj.bio}</div>`
-                                        : ""
-                                }
-                            </div>
-                        </div>
-                    </div>
-
-                    ${mutualHtml}
-                    <div id="nx-pub-song-slot">${songBannerHtml}</div>
-
-                    <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:8px; margin-top:14px;">
-                        <button type="button" id="nx-pub-follow-toggle" style="padding:10px; border-radius:11px; background:${
-                            isFollowing ? "#1e293b" : "#10b981"
-                        }; color:${isFollowing ? "#f8fafc" : "#020617"}; border:${
-                isFollowing ? "1px solid #334155" : "none"
-            }; font-weight:900; font-size:13px; cursor:pointer;">
-                            ${isFollowing ? "Following ✓" : "Follow"}
-                        </button>
-                        <button type="button" id="nx-pub-msg-btn" style="padding:10px; border-radius:11px; background:#1e293b; color:#f8fafc; border:1px solid #334155; font-weight:800; font-size:13px; cursor:pointer;">
-                            Message 💬
-                        </button>
-                        <button type="button" id="nx-pub-share-btn" style="padding:10px 13px; border-radius:11px; background:#1e293b; color:#38bdf8; border:1px solid #334155; font-weight:800; font-size:12px; cursor:pointer;">
-                            Share 🔗
-                        </button>
-                    </div>
-                </div>
-
-                <div style="display:grid; grid-template-columns:repeat(3, 1fr); border-top:1px solid #1e293b; border-bottom:1px solid #1e293b; margin-top:6px;">
-                    <button type="button" data-pubtab="grid" style="padding:11px 4px; background:none; border:none; border-bottom:2.5px solid ${
-                        currentPublicTabMode === "grid" ? "#10b981" : "transparent"
-                    }; color:${currentPublicTabMode === "grid" ? "#f8fafc" : "#64748b"}; font-weight:900; font-size:12px; cursor:pointer;">
-                        ⊞ Grid (${userPosts.length})
-                    </button>
-                    <button type="button" data-pubtab="feed" style="padding:11px 4px; background:none; border:none; border-bottom:2.5px solid ${
-                        currentPublicTabMode === "feed" ? "#10b981" : "transparent"
-                    }; color:${currentPublicTabMode === "feed" ? "#34d399" : "#64748b"}; font-weight:900; font-size:12px; cursor:pointer;">
-                        📱 Scroll Posts (${userPosts.length})
-                    </button>
-                    <button type="button" data-pubtab="videos" style="padding:11px 4px; background:none; border:none; border-bottom:2.5px solid ${
-                        currentPublicTabMode === "videos" ? "#10b981" : "transparent"
-                    }; color:${currentPublicTabMode === "videos" ? "#f8fafc" : "#64748b"}; font-weight:900; font-size:12px; cursor:pointer;">
-                        🎬 Videos (${userVideos.length})
-                    </button>
-                </div>
-
-                <div style="padding-bottom:60px;">
-                    ${tabBodyHtml}
-                </div>
-            `;
-
-            modal.querySelector("#nx-close-pub-profile").onclick = () => {
-                if (activeSongAudio) activeSongAudio.pause();
-                modal.remove();
-            };
-            modal.querySelector("#nx-pub-qr-btn").onclick = () => window.openProfileQrShareModal(userObj);
-            modal.querySelector("#nx-pub-share-btn").onclick = () => window.openProfileQrShareModal(userObj);
-            modal.querySelector("#nx-pub-dp-img").onclick = () => window.openAvatarLongPressZoomModal(userObj);
-
-            modal.querySelector("#nx-pub-call-btn").onclick = () => {
-                window.CURRENT_NXS_PARTNER = userObj.username;
-                if (window.startNexusRealCall) window.startNexusRealCall("audio");
-            };
-            modal.querySelector("#nx-pub-vidcall-btn").onclick = () => {
-                window.CURRENT_NXS_PARTNER = userObj.username;
-                if (window.startNexusRealCall) window.startNexusRealCall("video");
-            };
-
-            const songBtn = modal.querySelector("#nx-pub-play-song");
-            if (songBtn && partnerSong) {
-                songBtn.onclick = () => window.togglePlayProfileSong(partnerSong.audioUrl, songBtn);
-            }
-
-            modal.querySelector("#nx-pub-posts-stat").onclick = () => {
-                currentPublicTabMode = "feed";
-                renderPublicProfileContent();
-            };
-            modal.querySelector("#nx-pub-followers-btn").onclick = () => {
-                window.openFullScreenConnectionsModal(userObj, "followers");
-            };
-            modal.querySelector("#nx-pub-following-btn").onclick = () => {
-                window.openFullScreenConnectionsModal(userObj, "following");
-            };
-
-            modal.querySelectorAll("[data-pubtab]").forEach((b) => {
-                b.onclick = () => {
-                    currentPublicTabMode = b.getAttribute("data-pubtab");
-                    renderPublicProfileContent();
-                };
-            });
-
-            modal.querySelectorAll(".nx-pub-grid-item").forEach((cell) => {
-                cell.onclick = () => {
-                    const idx = Number(cell.getAttribute("data-pidx") || 0);
-                    window.openScrollableProfilePostsFeed(userPosts, idx, userObj);
-                };
-            });
-
-            if (currentPublicTabMode === "feed") {
-                bindRealPostCardEvents(modal, userPosts, renderPublicProfileContent);
-            }
-
-            modal.querySelector("#nx-pub-follow-toggle").onclick = async function () {
-                if (!isUserVerified()) {
-                    modal.remove();
-                    if (window.Nexus) Nexus.switchTab("tab-profile");
-                    return;
-                }
-                const curMe = getActiveUser();
-                if (!curMe || !curMe.username) return;
-                const myK = curMe.username.toLowerCase().trim();
-
-                userObj.followersList = cleanUniqueList(userObj.followersList || []);
-                curMe.followingList = cleanUniqueList(curMe.followingList || []);
-
-                if (userObj.followersList.includes(myK)) {
-                    userObj.followersList = userObj.followersList.filter((x) => x !== myK);
-                    curMe.followingList = curMe.followingList.filter((x) => x !== targetKey);
-                    this.innerText = "Follow";
-                    this.style.background = "#10b981";
-                    this.style.color = "#020617";
-                } else {
-                    userObj.followersList.push(myK);
-                    curMe.followingList.push(targetKey);
-                    this.innerText = "Following ✓";
-                    this.style.background = "#1e293b";
-                    this.style.color = "#f8fafc";
-                }
-
-                const cntEl = modal.querySelector("#nx-pub-followers-cnt");
-                if (cntEl) cntEl.textContent = String(userObj.followersList.length);
-                localStorage.setItem("nx_active_account", JSON.stringify(curMe));
-                crossSyncAllFollowersAndSongs();
-
-                if (window.Nexus && Nexus.db) {
-                    await Promise.allSettled([
-                        Nexus.db.collection("nexus_accounts").doc(targetKey).set({ followersList: userObj.followersList }, { merge: true }),
-                        Nexus.db.collection("nexus_accounts").doc(myK).set({ followingList: curMe.followingList }, { merge: true })
-                    ]);
-                }
-            };
-
-            modal.querySelector("#nx-pub-msg-btn").onclick = () => {
-                window.openDirect1to1ChatWithUser(userObj);
-            };
-        };
-
-        renderPublicProfileContent();
-        document.body.appendChild(modal);
-
-        if (window.Nexus && Nexus.db) {
-            Nexus.db
-                .collection("nexus_accounts")
-                .doc(targetKey)
-                .get()
-                .then((doc) => {
-                    if (!doc.exists) return;
-                    const cloudData = doc.data();
-                    if (!cloudData) return;
-
-                    let needsRerender = false;
-                    const cloudSong = getNormalizedProfileSong(cloudData);
-                    if (cloudSong && !getNormalizedProfileSong(userObj)) {
-                        userObj.profileSong = cloudSong;
-                        needsRerender = true;
-                    }
-                    if (Array.isArray(cloudData.followersList) || Array.isArray(cloudData.followingList)) {
-                        userObj.followersList = cleanUniqueList([...(userObj.followersList || []), ...(cloudData.followersList || [])]);
-                        userObj.followingList = cleanUniqueList([...(userObj.followingList || []), ...(cloudData.followingList || [])]);
-                        crossSyncAllFollowersAndSongs();
-                        needsRerender = true;
-                    }
-                    if (needsRerender && document.getElementById("nx-public-profile-modal")) {
-                        renderPublicProfileContent();
-                    }
-                })
-                .catch(() => {});
-        }
-    };
-
-    function bindGlobalAvatarLongPress() {
-        const startHold = (e) => {
-            const target = e.target.closest("img, div, span");
-            if (!target) return;
-            const rect = target.getBoundingClientRect();
-            if (rect.width < 26 || rect.width > 120) return;
-
-            const container = target.closest("[data-username], article, .nx-story-item, div");
-            if (!container) return;
-
-            const lines = (container.innerText || "").split("\n").map((l) => l.trim()).filter(Boolean);
-            let candidateName = container.getAttribute("data-username") || "";
-            if (!candidateName && lines.length > 0) {
-                candidateName = lines.find((l) => !l.endsWith("ago") && l !== "Live" && l !== "🟢 Live" && !l.includes("DM Open")) || lines[0];
-            }
-            const matchedUser = findUserObjectByAnyIdentifier(candidateName);
-            if (!matchedUser) return;
-
-            clearTimeout(longPressTimer);
-            longPressTimer = setTimeout(() => {
-                window.openAvatarLongPressZoomModal(matchedUser);
-            }, 480);
-        };
-
-        const cancelHold = () => clearTimeout(longPressTimer);
-
-        document.addEventListener("touchstart", startHold, { passive: true });
-        document.addEventListener("touchend", cancelHold, { passive: true });
-        document.addEventListener("touchmove", cancelHold, { passive: true });
-    }
-    bindGlobalAvatarLongPress();
-
-    // =========================================================================
-    // 11. EDIT PROFILE MODAL & MAIN PROFILE TAB RENDERER (NEVER BLANK!)
-    // =========================================================================
-    function openEditInstagramProfileModal() {
-        const me = getActiveUser();
-        if (!me) return;
-        document.getElementById("nx-edit-ig-profile-modal")?.remove();
-        window.__nxPushBackLayer("nx-edit-ig-profile-modal", () => {
-            document.getElementById("nx-edit-ig-profile-modal")?.remove();
-        });
-
-        const modal = document.createElement("div");
-        modal.id = "nx-edit-ig-profile-modal";
-        modal.style.cssText =
-            "position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:200085; display:flex; align-items:flex-end; justify-content:center;";
-
-        modal.innerHTML = `
-            <div style="background:#0f172a; border-top:1.5px solid #10b981; border-radius:24px 24px 0 0; width:100%; max-width:600px; max-height:88dvh; overflow-y:auto; padding:18px 16px 28px; color:#fff;">
-                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid #1e293b;">
-                    <h3 style="font-size:16.5px; font-weight:900; color:#f8fafc;">✏️ Edit Your Profile & Bio</h3>
-                    <button type="button" id="nx-close-edit-prof" style="width:30px; height:30px; border-radius:50%; background:#1e293b; border:none; color:#fff; font-weight:900; cursor:pointer;">✕</button>
-                </div>
-
-                <div style="display:flex; flex-direction:column; gap:10px;">
-                    <div>
-                        <label style="font-size:10.5px; font-weight:800; color:#94a3b8; display:block; margin-bottom:3px;">DISPLAY NAME</label>
-                        <input type="text" id="nx-ep-name" value="${me.name || ""}" style="width:100%; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; outline:none;" />
-                    </div>
-                    <div>
-                        <label style="font-size:10.5px; font-weight:800; color:#34d399; display:block; margin-bottom:3px;">YOUR CUSTOM BIO (UPDATES ON PROFILE & ALL YOUR POSTS)</label>
-                        <textarea id="nx-ep-bio" rows="3" placeholder="Write your custom bio here..." style="width:100%; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #10b981; color:#fff; font-size:13px; outline:none; resize:none;">${
-                            me.bio || ""
-                        }</textarea>
-                    </div>
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                        <div>
-                            <label style="font-size:10.5px; font-weight:800; color:#94a3b8; display:block; margin-bottom:3px;">MOOD NOTE (ABOVE DP)</label>
-                            <input type="text" id="nx-ep-mood" value="${
-                                me.moodNote || ""
-                            }" placeholder="e.g. Studying ⚡" style="width:100%; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:12.5px; outline:none;" />
-                        </div>
-                        <div>
-                            <label style="font-size:10.5px; font-weight:800; color:#94a3b8; display:block; margin-bottom:3px;">WEBSITE / LINK</label>
-                            <input type="text" id="nx-ep-link" value="${
-                                me.website || ""
-                            }" placeholder="https://..." style="width:100%; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:12.5px; outline:none;" />
-                        </div>
-                    </div>
-                    <button type="button" id="nx-save-ep-btn" style="width:100%; padding:13px; border-radius:13px; background:linear-gradient(90deg,#10b981,#06b6d4); color:#020617; font-weight:900; font-size:13.5px; border:none; cursor:pointer; margin-top:6px;">
-                        ✅ Save Bio & Profile Changes
-                    </button>
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-        modal.querySelector("#nx-close-edit-prof").onclick = () => modal.remove();
-
-        modal.querySelector("#nx-save-ep-btn").onclick = async function () {
-            this.disabled = true;
-            this.innerText = "⏳ Saving Bio Everywhere...";
-
-            const myKey = me.username.toLowerCase().trim();
-            me.name = (modal.querySelector("#nx-ep-name").value || me.username).trim();
-            me.bio = (modal.querySelector("#nx-ep-bio").value || "").trim();
-            me.moodNote = (modal.querySelector("#nx-ep-mood").value || "").trim();
-            me.website = (modal.querySelector("#nx-ep-link").value || "").trim();
-
-            localStorage.setItem("nx_active_account", JSON.stringify(me));
-            localStorage.setItem("nx_legacy_backup_account", JSON.stringify(me));
-
-            if (window.Nexus) {
-                if (Array.isArray(Nexus.users)) {
-                    Nexus.users.forEach((u) => {
-                        if (u && u.username && u.username.toLowerCase() === myKey) {
-                            u.name = me.name;
-                            u.bio = me.bio;
-                            u.moodNote = me.moodNote;
-                            u.website = me.website;
-                        }
-                    });
-                }
-                if (Array.isArray(Nexus.cloudAccounts)) {
-                    Nexus.cloudAccounts.forEach((u) => {
-                        if (u && u.username && u.username.toLowerCase() === myKey) {
-                            u.name = me.name;
-                            u.bio = me.bio;
-                            u.moodNote = me.moodNote;
-                            u.website = me.website;
-                        }
-                    });
-                }
-                if (Array.isArray(Nexus.posts)) {
-                    Nexus.posts.forEach((p) => {
-                        if (p && p.username && p.username.toLowerCase() === myKey) {
-                            p.author = me.name;
-                            p.bio = me.bio;
-                        }
-                    });
-                }
-            }
-
-            if (window.Nexus && Nexus.db) {
-                await Nexus.db
-                    .collection("nexus_accounts")
-                    .doc(myKey)
-                    .set(
-                        {
-                            name: me.name,
-                            bio: me.bio,
-                            moodNote: me.moodNote,
-                            website: me.website,
-                            lastOnline: Date.now()
-                        },
-                        { merge: true }
-                    )
-                    .catch(() => {});
-
-                try {
-                    const myPostsSnap = await Nexus.db.collection("nexus_real_posts").where("username", "==", myKey).get();
-                    const updates = [];
-                    myPostsSnap.forEach((doc) => {
-                        updates.push(doc.ref.set({ author: me.name, bio: me.bio }, { merge: true }));
-                    });
-                    await Promise.allSettled(updates);
-                } catch (e) {}
-            }
-
-            renderCleanZeroOverlapHomeFeed(true);
-            if (window.Nexus) {
-                Nexus.notifyAll && Nexus.notifyAll();
-                Nexus.toast && Nexus.toast("✅ Bio & Profile Updated Everywhere!");
-            }
-            modal.remove();
-            renderMyInstagramProfileTab();
-        };
-    }
-
-    window.renderMyInstagramProfileTab = function () {
-        const container = document.getElementById("tab-profile");
-        if (!container) return;
-
-        crossSyncAllFollowersAndSongs();
-        const me = (window.Nexus && Nexus.getCurrentUser && Nexus.getCurrentUser()) || getActiveUser();
-
-        // If user is not logged in yet, show a clean Sign-In card inside #nx-ig-profile-root so #tab-profile is NEVER blank!
-        if (!me || !me.username) {
-            document.body.classList.remove("nx-auth-locked");
-            container.innerHTML = `
-                <div id="nx-ig-profile-root" style="padding:24px 16px; text-align:center; color:#fff;">
-                    <div style="background:linear-gradient(145deg,#0f172a,#090d16); border:1.5px solid #10b981; border-radius:24px; padding:26px 18px; max-width:380px; margin:16px auto; box-shadow:0 18px 45px rgba(0,0,0,0.85);">
-                        <div style="font-size:36px; margin-bottom:8px;">🛡️</div>
-                        <h2 style="font-size:19px; font-weight:900; color:#f8fafc; margin-bottom:6px;">Sign In to Your Profile</h2>
-                        <p style="font-size:12px; color:#94a3b8; margin-bottom:18px; line-height:1.5;">Apne @username ya Google account se Sign In karke apni Profile, Posts aur Settings unlock karein.</p>
-                        <button type="button" id="nx-fallback-signin-btn" style="width:100%; padding:13px; border-radius:14px; background:linear-gradient(90deg,#10b981,#06b6d4); color:#020617; font-weight:900; font-size:13.5px; border:none; cursor:pointer;">
-                            🔓 Sign In / Verify Account
-                        </button>
-                    </div>
-                </div>
-            `;
-            const b = container.querySelector("#nx-fallback-signin-btn");
-            if (b) {
-                b.onclick = () => {
-                    if (window.openAdvancedGoogleAuthModal) window.openAdvancedGoogleAuthModal("signin");
-                };
-            }
-            return;
-        }
-
-        // User is logged in: remove auth-lock class so CSS never hides #nx-ig-profile-root!
-        document.body.classList.remove("nx-auth-locked");
-
-        const myKey = me.username.toLowerCase().trim();
-        const isFounder = ["mohiy", "mohit_01", "mohit"].includes(myKey);
-
-        const allMyPosts = ((window.Nexus && Nexus.posts) || [])
+    function renderCleanZeroOverlapHomeFeed(forceRebuild) {
+        const homeTab = document.getElementById("tab-home");
+        if (!homeTab || !window.Nexus || !Array.isArray(Nexus.posts)) return;
+        const firstChild = homeTab.firstElementChild;
+        if (firstChild && firstChild.id !== "nx-clean-home-feed-v31" && !document.getElementById("nx-stories-bar")) firstChild.id = "nx-stories-bar";
+
+        const seen = new Set();
+        const validPosts = Nexus.posts
+            .map((p) => (p && p.author_username && !p.username ? normalizeSupabasePost(p) : p))
             .filter((p) => {
                 if (!isRealValidPost(p)) return false;
-                const pU = (p.username || "").toLowerCase().trim();
-                const pA = (p.author || "").toLowerCase().trim();
-                return pU === myKey || pA === (me.name || "").toLowerCase().trim();
+                const sig = `${p.id || p.username}::${(p.content || "").slice(0, 40)}::${(p.image || "").slice(0, 80)}`;
+                if (seen.has(sig)) return false;
+                seen.add(sig); return true;
             })
-            .sort((a, b) => {
-                if (a.pinned && !b.pinned) return -1;
-                if (!a.pinned && b.pinned) return 1;
-                return Number(b.createdAt || 0) - Number(a.createdAt || 0);
-            });
-
-        const myVideoPosts = allMyPosts.filter(
-            (p) =>
-                p.mediaType === "video" ||
-                String(p.image || "").startsWith("data:video/") ||
-                String(p.image || "").startsWith("blob:") ||
-                String(p.image || "").startsWith("NX_VIDEO_STREAM:") ||
-                String(p.image || "").match(/\.(mp4|webm|mov)(\?|$)/i)
-        );
-
-        let vaultPosts = [];
-        try {
-            const saved = JSON.parse(localStorage.getItem("nx_saved_posts") || "[]").filter((p) => isRealValidPost(p));
-            const pinnedOwn = allMyPosts.filter((p) => p.pinned);
-            const map = new Map();
-            [...pinnedOwn, ...saved].forEach((p) => {
-                if (p && (p.id || p.createdAt)) map.set(p.id || p.createdAt, p);
-            });
-            vaultPosts = Array.from(map.values());
-        } catch (e) {}
-
-        const activeList =
-            currentProfileTabMode === "videos"
-                ? myVideoPosts
-                : currentProfileTabMode === "vault"
-                ? vaultPosts
-                : allMyPosts;
-
-        const mySong = getNormalizedProfileSong(me);
-        const exactMyBio = (me.bio || "").trim() || "Tap 'Edit profile' below to write your custom bio ✨";
-
-        const dpHtml = me.dp
-            ? `<img src="${me.dp}" id="nx-my-dp-img" style="width:88px; height:88px; border-radius:50%; object-fit:cover; border:3px solid #10b981; padding:2px; background:#090d16; cursor:pointer;" />`
-            : `<div id="nx-my-dp-img" style="width:88px; height:88px; border-radius:50%; background:linear-gradient(135deg,#10b981,#0284c7); color:#020617; font-size:34px; font-weight:900; display:flex; align-items:center; justify-content:center; border:3px solid #34d399; cursor:pointer;">${(
-                  me.name || me.username
-              )[0].toUpperCase()}</div>`;
-
-        const songPlayerHtml = mySong
-            ? buildProfileSongPlayerCardHtml(mySong, "nx-my-song-play", "nx-my-song-change")
-            : `<button type="button" id="nx-add-song-empty-btn" style="margin-top:8px; display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:999px; background:rgba(56,189,248,0.12); border:1px dashed rgba(56,189,248,0.45); color:#38bdf8; font-size:11.5px; font-weight:800; cursor:pointer;">
-                   🎵 + Add Music to Your Profile
-               </button>`;
-
-        const gridHtml = activeList.length
-            ? `<div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:3px; margin-top:2px;">
-                   ${activeList
-                       .map((p, idx) => {
-                           const img = p.image || p.videoUrl || "";
-                           const isVid =
-                               p.mediaType === "video" ||
-                               String(img).startsWith("data:video/") ||
-                               String(img).startsWith("blob:") ||
-                               String(img).startsWith("NX_VIDEO_STREAM:");
-
-                           const pinBadge = p.pinned
-                               ? `<span style="position:absolute; top:5px; left:5px; background:rgba(2,6,23,0.8); color:#fbbf24; font-size:10px; padding:2px 5px; border-radius:6px; z-index:3;">📌</span>`
-                               : "";
-
-                           const dotsBadge = `<button type="button" class="nx-grid-cell-3dot" data-gidx="${idx}" style="position:absolute; top:4px; right:4px; width:24px; height:24px; border-radius:50%; background:rgba(2,6,23,0.78); border:1px solid rgba(255,255,255,0.2); color:#fff; font-size:13px; font-weight:900; display:flex; align-items:center; justify-content:center; z-index:4; cursor:pointer;">⋮</button>`;
-
-                           if (img && !String(img).startsWith("NX_VIDEO_STREAM:")) {
-                               return `<div class="nx-my-grid-item" data-post-idx="${idx}" style="aspect-ratio:1/1; background:#090d16; overflow:hidden; position:relative; cursor:pointer;">
-                                           ${pinBadge}
-                                           ${dotsBadge}
-                                           ${
-                                               isVid
-                                                   ? `<video src="${img}" muted playsinline preload="metadata" style="width:100%; height:100%; object-fit:cover; display:block;"></video><span style="position:absolute; bottom:5px; right:5px; font-size:12px;">🎬</span>`
-                                                   : `<img src="${img}" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover; display:block;" />`
-                                           }
-                                       </div>`;
-                           }
-                           return `<div class="nx-my-grid-item" data-post-idx="${idx}" style="aspect-ratio:1/1; background:${
-                               p.cardGradient || "linear-gradient(145deg,#0f172a,#1e293b)"
-                           }; border:1px solid #1e293b; padding:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; font-size:11px; font-weight:800; color:#e2e8f0; cursor:pointer; overflow:hidden; position:relative;">
-                                       ${pinBadge}
-                                       ${dotsBadge}
-                                       ${isVid ? `<div style="font-size:20px; margin-bottom:4px;">🎬</div>` : ""}
-                                       <div>${(p.content || p.text || "Video Post").slice(0, 50)}</div>
-                                   </div>`;
-                       })
-                       .join("")}
-               </div>`
-            : `<div style="text-align:center; padding:40px 16px; color:#64748b;">
-                   <div style="font-size:28px; margin-bottom:6px;">${
-                       currentProfileTabMode === "videos" ? "🎬" : currentProfileTabMode === "vault" ? "⚡" : "📷"
-                   }</div>
-                   <div style="font-size:13.5px; font-weight:800; color:#cbd5e1;">No ${currentProfileTabMode} posts yet</div>
-               </div>`;
-
-        container.innerHTML = `
-            <div id="nx-ig-profile-root" style="padding-bottom:36px; background:#090d16; min-height:calc(100dvh - 120px);">
-                <div style="padding:12px 16px; border-bottom:1px solid #1e293b; display:flex; align-items:center; justify-content:space-between; background:#090d16;">
-                    <div id="nx-prof-switch-trigger" style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-                        <span style="font-size:18px; font-weight:900; color:#f8fafc;">@${me.username}</span>
-                        <span style="background:#10b981; color:#020617; font-size:10px; font-weight:900; padding:1px 6px; border-radius:999px;">✓</span>
-                        <span style="color:#94a3b8; font-size:13px;">▾</span>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <button type="button" id="nx-prof-new-post" title="Create Post" style="padding:6px 11px; border-radius:10px; background:#1e293b; border:1px solid #334155; color:#f8fafc; font-size:12px; font-weight:800; cursor:pointer;">＋ Post</button>
-                        <button type="button" id="nx-prof-open-settings" title="Settings" style="padding:6px 11px; border-radius:10px; background:#1e293b; border:1px solid #334155; color:#38bdf8; font-size:13px; font-weight:900; cursor:pointer;">☰</button>
-                    </div>
-                </div>
-
-                <div style="padding:16px 16px 10px;">
-                    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:14px;">
-                        <div style="display:flex; flex-direction:column; align-items:center; width:96px; flex-shrink:0;">
-                            <div style="position:relative;">
-                                <div id="nx-my-mood-pill" style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:#1e293b; border:1px solid #38bdf8; color:#f8fafc; font-size:9.5px; font-weight:800; padding:2px 8px; border-radius:12px; white-space:nowrap; z-index:5; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,0.6);">
-                                    ${me.moodNote ? "💭 " + me.moodNote : "💭 Note..."}
-                                </div>
-                                ${dpHtml}
-                                <label for="nx-inp-upload-dp" style="position:absolute; bottom:2px; right:2px; width:26px; height:26px; border-radius:50%; background:#38bdf8; color:#020617; font-weight:900; font-size:16px; display:flex; align-items:center; justify-content:center; border:2px solid #090d16; cursor:pointer;">+</label>
-                                <input type="file" id="nx-inp-upload-dp" accept="image/*" style="display:none;" />
-                            </div>
-                            <div style="font-size:14px; font-weight:900; color:#f8fafc; margin-top:8px; text-align:center; line-height:1.2;">
-                                ${me.name || me.username}
-                            </div>
-                            <span style="font-size:10px; font-weight:800; color:#34d399; margin-top:2px;">🟢 Online Now</span>
-                        </div>
-
-                        <div style="flex:1; display:flex; flex-direction:column; gap:8px; min-width:0;">
-                            <div style="display:grid; grid-template-columns:repeat(3, 1fr); text-align:center; background:#0f172a; border:1px solid #1e293b; border-radius:14px; padding:8px 4px;">
-                                <div id="nx-my-posts-scroll-trigger" style="cursor:pointer;">
-                                    <div style="font-size:17px; font-weight:900; color:#f8fafc;">${allMyPosts.length}</div>
-                                    <div style="font-size:11px; color:#94a3b8;">posts</div>
-                                </div>
-                                <div id="nx-my-followers-trigger" style="cursor:pointer;">
-                                    <div style="font-size:17px; font-weight:900; color:#f8fafc;">${(me.followersList || []).length}</div>
-                                    <div style="font-size:11px; color:#38bdf8; font-weight:700;">followers</div>
-                                </div>
-                                <div id="nx-my-following-trigger" style="cursor:pointer;">
-                                    <div style="font-size:17px; font-weight:900; color:#f8fafc;">${(me.followingList || []).length}</div>
-                                    <div style="font-size:11px; color:#38bdf8; font-weight:700;">following</div>
-                                </div>
-                            </div>
-
-                            <div id="nx-my-bio-card-trigger" style="background:linear-gradient(145deg,#0f172a,#090d16); border:1px solid rgba(16,185,129,0.35); border-radius:14px; padding:9px 11px; cursor:pointer;" title="Tap to edit bio">
-                                <div style="display:flex; align-items:center; justify-content:space-between; gap:4px; margin-bottom:4px; flex-wrap:wrap;">
-                                    <span style="font-size:10px; font-weight:900; color:#020617; background:linear-gradient(90deg,#10b981,#38bdf8); padding:2px 7px; border-radius:6px;">
-                                        ${isFounder ? "👑 Founder & Developer" : "🛡️ Nexus Verified"}
-                                    </span>
-                                    <span style="font-size:10px; font-weight:800; color:#38bdf8;">
-                                        ✏️ Edit Bio
-                                    </span>
-                                </div>
-                                <div style="font-size:12px; color:#e2e8f0; line-height:1.4; white-space:pre-line; word-break:break-word;">${exactMyBio}</div>
-                                ${
-                                    me.website
-                                        ? `<a href="${me.website}" target="_blank" style="display:inline-block; font-size:11px; color:#38bdf8; font-weight:700; margin-top:3px; text-decoration:none;">🔗 ${me.website}</a>`
-                                        : ""
-                                }
-                            </div>
-                        </div>
-                    </div>
-
-                    <div>${songPlayerHtml}</div>
-
-                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:7px; margin-top:12px;">
-                        <button type="button" id="nx-btn-edit-profile" style="padding:10px; border-radius:11px; background:#1e293b; border:1px solid #334155; color:#f8fafc; font-weight:800; font-size:12px; cursor:pointer;">
-                            Edit profile
-                        </button>
-                        <button type="button" id="nx-btn-profile-song" style="padding:10px; border-radius:11px; background:#1e293b; border:1px solid #334155; color:#34d399; font-weight:800; font-size:12px; cursor:pointer;">
-                            🎵 Profile Song
-                        </button>
-                        <button type="button" id="nx-btn-share-profile" style="padding:10px; border-radius:11px; background:#1e293b; border:1px solid #334155; color:#38bdf8; font-weight:800; font-size:12px; cursor:pointer;">
-                            Share / QR
-                        </button>
-                    </div>
-                </div>
-
-                <div style="display:grid; grid-template-columns:repeat(3, 1fr); border-top:1px solid #1e293b; border-bottom:1px solid #1e293b; margin-top:6px;">
-                    <button type="button" data-ptab="posts" style="padding:11px 4px; background:none; border:none; border-bottom:2.5px solid ${
-                        currentProfileTabMode === "posts" ? "#10b981" : "transparent"
-                    }; color:${currentProfileTabMode === "posts" ? "#f8fafc" : "#64748b"}; font-weight:900; font-size:12px; cursor:pointer;">
-                        ⊞ Posts (${allMyPosts.length})
-                    </button>
-                    <button type="button" data-ptab="videos" style="padding:11px 4px; background:none; border:none; border-bottom:2.5px solid ${
-                        currentProfileTabMode === "videos" ? "#10b981" : "transparent"
-                    }; color:${currentProfileTabMode === "videos" ? "#f8fafc" : "#64748b"}; font-weight:900; font-size:12px; cursor:pointer;">
-                        🎬 Reels (${myVideoPosts.length})
-                    </button>
-                    <button type="button" data-ptab="vault" style="padding:11px 4px; background:none; border:none; border-bottom:2.5px solid ${
-                        currentProfileTabMode === "vault" ? "#38bdf8" : "transparent"
-                    }; color:${currentProfileTabMode === "vault" ? "#38bdf8" : "#64748b"}; font-weight:900; font-size:12px; cursor:pointer;">
-                        ⚡ Nexus Vault (${vaultPosts.length})
-                    </button>
-                </div>
-
-                ${gridHtml}
-            </div>
-        `;
-
-        container.querySelector("#nx-prof-switch-trigger").onclick = () => {
-            if (window.openAdvancedGoogleAuthModal) window.openAdvancedGoogleAuthModal("signin");
-        };
-        container.querySelector("#nx-prof-new-post").onclick = () => {
-            if (window.openOfficialNexusCreatorStudio) window.openOfficialNexusCreatorStudio();
-        };
-        container.querySelector("#nx-prof-open-settings").onclick = () => {
-            if (window.Nexus && Nexus.switchTab) Nexus.switchTab("tab-settings");
-        };
-
-        container.querySelector("#nx-my-dp-img").onclick = () => window.openAvatarLongPressZoomModal(me);
-        container.querySelector("#nx-my-mood-pill").onclick = openEditInstagramProfileModal;
-        container.querySelector("#nx-my-bio-card-trigger").onclick = openEditInstagramProfileModal;
-        container.querySelector("#nx-btn-edit-profile").onclick = openEditInstagramProfileModal;
-        container.querySelector("#nx-btn-profile-song").onclick = window.openProfileSongPickerModal;
-        container.querySelector("#nx-btn-share-profile").onclick = () => window.openProfileQrShareModal(me);
-
-        const emptySongBtn = container.querySelector("#nx-add-song-empty-btn");
-        if (emptySongBtn) emptySongBtn.onclick = window.openProfileSongPickerModal;
-
-        const playMySongBtn = container.querySelector("#nx-my-song-play");
-        if (playMySongBtn && mySong) {
-            playMySongBtn.onclick = () => window.togglePlayProfileSong(mySong.audioUrl, playMySongBtn);
-        }
-        const changeMySongBtn = container.querySelector("#nx-my-song-change");
-        if (changeMySongBtn) changeMySongBtn.onclick = window.openProfileSongPickerModal;
-
-        const dpInp = container.querySelector("#nx-inp-upload-dp");
-        if (dpInp) {
-            dpInp.onchange = (e) => {
-                const file = e.target.files && e.target.files[0];
-                if (!file || !window.Nexus || !Nexus.compressImage) return;
-                Nexus.compressImage(file, 420, 0.72, async (b64) => {
-                    me.dp = b64;
-                    localStorage.setItem("nx_active_account", JSON.stringify(me));
-                    if (Nexus.db) {
-                        await Nexus.db.collection("nexus_accounts").doc(myKey).set({ dp: b64 }, { merge: true }).catch(() => {});
-                    }
-                    Nexus.rebuildAllUsersMasterList && Nexus.rebuildAllUsersMasterList();
-                    renderMyInstagramProfileTab();
-                    Nexus.toast && Nexus.toast("📸 Profile Picture Updated!");
-                });
-            };
-        }
-
-        container.querySelector("#nx-my-posts-scroll-trigger").onclick = () => {
-            if (allMyPosts.length) window.openScrollableProfilePostsFeed(allMyPosts, 0, me);
-        };
-        container.querySelector("#nx-my-followers-trigger").onclick = () => {
-            window.openFullScreenConnectionsModal(me, "followers");
-        };
-        container.querySelector("#nx-my-following-trigger").onclick = () => {
-            window.openFullScreenConnectionsModal(me, "following");
-        };
-
-        container.querySelectorAll("[data-ptab]").forEach((btn) => {
-            btn.onclick = () => {
-                currentProfileTabMode = btn.getAttribute("data-ptab");
-                renderMyInstagramProfileTab();
-            };
-        });
-
-        container.querySelectorAll(".nx-grid-cell-3dot").forEach((dotsBtn) => {
-            dotsBtn.onclick = (e) => {
-                e.stopPropagation();
-                const p = activeList[Number(dotsBtn.getAttribute("data-gidx"))];
-                if (p) openSystematicPostThreeDotSheet(p, renderMyInstagramProfileTab);
-            };
-        });
-
-        container.querySelectorAll(".nx-my-grid-item").forEach((cell) => {
-            cell.onclick = () => {
-                const idx = Number(cell.getAttribute("data-post-idx") || 0);
-                window.openScrollableProfilePostsFeed(activeList, idx, me);
-            };
-        });
-    };
-
-    // Hook directly onto bottom Profile Nav Button so tapping Profile Tab renders in 0.01s!
-    document.addEventListener(
-        "click",
-        (e) => {
-            const navBtn = e.target.closest('.nx-nav-item[data-tab="tab-profile"]');
-            if (navBtn) {
-                setTimeout(() => {
-                    window.renderMyInstagramProfileTab();
-                }, 10);
-            }
-        },
-        true
-    );
-
-    if (window.Nexus && Nexus.listeners) {
-        Nexus.listeners.onUsers.push(() => {
-            renderCleanZeroOverlapHomeFeed(false);
-            const pTab = document.getElementById("tab-profile");
-            if (pTab && pTab.classList.contains("active")) {
-                window.renderMyInstagramProfileTab();
-            }
-        });
-        Nexus.listeners.onPosts.push(() => {
-            renderCleanZeroOverlapHomeFeed(true);
-            const pTab = document.getElementById("tab-profile");
-            if (pTab && pTab.classList.contains("active")) {
-                window.renderMyInstagramProfileTab();
-            }
-        });
-    }
-
-    if (window.Nexus) {
-        Nexus.openUserProfile = window.openPublicUserProfileModal;
-    }
-
-    setInterval(() => {
-        if (window.Nexus && Nexus.openUserProfile !== window.openPublicUserProfileModal) {
-            Nexus.openUserProfile = window.openPublicUserProfileModal;
-        }
-        const pTab = document.getElementById("tab-profile");
-        if (pTab && pTab.classList.contains("active") && !pTab.querySelector("#nx-ig-profile-root")) {
-            window.renderMyInstagramProfileTab();
-        }
-    }, 350);
-})();
-/* ============================================================================
-   REPLACE THE LAST PATCH AT THE BOTTOM OF profile.js WITH THIS CLEAN BLOCK
-   - Connects Firebase Posts & Users Instantly (No fake DM screen!)
-   - Opens ONLY your original dm.js / dminbox.js 1:1 Chat UI with ⋮ 3-dot menu
-   ============================================================================ */
-(function () {
-    // Remove any fake DM screen or extra session bars immediately
-    document.getElementById("nx-guaranteed-dm-screen")?.remove();
-    document.getElementById("nx-official-session-bar")?.remove();
-
-    const PROJECT_ID = "nexus-community-bf99c";
-    const REST_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
-
-    function parseRestVal(v) {
-        if (!v || typeof v !== "object") return "";
-        if ("stringValue" in v) return v.stringValue;
-        if ("integerValue" in v) return Number(v.integerValue);
-        if ("doubleValue" in v) return Number(v.doubleValue);
-        if ("booleanValue" in v) return Boolean(v.booleanValue);
-        if ("timestampValue" in v) return new Date(v.timestampValue).getTime();
-        if ("arrayValue" in v) return (v.arrayValue.values || []).map(parseRestVal);
-        if ("mapValue" in v) return parseRestFields(v.mapValue.fields || {});
-        return "";
-    }
-
-    function parseRestFields(fields) {
-        const out = {};
-        if (!fields) return out;
-        for (const k in fields) out[k] = parseRestVal(fields[k]);
-        return out;
-    }
-
-    async function forceFetchFirebasePostsAndUsersNow() {
-        try {
-            if (!window.Nexus) return;
-            const [uRes, pRes] = await Promise.all([
-                fetch(`${REST_BASE}/nexus_accounts?pageSize=90`, { cache: "no-store" }),
-                fetch(`${REST_BASE}/nexus_real_posts?pageSize=80`, { cache: "no-store" })
-            ]);
-
-            if (uRes.ok) {
-                const uJson = await uRes.json();
-                const users = (uJson.documents || [])
-                    .map((d) => {
-                        const obj = parseRestFields(d.fields);
-                        obj.username = obj.username || d.name.split("/").pop();
-                        return obj;
-                    })
-                    .filter((u) => u && u.username && u.username.toLowerCase() !== "member");
-
-                if (users.length > 0) {
-                    Nexus.cloudAccounts = users;
-                    Nexus.users = users;
-                }
-            }
-
-            if (pRes.ok) {
-                const pJson = await pRes.json();
-                const posts = (pJson.documents || [])
-                    .map((d) => {
-                        const docId = d.name.split("/").pop();
-                        const p = parseRestFields(d.fields);
-                        p.id = p.id || docId;
-                        p.username = String(p.username || p.author || "user").toLowerCase().replace(/^@/, "").trim();
-                        p.author = p.author || p.name || p.username;
-                        p.content = String(p.content !== undefined ? p.content : p.text || "").trim();
-                        p.text = p.content;
-                        p.image = String(p.image || p.videoUrl || "").trim();
-                        p.createdAt = Number(p.createdAt || p.timestamp || Date.now());
-                        if (!Array.isArray(p.likedBy)) p.likedBy = [];
-                        if (!Array.isArray(p.viewedBy)) p.viewedBy = [];
-                        if (!Array.isArray(p.comments)) p.comments = [];
-                        p.likes = Math.max(p.likedBy.length, Number(p.likes || 0));
-                        p.views = Math.max(p.viewedBy.length, Number(p.views || 1), p.likes);
-                        return p;
-                    })
-                    .filter((p) => p.username !== "member" && (p.image || (p.content && p.content !== ".")))
-                    .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.createdAt - a.createdAt);
-
-                if (posts.length > 0) {
-                    Nexus.posts = posts;
-                    window.__NX_INSTANT_POSTS__ = posts;
-                    const stuckBox = document.getElementById("nx-clean-home-feed-v31");
-                    if (stuckBox && stuckBox.innerText.includes("Loading real community posts")) {
-                        stuckBox.innerHTML = "";
-                    }
-                }
-            }
-
-            if (Nexus.rebuildAllUsersMasterList) Nexus.rebuildAllUsersMasterList();
-            if (Nexus.notifyAll) Nexus.notifyAll();
-        } catch (err) {}
-    }
-
-    forceFetchFirebasePostsAndUsersNow();
-    setTimeout(forceFetchFirebasePostsAndUsersNow, 700);
-})();
-/* ============================================================================
-   PASTE AT THE VERY BOTTOM OF profile.js
-   1. Fixes Header Search Button (Nexus.openSearch) -> Real Member & Post Search + 1-Tap DM
-   2. Fixes Header Notification Bell (Nexus.openNotifications) -> Real Unread DMs, Likes, Comments & Followers + Red Badge Counter (#nx-notif-dot)
-   ============================================================================ */
-(function () {
-    let unreadDmNotifications = [];
-    let notifDmUnsub = null;
-
-    function norm(u) {
-        return String(u || "").toLowerCase().replace(/^@/, "").trim();
-    }
-
-    function getActiveMe() {
-        try {
-            if (window.Nexus && Nexus.getCurrentUser) {
-                const u = Nexus.getCurrentUser();
-                if (u && u.username) return u;
-            }
-            const raw = localStorage.getItem("nx_active_account") || localStorage.getItem("nx_legacy_backup_account");
-            if (raw) return JSON.parse(raw);
-        } catch (e) {}
-        return null;
-    }
-
-    function formatAgo(ts) {
-        const num = Number(ts || 0);
-        if (!num || num < 1000000000000) return "Recent";
-        const sec = Math.max(1, Math.floor((Date.now() - num) / 1000));
-        if (sec < 60) return "Just now";
-        if (sec < 3600) return Math.floor(sec / 60) + "m ago";
-        if (sec < 86400) return Math.floor(sec / 3600) + "h ago";
-        return Math.floor(sec / 86400) + "d ago";
-    }
-
-    // Build all real notifications from Firebase Posts, Followers & Unread 1:1 DMs
-    function gatherAllRealNotifications() {
-        const me = getActiveMe();
-        if (!me || !me.username) return { items: [], unreadCount: 0 };
-        const myU = norm(me.username);
-        const myName = norm(me.name || myU);
-        const lastClearedAt = Number(localStorage.getItem("nx_notif_last_seen_" + myU) || 0);
-
-        const items = [];
-
-        // 1. Unread 1:1 Direct Messages
-        unreadDmNotifications.forEach((m) => {
-            const fromU = norm(m.fromUser);
-            if (!fromU || fromU === myU) return;
-            const preview = m.audioData
-                ? "🎤 Sent you a Voice Note"
-                : m.videoUrl
-                ? "🎬 Sent you a Video"
-                : (m.imgUrl || (m.imgUrls && m.imgUrls.length))
-                ? "📸 Sent you a Photo"
-                : `💬 "${(m.text || "New message").slice(0, 60)}"`;
-
-            items.push({
-                id: "dm_" + m.id,
-                type: "dm",
-                actorUname: fromU,
-                actorName: m.fromName || fromU,
-                text: preview,
-                ts: Number(m.createdAt || Date.now()),
-                isUnread: true
-            });
-        });
-
-        // 2. Likes & Comments on My Posts
-        const allPosts = (window.Nexus && Array.isArray(Nexus.posts)) ? Nexus.posts : [];
-        allPosts.forEach((p) => {
-            if (!p) return;
-            const pOwner = norm(p.username || p.author);
-            if (pOwner !== myU && pOwner !== myName) return;
-            const postSnippet = (p.content || p.text || "your media post").slice(0, 38);
-
-            // Likes
-            (Array.isArray(p.likedBy) ? p.likedBy : []).forEach((likerRaw) => {
-                const liker = norm(likerRaw);
-                if (!liker || liker === myU) return;
-                const ts = Number(p.createdAt || Date.now());
-                items.push({
-                    id: `like_${p.id}_${liker}`,
-                    type: "like",
-                    actorUname: liker,
-                    actorName: "@" + liker,
-                    text: `❤️ Liked your post: "${postSnippet}"`,
-                    postId: p.id,
-                    ts: ts,
-                    isUnread: ts > lastClearedAt
-                });
-            });
-
-            // Comments
-            (Array.isArray(p.comments) ? p.comments : []).forEach((c, idx) => {
-                if (!c) return;
-                const cUser = norm(c.username || c.author);
-                if (!cUser || cUser === myU) return;
-                const cTs = Number(c.createdAt || p.createdAt || Date.now());
-                items.push({
-                    id: `comm_${p.id}_${idx}`,
-                    type: "comment",
-                    actorUname: cUser,
-                    actorName: c.author || "@" + cUser,
-                    text: `💬 Commented: "${(c.text || c.content || "").slice(0, 55)}"`,
-                    postId: p.id,
-                    ts: cTs,
-                    isUnread: cTs > lastClearedAt
-                });
-            });
-        });
-
-        // 3. Followers
-        const myUserEntry = ((window.Nexus && Nexus.users) || []).find((u) => u && norm(u.username) === myU) || me;
-        (Array.isArray(myUserEntry.followersList) ? myUserEntry.followersList : []).forEach((fRaw) => {
-            const fU = norm(fRaw);
-            if (!fU || fU === myU) return;
-            const fObj = ((window.Nexus && Nexus.users) || []).find((u) => u && norm(u.username) === fU);
-            const fTs = Number((fObj && (fObj.lastOnline || fObj.createdAt)) || Date.now() - 3600000);
-            items.push({
-                id: `fol_${fU}`,
-                type: "follow",
-                actorUname: fU,
-                actorName: (fObj && fObj.name) || "@" + fU,
-                text: `👥 Started following you on Nexus`,
-                ts: fTs,
-                isUnread: fTs > lastClearedAt
-            });
-        });
-
-        items.sort((a, b) => b.ts - a.ts);
-        const unreadCount = items.filter((x) => x.isUnread).length;
-        return { items, unreadCount };
-    }
-
-    function updateHeaderNotifBadge() {
-        const dot = document.getElementById("nx-notif-dot");
-        if (!dot) return;
-        const { unreadCount } = gatherAllRealNotifications();
-        if (unreadCount > 0) {
-            dot.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
-            dot.style.display = "inline-block";
-        } else {
-            dot.style.display = "none";
-        }
-    }
-
-    function startRealtimeNotifWatcher() {
-        const me = getActiveMe();
-        if (!me || !me.username || !window.Nexus || !Nexus.db || notifDmUnsub) return;
-        const myU = norm(me.username);
-
-        notifDmUnsub = Nexus.db
-            .collection("nexus_private_dms")
-            .where("toUser", "==", myU)
-            .limit(40)
-            .onSnapshot((snap) => {
-                unreadDmNotifications = [];
-                snap.forEach((doc) => {
-                    const d = doc.data() || {};
-                    if (!d.seen && !d.deleted) {
-                        unreadDmNotifications.push(Object.assign({ id: doc.id }, d));
-                    }
-                });
-                updateHeaderNotifBadge();
-            }, () => {});
-    }
-
-    // =========================================================================
-    // 1. REAL NOTIFICATION CENTER MODAL (Nexus.openNotifications)
-    // =========================================================================
-    window.openNexusRealNotificationsModal = function () {
-        document.getElementById("nx-real-notif-drawer")?.remove();
-        const me = getActiveMe();
-        const myU = me && me.username ? norm(me.username) : "";
-        const { items } = gatherAllRealNotifications();
-
-        if (myU) {
-            localStorage.setItem("nx_notif_last_seen_" + myU, String(Date.now()));
-            updateHeaderNotifBadge();
-        }
-
-        const modal = document.createElement("div");
-        modal.id = "nx-real-notif-drawer";
-        modal.style.cssText =
-            "position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:200160; display:flex; align-items:flex-end; justify-content:center; backdrop-filter:blur(6px);";
-
-        const rowsHtml = items.length
-            ? items
-                  .map((it, idx) => {
-                      const uObj = ((window.Nexus && Nexus.users) || []).find((u) => u && norm(u.username) === it.actorUname);
-                      const av =
-                          uObj && uObj.dp
-                              ? `<img src="${uObj.dp}" style="width:42px; height:42px; border-radius:50%; object-fit:cover; border:1.5px solid #10b981; flex-shrink:0;" />`
-                              : `<div style="width:42px; height:42px; border-radius:50%; background:linear-gradient(135deg,#10b981,#2563eb); color:#020617; font-weight:900; font-size:15px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${(
-                                    it.actorName || "U"
-                                )
-                                    .replace(/^@/, "")[0]
-                                    .toUpperCase()}</div>`;
-
-                      const actionBadge =
-                          it.type === "dm"
-                              ? `<span style="background:#10b981; color:#020617; padding:5px 10px; border-radius:9px; font-size:11px; font-weight:900; flex-shrink:0;">Reply 💬</span>`
-                              : `<span style="background:#1e293b; color:#38bdf8; border:1px solid #334155; padding:5px 9px; border-radius:9px; font-size:10.5px; font-weight:800; flex-shrink:0;">View →</span>`;
-
-                      return `
-                          <div data-notif-idx="${idx}" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 13px; border-radius:15px; background:${
-                          it.type === "dm" ? "rgba(16,185,129,0.12)" : "#090d16"
-                      }; border:1px solid ${
-                          it.type === "dm" ? "#10b981" : "#1e293b"
-                      }; margin-bottom:8px; cursor:pointer;">
-                              <div style="display:flex; align-items:center; gap:10px; min-width:0; flex:1;">
-                                  ${av}
-                                  <div style="min-width:0; flex:1;">
-                                      <div style="display:flex; align-items:center; gap:6px;">
-                                          <span style="font-size:13px; font-weight:900; color:#f8fafc;">${it.actorName}</span>
-                                          <span style="font-size:10px; color:#64748b;">• ${formatAgo(it.ts)}</span>
-                                      </div>
-                                      <div style="font-size:12px; color:#cbd5e1; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                                          ${it.text}
-                                      </div>
-                                  </div>
-                              </div>
-                              ${actionBadge}
-                          </div>
-                      `;
-                  })
-                  .join("")
-            : `<div style="text-align:center; padding:38px 16px; color:#64748b;">
-                   <div style="font-size:32px; margin-bottom:8px;">🔔</div>
-                   <div style="font-size:14px; font-weight:800; color:#cbd5e1;">No new notifications yet</div>
-                   <div style="font-size:11.5px; color:#64748b; margin-top:4px;">When friends message you, like, comment or follow you, they will appear here live!</div>
-               </div>`;
-
-        modal.innerHTML = `
-            <div style="background:#0f172a; border-top:2px solid #10b981; border-radius:24px 24px 0 0; width:100%; max-width:600px; max-height:86dvh; display:flex; flex-direction:column; padding:16px 16px 24px; color:#fff; box-shadow:0 -18px 50px rgba(0,0,0,0.95);">
-                <div style="width:42px; height:4px; background:#334155; border-radius:99px; margin:0 auto 12px;"></div>
-                <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #1e293b; margin-bottom:10px;">
-                    <div>
-                        <h3 style="font-size:16px; font-weight:900; color:#f8fafc;">🔔 Activity &amp; Notifications (${items.length})</h3>
-                        <div style="font-size:11px; color:#34d399; font-weight:700;">Live DMs, Likes, Comments &amp; Followers</div>
-                    </div>
-                    <button type="button" id="nx-close-notif-btn" style="width:32px; height:32px; border-radius:50%; background:#1e293b; border:none; color:#fff; font-weight:900; cursor:pointer;">✕</button>
-                </div>
-                <div style="flex:1; overflow-y:auto; max-height:66dvh; padding-right:2px;">
-                    ${rowsHtml}
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-        modal.querySelector("#nx-close-notif-btn").onclick = () => modal.remove();
-        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-
-        modal.querySelectorAll("[data-notif-idx]").forEach((row) => {
-            row.onclick = () => {
-                const it = items[Number(row.getAttribute("data-notif-idx"))];
-                if (!it) return;
-                modal.remove();
-                if (it.type === "dm" && window.NexusDM && typeof NexusDM.openDirectChat === "function") {
-                    NexusDM.openDirectChat(it.actorUname, it.actorName, "");
-                } else if (window.openPublicUserProfileModal) {
-                    window.openPublicUserProfileModal(it.actorUname);
-                }
-            };
-        });
-    };
-
-    // =========================================================================
-    // 2. REAL SEARCH ENGINE MODAL (Nexus.openSearch)
-    // =========================================================================
-    window.openNexusRealSearchModal = function () {
-        document.getElementById("nx-real-search-drawer")?.remove();
-
-        const modal = document.createElement("div");
-        modal.id = "nx-real-search-drawer";
-        modal.style.cssText =
-            "position:fixed; inset:0; background:#090d16; z-index:200160; display:flex; flex-direction:column; color:#fff; max-width:600px; margin:0 auto; box-shadow:0 0 60px rgba(0,0,0,0.95);";
-
-        modal.innerHTML = `
-            <div style="padding:12px 14px; background:#0b1120; border-bottom:1px solid #1e293b; display:flex; align-items:center; gap:10px;">
-                <button type="button" id="nx-close-search-btn" style="background:none; border:none; color:#f8fafc; font-size:21px; font-weight:900; cursor:pointer; padding:4px;">←</button>
-                <input type="text" id="nx-global-search-inp" placeholder="🔍 Search members (@username, name) or posts..." autocomplete="off" style="flex:1; padding:10px 14px; border-radius:14px; background:#111827; border:1.5px solid #10b981; color:#fff; font-size:13.5px; outline:none;" />
-            </div>
-            <div id="nx-global-search-results" style="flex:1; overflow-y:auto; padding:12px 14px 40px;"></div>
-        `;
-
-        document.body.appendChild(modal);
-        const inp = modal.querySelector("#nx-global-search-inp");
-        const resBox = modal.querySelector("#nx-global-search-results");
-        modal.querySelector("#nx-close-search-btn").onclick = () => modal.remove();
-
-        const renderSearchResults = (rawQ) => {
-            const q = String(rawQ || "").toLowerCase().replace(/^@/, "").trim();
-            const allUsers = ((window.Nexus && Nexus.users) || []).filter(
-                (u) => u && u.username && norm(u.username) !== "member"
-            );
-            const allPosts = ((window.Nexus && Nexus.posts) || []).filter((p) => p && (p.content || p.text || p.image));
-
-            const matchedUsers = allUsers
-                .filter((u) => {
-                    if (!q) return true;
-                    return (
-                        norm(u.username).includes(q) ||
-                        norm(u.name).includes(q) ||
-                        norm(u.bio).includes(q)
-                    );
-                })
-                .slice(0, 20);
-
-            const matchedPosts = q
-                ? allPosts
-                      .filter(
-                          (p) =>
-                              norm(p.content || p.text).includes(q) ||
-                              norm(p.username).includes(q) ||
-                              norm(p.author).includes(q)
-                      )
-                      .slice(0, 12)
-                : [];
-
-            const usersHtml = matchedUsers.length
-                ? matchedUsers
-                      .map((u) => {
-                          const uKey = norm(u.username);
-                          const isOnline = (Date.now() - Number(u.lastOnline || 0)) < 120000;
-                          const av = u.dp
-                              ? `<img src="${u.dp}" style="width:44px; height:44px; border-radius:50%; object-fit:cover; border:2px solid ${
-                                    isOnline ? "#10b981" : "#334155"
-                                }; flex-shrink:0;" />`
-                              : `<div style="width:44px; height:44px; border-radius:50%; background:linear-gradient(135deg,#10b981,#2563eb); color:#020617; font-weight:900; font-size:16px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${(
-                                    u.name || uKey
-                                )[0].toUpperCase()}</div>`;
-
-                          return `
-                              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-radius:15px; background:#0f172a; border:1px solid #1e293b; margin-bottom:8px;">
-                                  <div data-srch-profile="${uKey}" style="display:flex; align-items:center; gap:11px; min-width:0; flex:1; cursor:pointer;">
-                                      ${av}
-                                      <div style="min-width:0; flex:1;">
-                                          <div style="display:flex; align-items:center; gap:5px;">
-                                              <span style="font-size:14px; font-weight:900; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${
-                                                  u.name || uKey
-                                              }</span>
-                                              <span style="background:#10b981; color:#020617; font-size:9px; font-weight:900; padding:1px 5px; border-radius:99px;">✓</span>
-                                              ${isOnline ? `<span style="font-size:10px; color:#34d399; font-weight:800;">● Live</span>` : ""}
-                                          </div>
-                                          <div style="font-size:11.5px; color:#38bdf8; font-weight:700;">@${uKey}</div>
-                                          ${
-                                              u.bio
-                                                  ? `<div style="font-size:11px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${u.bio}</div>`
-                                                  : ""
-                                          }
-                                      </div>
-                                  </div>
-                                  <div style="display:flex; gap:6px; flex-shrink:0;">
-                                      <button type="button" data-srch-chat="${uKey}" data-srch-name="${(u.name || uKey).replace(/"/g, "")}" style="padding:7px 12px; border-radius:10px; background:#10b981; color:#020617; border:none; font-size:12px; font-weight:900; cursor:pointer;">
-                                          💬 Chat
-                                      </button>
-                                  </div>
-                              </div>
-                          `;
-                      })
-                      .join("")
-                : `<div style="padding:18px; text-align:center; color:#64748b; font-size:12.5px;">No members found matching "${rawQ}"</div>`;
-
-            const postsHtml = matchedPosts.length
-                ? `<div style="font-size:11.5px; font-weight:900; color:#38bdf8; text-transform:uppercase; margin:16px 4px 8px;">📝 Matching Community Posts (${matchedPosts.length})</div>` +
-                  matchedPosts
-                      .map(
-                          (p, idx) => `
-                          <div data-srch-post="${idx}" style="padding:10px 12px; border-radius:14px; background:#0f172a; border:1px solid #1e293b; margin-bottom:8px; cursor:pointer;">
-                              <div style="font-size:12px; font-weight:900; color:#34d399;">@${p.username || p.author}</div>
-                              <div style="font-size:12.5px; color:#e2e8f0; margin-top:3px;">${(p.content || p.text || "📷 Media Post").slice(0, 110)}</div>
-                          </div>
-                      `
-                      )
-                      .join("")
-                : "";
-
-            resBox.innerHTML = `
-                <div style="font-size:11.5px; font-weight:900; color:#34d399; text-transform:uppercase; margin:2px 4px 10px;">
-                    👥 ${q ? `Matching Members (${matchedUsers.length})` : `Active Community Members (${matchedUsers.length})`}
-                </div>
-                ${usersHtml}
-                ${postsHtml}
-            `;
-
-            resBox.querySelectorAll("[data-srch-profile]").forEach((el) => {
-                el.onclick = () => {
-                    const uKey = el.getAttribute("data-srch-profile");
-                    modal.remove();
-                    if (window.openPublicUserProfileModal) window.openPublicUserProfileModal(uKey);
-                };
-            });
-
-            resBox.querySelectorAll("[data-srch-chat]").forEach((btn) => {
-                btn.onclick = (e) => {
-                    e.stopPropagation();
-                    const uKey = btn.getAttribute("data-srch-chat");
-                    const uName = btn.getAttribute("data-srch-name");
-                    modal.remove();
-                    if (window.NexusDM && typeof NexusDM.openDirectChat === "function") {
-                        NexusDM.openDirectChat(uKey, uName, "");
-                    } else if (window.openDirect1to1ChatWithUser) {
-                        window.openDirect1to1ChatWithUser(uKey);
-                    }
-                };
-            });
-
-            resBox.querySelectorAll("[data-srch-post]").forEach((row) => {
-                row.onclick = () => {
-                    const p = matchedPosts[Number(row.getAttribute("data-srch-post"))];
-                    modal.remove();
-                    if (p && window.openScrollableProfilePostsFeed) {
-                        window.openScrollableProfilePostsFeed([p], 0, { username: p.username });
-                    }
-                };
-            });
-        };
-
-        inp.oninput = () => renderSearchResults(inp.value);
-        renderSearchResults("");
-        setTimeout(() => inp.focus(), 60);
-    };
-
-    // Also ensure clicking "Message 💬" on ANY profile directly calls NexusDM.openDirectChat!
-    const origOpenDirect = window.openDirect1to1ChatWithUser;
-    window.openDirect1to1ChatWithUser = function (targetIdentifier) {
-        const uKey =
-            typeof targetIdentifier === "object"
-                ? norm(targetIdentifier.username || targetIdentifier.name)
-                : norm(targetIdentifier);
-        const uObj = ((window.Nexus && Nexus.users) || []).find((u) => u && norm(u.username) === uKey);
-        const uName = (uObj && (uObj.name || uObj.username)) || (typeof targetIdentifier === "object" && targetIdentifier.name) || uKey;
-        const uDp = (uObj && uObj.dp) || "";
-
-        document.getElementById("nx-public-profile-modal")?.remove();
-        document.getElementById("nx-follow-list-modal")?.remove();
-        document.getElementById("nx-avatar-zoom-overlay")?.remove();
-
-        if (window.NexusDM && typeof NexusDM.openDirectChat === "function" && uKey) {
-            NexusDM.openDirectChat(uKey, uName, uDp);
+            .sort((a, b) => ((b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)) || (Number(b.createdAt || 0) - Number(a.createdAt || 0)));
+
+        const hash = validPosts.map((p) => `${p.id}:${p.likes}:${(p.likedBy || []).length}:${(p.comments || []).length}:${p.pinned ? 1 : 0}:${(p.content || "").slice(0, 15)}`).join("|");
+        let feedBox = document.getElementById("nx-clean-home-feed-v31");
+        if (!feedBox) { feedBox = document.createElement("div"); feedBox.id = "nx-clean-home-feed-v31"; homeTab.appendChild(feedBox); forceRebuild = true; }
+        if (!forceRebuild && hash === lastRenderedHomeHash && feedBox.children.length > 0) return;
+        lastRenderedHomeHash = hash;
+
+        if (!validPosts.length) {
+            feedBox.innerHTML = `<div style="text-align:center;padding:36px 16px;color:#94a3b8;font-size:13px;">⏳ Loading real community posts...</div>`;
             return;
         }
-        if (typeof origOpenDirect === "function") {
-            origOpenDirect(targetIdentifier);
-        }
+        feedBox.innerHTML = buildScrollablePostCardsHtml(validPosts, null);
+        bindRealPostCardEvents(feedBox, validPosts, () => renderCleanZeroOverlapHomeFeed(true));
+    }
+
+    window.renderHomeFeedTab = () => renderCleanZeroOverlapHomeFeed(true);
+    setInterval(() => renderCleanZeroOverlapHomeFeed(false), 550);
+    setTimeout(() => syncSupabaseUsersAndPosts(true), 450);
+    setInterval(() => syncSupabaseUsersAndPosts(false), 20000);
+
+    // Export shared core for Part 2 cleanly
+    window.__NX_PROF_CORE__ = {
+        normU, esc, getSec, getSb, THEME_ACCENTS, getThemeAccent, getExtraProfileMeta, saveExtraProfileMeta,
+        cleanUniqueList, getActiveUser, getMyUsername, isUserVerified, openLoginIfNeeded, isStrictOwnerOfPost,
+        getNormalizedProfileSong, normalizeSupabaseUser, normalizeSupabasePost, isRealValidPost,
+        syncSupabaseUsersAndPosts, crossSyncAllFollowersAndSongs, persistPostUpdate, persistFollowToggle,
+        extractTrueTimestamp, isUserTrulyOnlineRightNow, findUserObjectByAnyIdentifier,
+        recordRealPostView, buildScrollablePostCardsHtml, bindRealPostCardEvents, renderCleanZeroOverlapHomeFeed
     };
-
-    // Bind directly to Nexus.openNotifications & Nexus.openSearch + header buttons
-    function bindHeaderSearchAndNotifButtons() {
-        startRealtimeNotifWatcher();
-        updateHeaderNotifBadge();
-        if (window.Nexus) {
-            Nexus.openNotifications = window.openNexusRealNotificationsModal;
-            Nexus.openSearch = window.openNexusRealSearchModal;
-        }
-        document.querySelectorAll('.nx-header-actions button').forEach((btn) => {
-            const oc = btn.getAttribute("onclick") || "";
-            if (oc.includes("openNotifications") && !btn.dataset.nxNotifBound) {
-                btn.dataset.nxNotifBound = "1";
-                btn.onclick = (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    window.openNexusRealNotificationsModal();
-                };
-            } else if (oc.includes("openSearch") && !btn.dataset.nxSearchBound) {
-                btn.dataset.nxSearchBound = "1";
-                btn.onclick = (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    window.openNexusRealSearchModal();
-                };
-            }
-        });
-    }
-
-    setInterval(bindHeaderSearchAndNotifButtons, 700);
-    setTimeout(bindHeaderSearchAndNotifButtons, 150);
-})();
-/* ============================================================================
-   REPLACE THE LAST PATCH AT THE BOTTOM OF profile.js WITH THIS (V38 MASTER):
-   1. Fixes Recent/Story Profile Tap Opening Your Own Profile (Targets Exact Single Card!)
-   2. 100% Working New User Signup + Login (Username + 4-Digit PIN + Optional Google)
-      -> Works in Chrome, WhatsApp/Insta In-App Browser & All Android Phones!
-   3. Keeps 3-Dot (⋮) Menu Z-Index Above DM Chat
-   ============================================================================ */
-(function () {
-    // 1. Z-Index Shield (3-Dot Menu, Public Profile & Auth Modal always on top)
-    if (!document.getElementById("nx-zindex-v38")) {
-        const zStyle = document.createElement("style");
-        zStyle.id = "nx-zindex-v38";
-        zStyle.textContent = `
-            #nx-global-modal { z-index: 250000 !important; }
-            #nx-public-profile-modal { z-index: 255000 !important; }
-            #nx-sys-post-3dot-sheet, #nx-home-post-admin-sheet { z-index: 256000 !important; }
-            #nx-instant-auth-modal { z-index: 270000 !important; }
-        `;
-        document.head.appendChild(zStyle);
-    }
-
-    // 2. Guaranteed 3-Dot (⋮) Click Router inside 1:1 DM Chat & Group Chat
-    document.addEventListener("click", function (e) {
-        const btn = e.target.closest("button");
-        if (!btn) return;
-        const txt = (btn.innerText || "").trim();
-        if (txt !== "⋮" && txt !== "•••") return;
-        if (btn.classList.contains("nx-dm-message-menu-btn") || btn.closest(".nx-dm-bubble-anim")) return;
-
-        const dmRoot = document.getElementById("nx-dm-dedicated-root");
-        const grpRoom = document.getElementById("nx-chat-room");
-
-        if (dmRoot && dmRoot.contains(btn)) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (window.NexusDotsMenu && NexusDotsMenu.openDmMenu) NexusDotsMenu.openDmMenu();
-            else if (window.NexusDM && NexusDM.openChatMenu) NexusDM.openChatMenu();
-            const gModal = document.getElementById("nx-global-modal");
-            if (gModal) { gModal.style.zIndex = "250000"; gModal.style.display = "flex"; }
-            return;
-        }
-        if (grpRoom && grpRoom.contains(btn)) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (window.NexusDotsMenu && NexusDotsMenu.openGroupMenu) NexusDotsMenu.openGroupMenu();
-            const gModal = document.getElementById("nx-global-modal");
-            if (gModal) { gModal.style.zIndex = "250000"; gModal.style.display = "flex"; }
-        }
-    }, true);
-
-    // 3. EXACT USER RESOLVER (Matches Username/Name FIRST — Never Misfires to Your Own DP!)
-    const origOpenProfile = window.openPublicUserProfileModal;
-
-    function resolveUserStrict(identifier, cardImgSrc) {
-        const pools = [
-            ...((window.Nexus && Array.isArray(Nexus.users)) ? Nexus.users : []),
-            ...((window.Nexus && Array.isArray(Nexus.cloudAccounts)) ? Nexus.cloudAccounts : [])
-        ];
-
-        if (identifier && typeof identifier === "object" && identifier.username) {
-            return identifier;
-        }
-
-        const raw = String(identifier || "").trim();
-        const clean = raw.toLowerCase().replace(/^@/, "").replace(/\.+$/, "").trim();
-        const alpha = clean.replace(/[^a-z0-9]/g, "");
-
-        // A. Exact username or display name match first
-        if (clean && clean !== "member") {
-            let exact = pools.find(u =>
-                u && u.username && (
-                    u.username.toLowerCase().trim() === clean ||
-                    (u.name && u.name.toLowerCase().trim() === clean)
-                )
-            );
-            if (exact) return exact;
-
-            // B. Partial/prefix match for truncated names (e.g. "Aarush...")
-            let partial = pools.find(u => {
-                if (!u || !u.username) return false;
-                const uN = u.username.toLowerCase().trim();
-                const dN = (u.name || "").toLowerCase().trim();
-                const uA = uN.replace(/[^a-z0-9]/g, "");
-                const dA = dN.replace(/[^a-z0-9]/g, "");
-                return (
-                    (clean.length >= 2 && (uN.startsWith(clean) || dN.startsWith(clean))) ||
-                    (alpha.length >= 3 && (uA.startsWith(alpha) || dA.startsWith(alpha)))
-                );
-            });
-            if (partial) return partial;
-        }
-
-        // C. Match by single card's DP ONLY if text didn't match (for fancy emoji/Unicode names)
-        if (cardImgSrc && cardImgSrc.length > 35) {
-            const dpHit = pools.find(u => u && u.dp && u.dp.slice(0, 120) === cardImgSrc.slice(0, 120));
-            if (dpHit) return dpHit;
-        }
-
-        // D. Search in posts
-        if (clean && clean !== "member") {
-            const posts = (window.Nexus && Array.isArray(Nexus.posts)) ? Nexus.posts : [];
-            const pHit = posts.find(p =>
-                p && (
-                    String(p.username || "").toLowerCase().trim() === clean ||
-                    String(p.author || "").toLowerCase().trim() === clean
-                )
-            );
-            if (pHit) {
-                return {
-                    username: String(pHit.username || clean).toLowerCase().replace(/^@/, "").trim(),
-                    name: pHit.author || pHit.username || raw,
-                    bio: pHit.bio || "",
-                    dp: pHit.dp || "",
-                    followersList: [],
-                    followingList: []
-                };
-            }
-            const safeU = alpha || clean.replace(/\s+/g, "_");
-            return { username: safeU, name: raw.replace(/^@/, "") || safeU, bio: "", dp: cardImgSrc || "", followersList: [], followingList: [] };
-        }
-        return null;
-    }
-
-    if (typeof origOpenProfile === "function") {
-        window.openPublicUserProfileModal = function (targetIdentifier, cardImgSrc) {
-            const resolved = resolveUserStrict(targetIdentifier, cardImgSrc);
-            if (!resolved || !resolved.username) return;
-            origOpenProfile(resolved);
-        };
-    }
-
-    // 4. FIXED STORY / RECENT BAR CLICK HANDLER (Stops at the EXACT clicked card, NEVER the whole bar!)
-    document.addEventListener("click", function (e) {
-        const storyBar = document.getElementById("nx-stories-bar");
-        if (!storyBar || !storyBar.contains(e.target)) return;
-
-        // Walk UP from e.target and find the EXACT single story card (width <= 135px)
-        let el = e.target;
-        let singleCard = null;
-        while (el && el !== storyBar) {
-            const r = el.getBoundingClientRect();
-            const imgsInside = el.querySelectorAll("img").length;
-            if (r.width >= 44 && r.width <= 135 && r.height >= 50 && r.height <= 165 && imgsInside <= 1) {
-                singleCard = el;
-            } else if (r.width > 150) {
-                break; // Never climb into the wide horizontal scroll container!
-            }
-            el = el.parentElement;
-        }
-
-        if (!singleCard) return;
-
-        const fullTxt = (singleCard.innerText || "").toLowerCase();
-        if (fullTxt.includes("nexus") && fullTxt.includes("official")) return;
-
-        let handle = singleCard.getAttribute("data-username") || "";
-        if (!handle) {
-            const oc = singleCard.getAttribute("onclick") || "";
-            const m = oc.match(/(?:openPublicProfile|openUserProfile|openPublicUserProfileModal)\s*\(\s*['"]([^'"]+)['"]/);
-            if (m && m[1]) handle = m[1];
-        }
-
-        // Only grab the single image inside THIS clicked card
-        const imgEl = singleCard.querySelector("img");
-        const imgSrc = imgEl ? (imgEl.getAttribute("src") || "") : "";
-
-        if (!handle) {
-            const lines = (singleCard.innerText || "")
-                .split("\n")
-                .map(l => l.trim())
-                .filter(l =>
-                    l &&
-                    l !== "Live" &&
-                    l !== "🟢 Live" &&
-                    l !== "Online" &&
-                    l !== "Official" &&
-                    !l.endsWith("ago") &&
-                    !l.includes("DM Open")
-                );
-            handle = lines[lines.length - 1] || "";
-        }
-
-        if (handle || imgSrc) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (typeof window.openPublicUserProfileModal === "function") {
-                window.openPublicUserProfileModal(handle, imgSrc);
-            }
-        }
-    }, true);
-
-    // 5. 100% WORKING INSTANT SIGNUP & LOGIN SYSTEM (ZERO POPUP ERRORS FOR NEW USERS!)
-    window.openAdvancedGoogleAuthModal = function (initialMode) {
-        document.getElementById("nx-instant-auth-modal")?.remove();
-        let mode = initialMode === "signin" ? "signin" : "signup";
-
-        const modal = document.createElement("div");
-        modal.id = "nx-instant-auth-modal";
-        modal.style.cssText =
-            "position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:270000; display:flex; align-items:center; justify-content:center; padding:16px; backdrop-filter:blur(6px);";
-
-        const getDb = () => (window.Nexus && Nexus.db) || (window.firebase && firebase.firestore ? firebase.firestore() : null);
-
-        const completeLogin = (accObj) => {
-            accObj.verified = true;
-            accObj.googleVerified = true;
-            accObj.isOnlineNow = true;
-            accObj.lastOnline = Date.now();
-            accObj.lastSeenAt = Date.now();
-            localStorage.setItem("nx_active_account", JSON.stringify(accObj));
-            localStorage.setItem("nx_legacy_backup_account", JSON.stringify(accObj));
-            document.body.classList.remove("nx-auth-locked");
-            document.getElementById("nx-google-auth-hub")?.remove();
-            modal.remove();
-
-            if (window.Nexus) {
-                if (Array.isArray(Nexus.users)) {
-                    const idx = Nexus.users.findIndex(u => u && u.username && u.username.toLowerCase() === accObj.username.toLowerCase());
-                    if (idx === -1) Nexus.users.unshift(accObj);
-                    else Nexus.users[idx] = Object.assign({}, Nexus.users[idx], accObj);
-                }
-                Nexus.rebuildAllUsersMasterList && Nexus.rebuildAllUsersMasterList();
-                Nexus.notifyAll && Nexus.notifyAll();
-                Nexus.toast && Nexus.toast(`✅ Welcome, ${accObj.name}!`);
-                Nexus.switchTab && Nexus.switchTab("tab-profile");
-            }
-        };
-
-        const renderAuthUI = () => {
-            const isSignup = mode === "signup";
-            modal.innerHTML = `
-                <div style="background:linear-gradient(155deg,#0f172a,#090d16); border:1.5px solid #10b981; border-radius:22px; width:100%; max-width:390px; padding:20px 18px; color:#fff; box-shadow:0 22px 55px rgba(0,0,0,0.95);">
-                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-                        <h3 style="font-size:17px; font-weight:900; color:#34d399;">
-                            ${isSignup ? "✨ Create New Nexus Account" : "🔓 Sign In to Nexus"}
-                        </h3>
-                        <button type="button" id="nx-auth-x" style="width:30px; height:30px; border-radius:50%; background:#1e293b; border:none; color:#cbd5e1; font-weight:900; cursor:pointer;">✕</button>
-                    </div>
-
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; background:#050811; padding:4px; border-radius:12px; margin-bottom:14px;">
-                        <button type="button" id="nx-tab-signup" style="padding:9px; border-radius:9px; border:none; background:${isSignup ? "#10b981" : "transparent"}; color:${isSignup ? "#020617" : "#94a3b8"}; font-weight:900; font-size:12.5px; cursor:pointer;">New Account</button>
-                        <button type="button" id="nx-tab-signin" style="padding:9px; border-radius:9px; border:none; background:${!isSignup ? "#10b981" : "transparent"}; color:${!isSignup ? "#020617" : "#94a3b8"}; font-weight:900; font-size:12.5px; cursor:pointer;">Login</button>
-                    </div>
-
-                    <div id="nx-auth-err" style="display:none; background:rgba(244,63,94,0.16); border:1px solid #f43f5e; color:#fda4af; padding:8px 10px; border-radius:10px; font-size:12px; font-weight:700; margin-bottom:10px;"></div>
-
-                    <div style="display:flex; flex-direction:column; gap:10px;">
-                        ${isSignup ? `
-                            <div>
-                                <label style="font-size:10.5px; font-weight:800; color:#94a3b8;">YOUR NAME</label>
-                                <input type="text" id="nx-a-name" placeholder="e.g. Rahul Sharma" style="width:100%; margin-top:4px; padding:11px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13.5px; outline:none;" />
-                            </div>
-                        ` : ""}
-                        <div>
-                            <label style="font-size:10.5px; font-weight:800; color:#94a3b8;">USERNAME (NO SPACES)</label>
-                            <input type="text" id="nx-a-uname" placeholder="e.g. rahul_07" autocapitalize="none" style="width:100%; margin-top:4px; padding:11px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13.5px; outline:none;" />
-                        </div>
-                        <div>
-                            <label style="font-size:10.5px; font-weight:800; color:#94a3b8;">4-DIGIT SECRET PIN / PASSWORD</label>
-                            <input type="password" id="nx-a-pin" maxlength="16" placeholder="e.g. 1234" style="width:100%; margin-top:4px; padding:11px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13.5px; outline:none;" />
-                        </div>
-                        ${isSignup ? `
-                            <div>
-                                <label style="font-size:10.5px; font-weight:800; color:#94a3b8;">SHORT BIO (OPTIONAL)</label>
-                                <input type="text" id="nx-a-bio" placeholder="e.g. Class 11 Student / JEE Aspirant" style="width:100%; margin-top:4px; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; outline:none;" />
-                            </div>
-                        ` : ""}
-
-                        <button type="button" id="nx-a-submit" style="width:100%; padding:13px; border-radius:13px; background:linear-gradient(90deg,#10b981,#06b6d4); color:#020617; font-weight:900; font-size:14px; border:none; cursor:pointer; margin-top:4px;">
-                            ${isSignup ? "🚀 Create Account Instantly" : "🔓 Login Now"}
-                        </button>
-
-                        <div style="text-align:center; font-size:11px; color:#64748b; margin:2px 0;">— OR —</div>
-
-                        <button type="button" id="nx-a-google" style="width:100%; padding:11px; border-radius:12px; background:#ffffff; color:#0f172a; font-weight:900; font-size:12.5px; border:none; cursor:pointer;">
-                            Continue with Google (Chrome Only)
-                        </button>
-                    </div>
-                </div>
-            `;
-
-            const showErr = (msg) => {
-                const box = modal.querySelector("#nx-auth-err");
-                if (box) { box.textContent = msg; box.style.display = "block"; }
-            };
-
-            modal.querySelector("#nx-auth-x").onclick = () => modal.remove();
-            modal.querySelector("#nx-tab-signup").onclick = () => { mode = "signup"; renderAuthUI(); };
-            modal.querySelector("#nx-tab-signin").onclick = () => { mode = "signin"; renderAuthUI(); };
-
-            modal.querySelector("#nx-a-submit").onclick = async function () {
-                const db = getDb();
-                if (!db) return showErr("⚠️ Internet slow hai, 2 second baad dobara try karein.");
-
-                const rawU = (modal.querySelector("#nx-a-uname").value || "").trim();
-                const uname = rawU.toLowerCase().replace(/^@/, "").replace(/[^a-z0-9_]/g, "");
-                const pin = (modal.querySelector("#nx-a-pin").value || "").trim();
-
-                if (uname.length < 3) return showErr("⚠️ Username kam se kam 3 letters ka hona chahiye (e.g. rahul_01).");
-                if (uname === "member" || uname === "nexus_official") return showErr("⚠️ Yeh username reserved hai, koi aur chunein.");
-                if (pin.length < 4) return showErr("⚠️ Kam se kam 4 digit ka PIN ya password dalein.");
-
-                this.disabled = true;
-                this.textContent = isSignup ? "⏳ Creating Account..." : "⏳ Logging In...";
-
-                try {
-                    const docRef = db.collection("nexus_accounts").doc(uname);
-                    const snap = await docRef.get();
-
-                    if (isSignup) {
-                        if (snap.exists) {
-                            this.disabled = false;
-                            this.textContent = "🚀 Create Account Instantly";
-                            return showErr(`⚠️ @${uname} pehle se bana hua hai! Koi aur username dalein ya Login tab mein jayein.`);
-                        }
-                        const name = (modal.querySelector("#nx-a-name").value || "").trim() || uname;
-                        const bio = (modal.querySelector("#nx-a-bio").value || "").trim() || "Nexus Community Member ✨";
-                        const newAcc = {
-                            username: uname,
-                            name: name,
-                            bio: bio,
-                            authPin: pin,
-                            pin: pin,
-                            email: `${uname}@nexus.app`,
-                            dp: "",
-                            verified: true,
-                            googleVerified: true,
-                            isOnlineNow: true,
-                            followersList: [],
-                            followingList: [],
-                            createdAt: Date.now(),
-                            lastOnline: Date.now(),
-                            lastSeenAt: Date.now()
-                        };
-                        await docRef.set(newAcc);
-                        completeLogin(newAcc);
-                    } else {
-                        if (!snap.exists) {
-                            this.disabled = false;
-                            this.textContent = "🔓 Login Now";
-                            return showErr(`⚠️ @${uname} naam ka koi account nahi mila. Naya account banane ke liye "New Account" par tap karein.`);
-                        }
-                        const data = snap.data() || {};
-                        if (data.isBanned) {
-                            this.disabled = false;
-                            this.textContent = "🔓 Login Now";
-                            return showErr("🚫 This account has been suspended by Admin.");
-                        }
-                        const savedPin = String(data.authPin || data.pin || "").trim();
-                        if (savedPin && savedPin !== pin) {
-                            this.disabled = false;
-                            this.textContent = "🔓 Login Now";
-                            return showErr("❌ Galat PIN/Password! Dobara check karke dalein.");
-                        }
-                        const merged = Object.assign({}, data, {
-                            username: uname,
-                            authPin: savedPin || pin,
-                            pin: savedPin || pin,
-                            verified: true,
-                            googleVerified: true,
-                            isOnlineNow: true,
-                            lastOnline: Date.now(),
-                            lastSeenAt: Date.now()
-                        });
-                        await docRef.set({
-                            authPin: merged.authPin,
-                            isOnlineNow: true,
-                            lastOnline: Date.now(),
-                            lastSeenAt: Date.now()
-                        }, { merge: true }).catch(() => {});
-                        completeLogin(merged);
-                    }
-                } catch (err) {
-                    this.disabled = false;
-                    this.textContent = isSignup ? "🚀 Create Account Instantly" : "🔓 Login Now";
-                    showErr("❌ Server error: " + (err.message || "Please retry."));
-                }
-            };
-
-            // Optional Google Login with Clean Error Handling
-            modal.querySelector("#nx-a-google").onclick = async function () {
-                const db = getDb();
-                if (!window.firebase || !firebase.auth || !db) {
-                    return showErr("⚠️ Google Login yahan available nahi hai. Upar Username + PIN se 2 second mein account banayein!");
-                }
-                this.disabled = true;
-                this.textContent = "⏳ Opening Google...";
-                try {
-                    const provider = new firebase.auth.GoogleAuthProvider();
-                    const res = await firebase.auth().signInWithPopup(provider);
-                    const gUser = res.user;
-                    const email = (gUser.email || "").toLowerCase();
-                    const snapByEmail = await db.collection("nexus_accounts").where("email", "==", email).limit(1).get();
-                    if (!snapByEmail.empty) {
-                        const existing = snapByEmail.docs[0].data();
-                        existing.username = existing.username || snapByEmail.docs[0].id;
-                        completeLogin(existing);
-                    } else {
-                        const baseU = (email.split("@")[0] || "user").replace(/[^a-z0-9_]/g, "").slice(0, 14) + "_" + Math.floor(10 + Math.random() * 89);
-                        const newAcc = {
-                            username: baseU,
-                            name: gUser.displayName || baseU,
-                            email: email,
-                            bio: "Nexus Community Member ✨",
-                            dp: gUser.photoURL || "",
-                            verified: true,
-                            googleVerified: true,
-                            isOnlineNow: true,
-                            followersList: [],
-                            followingList: [],
-                            createdAt: Date.now(),
-                            lastOnline: Date.now(),
-                            lastSeenAt: Date.now()
-                        };
-                        await db.collection("nexus_accounts").doc(baseU).set(newAcc);
-                        completeLogin(newAcc);
-                    }
-                } catch (err) {
-                    this.disabled = false;
-                    this.textContent = "Continue with Google (Chrome Only)";
-                    showErr("⚠️ Is browser mein Google popup blocked hai. Upar apna Name + Username + 4-digit PIN daal kar turant Account banayein!");
-                }
-            };
-        };
-
-        renderAuthUI();
-        document.body.appendChild(modal);
-        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-    };
-
-    // Sync profile hooks cleanly
-    function syncHooks() {
-        if (window.Nexus && typeof window.openPublicUserProfileModal === "function") {
-            Nexus.openPublicProfile = window.openPublicUserProfileModal;
-            Nexus.openUserProfile = window.openPublicUserProfileModal;
-        }
-    }
-    syncHooks();
-    setInterval(syncHooks, 2000);
 })();
