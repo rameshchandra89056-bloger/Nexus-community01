@@ -522,3 +522,163 @@
 
     window.dispatchEvent(new CustomEvent("nexus-security-ready", { detail: window.NexusSecurity }));
 })();
+/* ============================================================================
+   NEXUS REAL-TIME SYNC, 25s LIVE HEARTBEAT & REAL STORY BAR ENGINE (v4.6)
+   Paste at the very bottom of nexus-security.js
+   ============================================================================ */
+(function () {
+    if (window.__NEXUS_REALTIME_HEARTBEAT_V46__) return;
+    window.__NEXUS_REALTIME_HEARTBEAT_V46__ = true;
+
+    const getSec = () => window.NexusSecurity || null;
+    const getSb = () => (window.NexusSecurity && window.NexusSecurity.sb) || null;
+    const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const normU = (u) => String(u || "").toLowerCase().replace(/^@/, "").trim();
+
+    function formatShortAgo(ms) {
+        if (!ms || ms < 1000000000000) return "";
+        const sec = Math.max(1, Math.floor((Date.now() - ms) / 1000));
+        if (sec <= 95) return "🟢 Live";
+        if (sec < 3600) return Math.floor(sec / 60) + "m ago";
+        if (sec < 86400) return Math.floor(sec / 3600) + "h ago";
+        return Math.floor(sec / 86400) + "d ago";
+    }
+
+    // 1. KILL STALE FIREBASE GHOST SESSION & SYNC REAL SUPABASE SESSION
+    async function verifyRealSupabaseSessionOnBoot() {
+        const sec = getSec(), sb = getSb();
+        if (!sec || !sb) return;
+        try {
+            const { data } = await sb.auth.getSession();
+            const sessionUser = data && data.session ? data.session.user : null;
+
+            if (sessionUser && sessionUser.id) {
+                await sec.syncCurrentUserProfile();
+                await sendLiveHeartbeatNow(sessionUser.id);
+            } else {
+                // No real Supabase JWT -> clear old Firebase ghost account so DM/Post writes don't silently fail!
+                const raw = localStorage.getItem("nx_active_account");
+                if (raw) {
+                    localStorage.removeItem("nx_active_account");
+                    localStorage.removeItem("nx_legacy_backup_account");
+                    if (window.Nexus && Nexus.toast) {
+                        Nexus.toast("🔐 Real Supabase Sync ke liye ek baar Login karein!");
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    // 2. REAL 25-SECOND LIVE PRESENCE HEARTBEAT (KILLS STALE "1d ago" FOREVER!)
+    async function sendLiveHeartbeatNow(explicitUid) {
+        const sb = getSb();
+        if (!sb || document.visibilityState === "hidden") return;
+        try {
+            let uid = explicitUid;
+            if (!uid) {
+                const { data } = await sb.auth.getSession();
+                uid = data && data.session && data.session.user ? data.session.user.id : null;
+            }
+            if (!uid) return;
+            const nowIso = new Date().toISOString();
+            await sb.from("profiles").update({ last_online: nowIso }).eq("id", uid);
+            // Update local memory immediately too
+            if (window.Nexus && Array.isArray(Nexus.users)) {
+                const meRow = Nexus.users.find((u) => u && String(u.id) === String(uid));
+                if (meRow) { meRow.lastOnline = Date.now(); meRow.lastSeenAt = Date.now(); }
+            }
+            renderRealSupabaseStoryBar();
+        } catch (e) {}
+    }
+
+    // 3. REAL SUPABASE STORY BAR (ZERO DUMMY, LIVE USERS FIRST, ACCURATE LAST SEEN)
+    function renderRealSupabaseStoryBar() {
+        const homeTab = document.getElementById("tab-home");
+        if (!homeTab || !window.Nexus || !Array.isArray(Nexus.users) || !Nexus.users.length) return;
+
+        let bar = document.getElementById("nx-stories-bar");
+        if (!bar) {
+            bar = document.createElement("div");
+            bar.id = "nx-stories-bar";
+            homeTab.prepend(bar);
+        }
+
+        const myRaw = localStorage.getItem("nx_active_account");
+        const me = myRaw ? (() => { try { return JSON.parse(myRaw); } catch (e) { return null; } })() : null;
+        const myU = normU(me && me.username);
+
+        const realUsers = Nexus.users
+            .filter((u) => u && u.username && normU(u.username) !== "member")
+            .sort((a, b) => {
+                if (normU(a.username) === myU) return -1;
+                if (normU(b.username) === myU) return 1;
+                return Number(b.lastOnline || 0) - Number(a.lastOnline || 0);
+            })
+            .slice(0, 30);
+
+        bar.style.cssText = "display:flex !important;gap:12px;overflow-x:auto;padding:10px 12px 6px;scrollbar-width:none;align-items:flex-start;border-bottom:1px solid #1e293b;background:#090d16;";
+        bar.innerHTML = realUsers.map((u) => {
+            const uK = normU(u.username);
+            const isMe = uK === myU;
+            const ts = isMe ? Date.now() : Number(u.lastSeenAt || u.lastOnline || 0);
+            const isLive = isMe || (ts > 0 && (Date.now() - ts) <= 95000);
+            const badgeText = isLive ? "🟢 Live" : (formatShortAgo(ts) || "Verified");
+            const dispName = (u.name || uK).slice(0, 11);
+            const av = u.dp
+                ? `<img src="${esc(u.dp)}" loading="lazy" style="width:58px;height:58px;border-radius:50%;object-fit:cover;border:2.5px solid ${isLive ? "#10b981" : "#334155"};padding:2px;background:#090d16;display:block;">`
+                : `<div style="width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,${isLive ? "#10b981,#06b6d4" : "#334155,#1e293b"});color:${isLive ? "#020617" : "#f8fafc"};font-weight:900;font-size:22px;display:flex;align-items:center;justify-content:center;border:2.5px solid ${isLive ? "#34d399" : "#475569"};">${esc((u.name || uK)[0].toUpperCase())}</div>`;
+
+            return `<div data-username="${esc(uK)}" style="display:flex;flex-direction:column;align-items:center;width:72px;flex-shrink:0;cursor:pointer;position:relative;">
+                <div style="position:relative;">
+                    ${av}
+                    <span style="position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);background:${isLive ? "#064e3b" : "#0f172a"};border:1px solid ${isLive ? "#10b981" : "#38bdf8"};color:${isLive ? "#34d399" : "#e0f2fe"};font-size:9px;font-weight:900;padding:1px 6px;border-radius:999px;white-space:nowrap;">${esc(badgeText)}</span>
+                </div>
+                <div style="font-size:11px;font-weight:800;color:#e2e8f0;margin-top:8px;text-align:center;max-width:70px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(isMe ? "You" : dispName)}</div>
+            </div>`;
+        }).join("");
+    }
+    window.__nxRenderRealStoryBar = renderRealSupabaseStoryBar;
+
+    // 4. REAL-TIME SUBSCRIPTION ON PROFILES & POSTS (LIVE SYNC ACROSS ALL DEVICES)
+    let globalSyncChannel = null;
+    function startGlobalRealtimeDbSync() {
+        const sb = getSb();
+        if (!sb || globalSyncChannel) return;
+        globalSyncChannel = sb.channel("nx_global_live_sync_v46")
+            .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, (payload) => {
+                const row = payload && payload.new;
+                if (row && row.id && window.Nexus && Array.isArray(Nexus.users)) {
+                    const idx = Nexus.users.findIndex((u) => u && (String(u.id) === String(row.id) || normU(u.username) === normU(row.username)));
+                    const lo = row.last_online ? new Date(row.last_online).getTime() : Date.now();
+                    if (idx !== -1) {
+                        Nexus.users[idx].lastOnline = lo;
+                        Nexus.users[idx].lastSeenAt = lo;
+                        if (row.avatar_url) Nexus.users[idx].dp = row.avatar_url;
+                        if (row.display_name) Nexus.users[idx].name = row.display_name;
+                        if (row.bio !== undefined) Nexus.users[idx].bio = row.bio;
+                    } else if (window.__nxSyncSupabaseAll) {
+                        window.__nxSyncSupabaseAll(false);
+                    }
+                    renderRealSupabaseStoryBar();
+                }
+            })
+            .on("postgres_changes", { event: "*", schema: "public", table: "posts" }, () => {
+                if (window.__nxSyncSupabaseAll) window.__nxSyncSupabaseAll(true);
+            })
+            .subscribe();
+    }
+
+    // Boot sequence
+    setTimeout(async () => {
+        await verifyRealSupabaseSessionOnBoot();
+        if (window.__nxSyncSupabaseAll) await window.__nxSyncSupabaseAll(true);
+        renderRealSupabaseStoryBar();
+        startGlobalRealtimeDbSync();
+    }, 350);
+
+    setInterval(() => sendLiveHeartbeatNow(), 25000);
+    setInterval(() => renderRealSupabaseStoryBar(), 8000);
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") sendLiveHeartbeatNow();
+    });
+})();
