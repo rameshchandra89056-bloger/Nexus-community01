@@ -1840,12 +1840,13 @@ Ab Nexus pehle se aur bhi fast, smooth aur secure ho gaya hai! ⚡
                     if (!confirm(`⚠️ PERMANENT DELETE @${u.username}?\n\nIs user ki Supabase profile, Firebase account, active sessions aur saari posts hamesha ke liye delete ho jayengi!`)) return;
 
                     let sbErrMsg = "";
-                    // 1. Delete from Supabase (sessions + posts + profile)
+                    // 1. Delete from Supabase (posts + profile safely with try/catch — zero 404/TypeError!)
                     if (sb && u.sbId) {
-                        await sb.from("user_sessions").delete().eq("user_id", u.sbId).catch(() => {});
-                        await sb.from("posts").delete().eq("author_id", u.sbId).catch(() => {});
-                        const { error } = await sb.from("profiles").delete().eq("id", u.sbId);
-                        if (error) sbErrMsg = error.message;
+                        try { await sb.from("posts").delete().eq("author_id", u.sbId); } catch (e) {}
+                        try {
+                            const { error } = await sb.from("profiles").delete().eq("id", u.sbId);
+                            if (error) sbErrMsg = error.message;
+                        } catch (e) { sbErrMsg = e.message || "Delete failed"; }
                     }
                     // 2. Delete from Firebase (account + user posts)
                     await db.collection("nexus_accounts").doc(u.username).delete().catch(() => {});
@@ -1921,9 +1922,14 @@ DROP POLICY IF EXISTS "Founder full manage posts" ON public.posts;
 CREATE POLICY "Founder full manage posts" ON public.posts FOR ALL TO authenticated
 USING (auth.jwt() ->> 'email' IN ('mohitgamerprajapati753@gmail.com', 'mohit.ai.test@gmail.com', 'rameshchandra89056@gmail.com'));
 
-DROP POLICY IF EXISTS "Founder full delete sessions" ON public.user_sessions;
-CREATE POLICY "Founder full delete sessions" ON public.user_sessions FOR DELETE TO authenticated
-USING (auth.jwt() ->> 'email' IN ('mohitgamerprajapati753@gmail.com', 'mohit.ai.test@gmail.com', 'rameshchandra89056@gmail.com'));
+-- Safe optional check: only touches user_sessions if that table exists
+DO $$
+BEGIN
+  IF to_regclass('public.user_sessions') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS "Founder full delete sessions" ON public.user_sessions';
+    EXECUTE $p$CREATE POLICY "Founder full delete sessions" ON public.user_sessions FOR DELETE TO authenticated USING (auth.jwt() ->> 'email' IN ('mohitgamerprajapati753@gmail.com', 'mohit.ai.test@gmail.com', 'rameshchandra89056@gmail.com'))$p$;
+  END IF;
+END $$;
 
 DO $$
 BEGIN
