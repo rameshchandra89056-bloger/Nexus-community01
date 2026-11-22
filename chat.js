@@ -1,8 +1,13 @@
 // ================= CHAT.JS (FINAL MASTER): COMPACT DELETED MESSAGE PILL + 🧹 DELETE FOR ME & 🗑️ DELETE FOR EVERYONE IN GROUP CHAT + 0.01s INSTANT SEND + 📝 LIVE TEST SERIES =================
 
 (function() {
+    if (window.__NEXUS_CHAT_FIXED_V2__) return;
+    window.__NEXUS_CHAT_FIXED_V2__ = true;
     const chatTab = document.getElementById('tab-community');
     if (!chatTab) return;
+
+    const GRP_CACHE_KEY = 'nx_grp_msgs_cache_v2';
+    const escHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
     const chatStyle = document.createElement('style');
     chatStyle.innerHTML = `
@@ -60,8 +65,8 @@
         .nx-cmsg-backdrop {
             position: fixed;
             inset: 0;
-            background: rgba(2, 6, 23, 0.78);
-            z-index: 100006;
+            background: rgba(2, 6, 23, 0.82);
+            z-index: 276000;
             display: none;
             align-items: center;
             justify-content: center;
@@ -273,7 +278,13 @@
     let replyingToMsg = null;
     let editingMsgId = null;
     let liveMessagesByRoom = {};
+    try {
+        const cached = JSON.parse(localStorage.getItem(GRP_CACHE_KEY) || '{}');
+        if (cached && typeof cached === 'object') liveMessagesByRoom = cached;
+    } catch (e) {}
     let livePdfsList = [];
+    let activeGroupSearchQuery = '';
+    let lastGroupTypingPing = 0;
     let currentRoomStkCat = 'trending';
     let lastGroupTapMap = {};
 
@@ -338,10 +349,17 @@
                         <div id="nx-online-count-txt" style="font-size:11px; color:#00a884; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Live Room • Swipe or Tap msg</div>
                     </div>
                 </div>
-                <div style="display:flex; gap:6px; flex-shrink:0;">
+                <div style="display:flex; gap:5px; flex-shrink:0;">
                     <button type="button" id="nx-room-music-btn" style="display:none;"></button>
-                    <button type="button" onclick="NexusChat.openPdfVaultModal()" style="background:#2a3942; border:none; color:white; padding:6px 10px; border-radius:10px; font-size:12px; font-weight:700; cursor:pointer;">📄 PDF</button>
+                    <button type="button" onclick="NexusChat.toggleGroupSearch()" title="Search Messages" style="background:#2a3942; border:none; color:#38bdf8; width:32px; height:32px; border-radius:10px; font-size:14px; cursor:pointer;">🔍</button>
+                    <button type="button" onclick="NexusChat.openCodeSnippetModal()" title="Share Code Box" style="background:#2a3942; border:none; color:#34d399; width:32px; height:32px; border-radius:10px; font-size:14px; cursor:pointer;">💻</button>
+                    <button type="button" onclick="NexusChat.openPdfVaultModal()" style="background:#2a3942; border:none; color:white; padding:6px 9px; border-radius:10px; font-size:11.5px; font-weight:700; cursor:pointer;">📄 PDF</button>
                 </div>
+            </div>
+
+            <div id="nx-grp-search-bar" style="display:none; padding:7px 12px; background:#111b21; border-bottom:1px solid #2a3942; align-items:center; gap:8px; flex-shrink:0;">
+                <input type="text" id="nx-grp-search-in" placeholder="🔍 Search messages in this room..." autocomplete="off" style="flex:1; padding:7px 12px; border-radius:14px; border:1px solid #334155; background:#202c33; color:#fff; font-size:12.5px; outline:none;">
+                <button type="button" onclick="NexusChat.toggleGroupSearch(false)" style="background:none; border:none; color:#ef4444; font-weight:900; cursor:pointer;">✕</button>
             </div>
 
             <div style="background:#182229; border-bottom:1px solid #233138; border-left:4px solid #00a884; padding:6px 12px; font-size:11.5px; color:#cbd5e1; flex-shrink:0;">
@@ -400,6 +418,7 @@
     ensureCommunityActionModal();
 
     function pingOnlinePresence(isTypingRoom) {
+        if (document.visibilityState === 'hidden' && isTypingRoom === undefined) return;
         let me = Nexus.getCurrentUser();
         if (!me || !Nexus.db) return;
         let payload = { isOnlineNow: true, lastOnline: Date.now(), lastSeenAt: Date.now() };
@@ -407,12 +426,65 @@
             payload.typingRoom = isTypingRoom;
             payload.typingAt = Date.now();
         }
-        Nexus.db.collection("nexus_accounts").doc(me.username).set(payload, { merge: true }).catch(() => {});
+        Nexus.db.collection("nexus_accounts").doc(String(me.username).toLowerCase().trim()).set(payload, { merge: true }).catch(() => {});
     }
-    setInterval(() => pingOnlinePresence(), 35000);
+    setInterval(() => {
+        if (document.visibilityState !== 'hidden') pingOnlinePresence();
+    }, 45000);
+
+    function persistLightGroupCache() {
+        try {
+            const slim = {};
+            Object.keys(liveMessagesByRoom).forEach(rk => {
+                slim[rk] = (liveMessagesByRoom[rk] || []).slice(-18).map(m => Object.assign({}, m, {
+                    imgUrl: (m.imgUrl && m.imgUrl.length > 50000) ? '' : (m.imgUrl || '')
+                }));
+            });
+            localStorage.setItem(GRP_CACHE_KEY, JSON.stringify(slim));
+        } catch (e) {}
+    }
+
+    // Fast Firestore REST Fallback so Group Channel counts NEVER stay at 0 even if Firestore WebSocket is slow!
+    async function fastRestPrefetchGroupMessages() {
+        try {
+            const url = 'https://firestore.googleapis.com/v1/projects/nexus-community-bf99c/databases/(default)/documents/nexus_real_msgs?pageSize=120';
+            const res = await fetch(url, { cache: 'no-store' });
+            if (!res.ok) return;
+            const json = await res.json();
+            if (!json || !Array.isArray(json.documents) || !json.documents.length) return;
+            const parseV = (v) => {
+                if (!v || typeof v !== 'object') return '';
+                if ('stringValue' in v) return v.stringValue;
+                if ('integerValue' in v) return Number(v.integerValue);
+                if ('doubleValue' in v) return Number(v.doubleValue);
+                if ('booleanValue' in v) return Boolean(v.booleanValue);
+                if ('arrayValue' in v) return (v.arrayValue.values || []).map(parseV);
+                if ('mapValue' in v) { const o = {}; const f = v.mapValue.fields || {}; for (const k in f) o[k] = parseV(f[k]); return o; }
+                return '';
+            };
+            const map = {};
+            json.documents.forEach(d => {
+                const m = {};
+                const f = d.fields || {};
+                for (const k in f) m[k] = parseV(f[k]);
+                m.id = d.name.split('/').pop();
+                const rId = m.roomId || 'casual_chat';
+                if (!map[rId]) map[rId] = [];
+                map[rId].push(m);
+            });
+            Object.keys(map).forEach(rk => map[rk].sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0)));
+            if (Object.keys(liveMessagesByRoom).length === 0) {
+                liveMessagesByRoom = map;
+                persistLightGroupCache();
+                if (activeRoomId) NexusChat.renderActiveRoomMessages();
+                else NexusChat.renderChannelCards();
+            }
+        } catch (e) {}
+    }
+    fastRestPrefetchGroupMessages();
 
     function connectRealMessages() {
-        if (!Nexus.db) { setTimeout(connectRealMessages, 300); return; }
+        if (!Nexus.db) { setTimeout(connectRealMessages, 350); return; }
         Nexus.db.collection("nexus_real_msgs").orderBy("createdAt", "desc").limit(160).onSnapshot(snap => {
             liveMessagesByRoom = {};
             snap.forEach(doc => {
@@ -425,7 +497,7 @@
             Object.keys(liveMessagesByRoom).forEach(rKey => {
                 liveMessagesByRoom[rKey].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
             });
-
+            persistLightGroupCache();
             if (activeRoomId) NexusChat.renderActiveRoomMessages();
             else NexusChat.renderChannelCards();
         });
@@ -436,6 +508,30 @@
         });
     }
     connectRealMessages();
+
+    // Wire Live Group Typing Indicator (#nx-typing-bar) via Nexus.listeners.onUsers!
+    function updateGroupTypingBanner() {
+        if (!activeRoomId) return;
+        const bar = document.getElementById('nx-typing-bar');
+        const namesEl = document.getElementById('nx-typing-names');
+        if (!bar || !namesEl) return;
+        const me = Nexus.getCurrentUser();
+        const myU = me ? String(me.username || '').toLowerCase() : '';
+        const now = Date.now();
+        const typers = ((window.Nexus && Nexus.users) || []).filter(u =>
+            u && u.username && u.username.toLowerCase() !== myU &&
+            u.typingRoom === activeRoomId && u.typingAt && (now - Number(u.typingAt) < 4500)
+        ).map(u => u.name || u.username);
+        if (typers.length > 0) {
+            namesEl.textContent = typers.slice(0, 2).join(', ') + (typers.length > 1 ? ' are typing' : ' is typing');
+            bar.style.display = 'flex';
+        } else {
+            bar.style.display = 'none';
+        }
+    }
+    if (window.Nexus && Nexus.listeners && Nexus.listeners.onUsers) {
+        Nexus.listeners.onUsers.push(updateGroupTypingBanner);
+    }
 
     window.NexusChat = {
         getActiveRoomId: function() { return activeRoomId; },
@@ -491,8 +587,60 @@
             }).join('');
         },
 
+        toggleGroupSearch: function(forceState) {
+            const bar = document.getElementById('nx-grp-search-bar');
+            const inp = document.getElementById('nx-grp-search-in');
+            if (!bar) return;
+            const show = typeof forceState === 'boolean' ? forceState : (bar.style.display === 'none');
+            bar.style.display = show ? 'flex' : 'none';
+            if (show && inp) { inp.focus(); }
+            else { activeGroupSearchQuery = ''; if (inp) inp.value = ''; this.renderActiveRoomMessages(); }
+        },
+
+        openCodeSnippetModal: function() {
+            const modal = document.getElementById('nx-global-modal');
+            if (!modal) return;
+            modal.style.zIndex = '272000';
+            modal.innerHTML = `
+                <div class="nx-modal-box" style="border:1.5px solid #38bdf8;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <h3 style="font-size:15.5px; color:#38bdf8;">💻 Share Formatted Code Snippet</h3>
+                        <button type="button" onclick="document.getElementById('nx-global-modal').style.display='none'" style="background:none; border:none; color:#94a3b8; font-size:17px; cursor:pointer;">✕</button>
+                    </div>
+                    <select id="nx-code-lang" style="width:100%; padding:8px 10px; border-radius:9px; background:#090d16; border:1px solid #334155; color:#34d399; font-size:12.5px; font-weight:800; margin-bottom:8px; outline:none;">
+                        <option value="JS">JavaScript</option>
+                        <option value="HTML">HTML / CSS</option>
+                        <option value="PY">Python</option>
+                        <option value="CPP">C++ / DSA</option>
+                        <option value="MATH">JEE Formula / Steps</option>
+                    </select>
+                    <textarea id="nx-code-body" rows="6" placeholder="Paste code or formula steps here..." style="width:100%; padding:10px; border-radius:10px; background:#050811; border:1px solid #334155; color:#e2e8f0; font-family:monospace; font-size:12.5px; outline:none; resize:vertical;"></textarea>
+                    <button type="button" id="nx-send-code-btn" style="width:100%; margin-top:10px; padding:11px; border-radius:11px; background:#10b981; color:#020617; font-weight:900; font-size:13px; border:none; cursor:pointer;">🚀 Send Code to Room</button>
+                </div>
+            `;
+            modal.style.display = 'flex';
+            modal.querySelector('#nx-send-code-btn').onclick = () => {
+                const lang = modal.querySelector('#nx-code-lang').value || 'CODE';
+                const body = (modal.querySelector('#nx-code-body').value || '').trim();
+                if (!body) return Nexus.toast('⚠️ Code box khali hai!');
+                modal.style.display = 'none';
+                const inp = document.getElementById('nx-chat-msg-in');
+                if (inp) inp.value = `[${lang}]
+\`\`\`
+${body}
+\`\`\``;
+                NexusChat.sendChatMessage();
+            };
+        },
+
         openChatRoom: function(roomId) {
             activeRoomId = roomId;
+            activeGroupSearchQuery = '';
+            const sBar = document.getElementById('nx-grp-search-bar');
+            if (sBar) sBar.style.display = 'none';
+            if (window.__nxPushBackLayer) {
+                window.__nxPushBackLayer('nx-chat-room', () => NexusChat.closeChatRoom());
+            }
             document.documentElement.style.overflow = 'hidden';
             document.body.style.overflow = 'hidden';
             let meta = CHANNELS_META.find(c => c.id === roomId) || { title: roomId, color: "#00a884", pin: "Swipe Left/Right to Reply!" };
@@ -526,7 +674,10 @@
             const msgBox = document.getElementById('nx-room-messages');
             if (!msgBox) return;
 
-            let msgs = (liveMessagesByRoom[activeRoomId] || []).slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+            let q = String(activeGroupSearchQuery || '').toLowerCase().trim();
+            let msgs = (liveMessagesByRoom[activeRoomId] || []).slice()
+                .filter(m => !q || String(m.text || '').toLowerCase().includes(q) || String(m.sender || '').toLowerCase().includes(q))
+                .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
             let me = Nexus.getCurrentUser();
             let myUsername = me ? me.username.toLowerCase() : '';
             let myName = me ? me.name.toLowerCase() : '';
@@ -570,7 +721,7 @@
                     return;
                 }
 
-                let cleanText = (m.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                let cleanText = escHtml(m.text || '').replace(/```([\s\S]*?)```/g, '<pre style="background:#050811;border:1px solid #334155;border-left:3px solid #38bdf8;border-radius:8px;padding:7px 9px;margin:5px 0;font-family:monospace;font-size:12px;color:#e2e8f0;overflow-x:auto;white-space:pre-wrap;">$1</pre>');
                 let likesArr = Array.isArray(m.likes) ? m.likes : [];
                 let reactionEmoji = m.reaction || '❤️';
 
@@ -661,7 +812,7 @@
                         <span>👤</span> <span>View ${m.sender}'s Profile</span>
                     </button>
                     ${m.text ? `
-                        <button type="button" class="nx-cmsg-opt-btn" onclick="navigator.clipboard.writeText('${safeSnippet}'); document.getElementById('nx-cmsg-action-modal').style.display='none'; Nexus.toast('📋 Copied!');">
+                        <button type="button" class="nx-cmsg-opt-btn" onclick="NexusChat.copyGroupMsg('${m.id}')">
                             <span>📋</span> <span>Copy Message Text</span>
                         </button>
                     ` : ''}
@@ -682,6 +833,15 @@
                 </div>
             `;
             modal.style.display = 'flex';
+        },
+
+        copyGroupMsg: function(msgId) {
+            const modal = document.getElementById('nx-cmsg-action-modal');
+            if (modal) modal.style.display = 'none';
+            const m = (liveMessagesByRoom[activeRoomId] || []).find(x => x.id === msgId);
+            if (m && m.text) {
+                navigator.clipboard?.writeText(m.text).then(() => Nexus.toast('📋 Copied!')).catch(() => {});
+            }
         },
 
         deleteMsgForMe: function(msgId) {
@@ -894,31 +1054,65 @@
             rec.start();
         },
 
-        openPdfVaultModal: function() {
+        openPdfVaultModal: function(searchQ) {
             let me = Nexus.getCurrentUser();
             const modal = document.getElementById('nx-global-modal');
-            let listHTML = livePdfsList.length === 0
-                ? `<div style="text-align:center; padding:16px; color:#64748b; font-size:13px;">No study PDFs uploaded yet.</div>`
-                : livePdfsList.map(p => {
+            if (!modal) return;
+            modal.style.zIndex = '270000';
+            const q = String(searchQ || '').toLowerCase().trim();
+            const filtered = livePdfsList.filter(p => !q || String(p.title || '').toLowerCase().includes(q) || String(p.by || '').toLowerCase().includes(q));
+
+            let listHTML = filtered.length === 0
+                ? `<div style="text-align:center; padding:16px; color:#64748b; font-size:13px;">${q ? 'No matching PDFs found.' : 'No study PDFs uploaded yet.'}</div>`
+                : filtered.map(p => {
                     let isMyPdf = me && ((p.username && p.username.toLowerCase() === me.username.toLowerCase()) || p.by === me.name);
-                    return `<div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#1e293b; border-radius:10px;"><a href="${p.url}" target="_blank" style="color:white; text-decoration:none; font-size:13px; flex:1;">📄 <b>${p.title}</b> <small style="color:#94a3b8;">by ${p.by}</small></a>${isMyPdf ? `<button type="button" onclick="NexusChat.deletePdf('${p.id}')" style="background:none; border:none; color:#f87171; cursor:pointer;">🗑️</button>` : ''}</div>`;
+                    return `<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 12px; background:#1e293b; border:1px solid #334155; border-radius:11px;"><a href="${escHtml(p.url)}" target="_blank" style="color:white; text-decoration:none; font-size:13px; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">📄 <b>${escHtml(p.title)}</b> <small style="color:#94a3b8;">by ${escHtml(p.by)}</small></a>${isMyPdf ? `<button type="button" onclick="NexusChat.deletePdf('${escHtml(p.id)}')" style="background:none; border:none; color:#f87171; cursor:pointer;">🗑️</button>` : ''}</div>`;
                 }).join('');
 
             modal.innerHTML = `
-                <div class="nx-modal-box">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                        <h3 style="font-size:16px; color:#f8fafc;">📄 Study PDF Vault</h3>
+                <div class="nx-modal-box" style="border:1.5px solid #10b981;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <h3 style="font-size:16px; color:#f8fafc;">📄 Study PDF Vault (${livePdfsList.length})</h3>
                         <button type="button" onclick="document.getElementById('nx-global-modal').style.display='none'" style="background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer;">✕</button>
                     </div>
-                    <div style="display:flex; flex-direction:column; gap:8px; max-height:40vh; overflow-y:auto; margin-bottom:12px;">${listHTML}</div>
-                    <div style="display:flex; flex-direction:column; gap:8px;">
-                        <input type="text" id="nx-pdf-t" placeholder="Topic / Chapter Name" style="padding:9px 12px; border-radius:8px; border:1px solid #334155; background:#1e293b; color:white; font-size:13px; outline:none;">
-                        <input type="url" id="nx-pdf-u" placeholder="Google Drive / PDF Link (https://...)" style="padding:9px 12px; border-radius:8px; border:1px solid #334155; background:#1e293b; color:white; font-size:13px; outline:none;">
-                        <button type="button" onclick="NexusChat.addPdf()" style="background:#00a884; color:#020617; border:none; padding:10px; border-radius:8px; font-weight:800; cursor:pointer;">+ Share PDF</button>
+                    <input type="text" id="nx-pdf-search" value="${escHtml(searchQ || '')}" placeholder="🔍 Search chapter / notes..." oninput="NexusChat.openPdfVaultModal(this.value)" style="width:100%; padding:8px 12px; border-radius:10px; border:1px solid #334155; background:#090d16; color:#fff; font-size:12.5px; margin-bottom:10px; outline:none;">
+                    <div style="display:flex; flex-direction:column; gap:8px; max-height:36vh; overflow-y:auto; margin-bottom:12px;">${listHTML}</div>
+                    <div style="display:flex; flex-direction:column; gap:8px; padding-top:10px; border-top:1px solid #1e293b;">
+                        <input type="text" id="nx-pdf-t" placeholder="Topic / Chapter Name (e.g. Electrostatics Formula Sheet)" style="padding:9px 12px; border-radius:9px; border:1px solid #334155; background:#090d16; color:white; font-size:13px; outline:none;">
+                        <input type="url" id="nx-pdf-u" placeholder="Google Drive / PDF Link (OR upload PDF file below)" style="padding:9px 12px; border-radius:9px; border:1px solid #334155; background:#090d16; color:white; font-size:13px; outline:none;">
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                            <label for="nx-pdf-file-up" style="background:#1e293b; border:1px dashed #38bdf8; color:#38bdf8; padding:10px 8px; border-radius:9px; font-size:12px; font-weight:800; text-align:center; cursor:pointer; margin:0;">📤 Upload PDF (50MB)</label>
+                            <button type="button" onclick="NexusChat.addPdf()" style="background:#00a884; color:#020617; border:none; padding:10px; border-radius:9px; font-weight:900; font-size:12.5px; cursor:pointer;">+ Share Link</button>
+                        </div>
+                        <input type="file" id="nx-pdf-file-up" accept="application/pdf" style="display:none;">
                     </div>
                 </div>
             `;
             modal.style.display = 'flex';
+            const fUp = modal.querySelector('#nx-pdf-file-up');
+            if (fUp) {
+                fUp.onchange = async (e) => {
+                    const f = e.target.files && e.target.files[0];
+                    if (!f || !me) return;
+                    if (!window.NexusSecurity || typeof window.NexusSecurity.uploadPublicMedia !== 'function') {
+                        return Nexus.toast('⚠️ Direct PDF upload ke liye Supabase Login karein!');
+                    }
+                    const uid = await window.NexusSecurity.getAuthenticatedUserId();
+                    if (!uid) return Nexus.toast('⚠️ Direct PDF upload ke liye Supabase Login karein!');
+                    try {
+                        Nexus.toast(`⏳ Uploading "${f.name}" to Study Vault...`);
+                        const up = await window.NexusSecurity.uploadPublicMedia(f, 'study-pdfs');
+                        const title = (modal.querySelector('#nx-pdf-t').value || '').trim() || f.name.replace(/\.pdf$/i, '');
+                        if (up && up.publicUrl && Nexus.db) {
+                            await Nexus.db.collection("nexus_real_pdfs").add({ title, url: up.publicUrl, by: me.name || me.username, username: me.username, createdAt: Date.now() });
+                            Nexus.toast('✅ Study PDF Uploaded to Vault!');
+                            NexusChat.openPdfVaultModal('');
+                        }
+                    } catch (err) {
+                        Nexus.toast('❌ Upload failed: ' + (err.message || 'Retry'));
+                    }
+                };
+            }
         },
 
         addPdf: function() {
@@ -937,18 +1131,51 @@
         }
     };
 
+    const grpSearchIn = document.getElementById('nx-grp-search-in');
+    if (grpSearchIn) {
+        grpSearchIn.addEventListener('input', () => {
+            activeGroupSearchQuery = grpSearchIn.value;
+            NexusChat.renderActiveRoomMessages();
+        });
+    }
+    const roomStkSrch = document.getElementById('nx-room-stk-search');
+    if (roomStkSrch) {
+        roomStkSrch.addEventListener('input', () => {
+            NexusChat.renderRoomStickers(currentRoomStkCat, roomStkSrch.value);
+        });
+    }
     const msgIn = document.getElementById('nx-chat-msg-in');
     if (msgIn) {
-        msgIn.addEventListener('input', resizeChatInputBox);
+        msgIn.addEventListener('input', () => {
+            resizeChatInputBox();
+            if (activeRoomId && Date.now() - lastGroupTypingPing > 2200) {
+                lastGroupTypingPing = Date.now();
+                pingOnlinePresence(activeRoomId);
+            }
+        });
         msgIn.addEventListener('keydown', e => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); NexusChat.sendChatMessage(); }
         });
     }
     const photoIn = document.getElementById('nx-chat-photo-in');
     if (photoIn) {
-        photoIn.addEventListener('change', e => {
+        photoIn.addEventListener('change', async e => {
             const f = e.target.files && e.target.files[0];
             if (!f) return;
+            if (window.NexusSecurity && typeof window.NexusSecurity.uploadPublicMedia === 'function') {
+                try {
+                    const uid = await window.NexusSecurity.getAuthenticatedUserId();
+                    if (uid && f.size <= 50 * 1024 * 1024) {
+                        Nexus.toast('⏳ Uploading HD Photo...');
+                        const up = await window.NexusSecurity.uploadPublicMedia(f, 'group-photos');
+                        if (up && up.publicUrl) {
+                            NexusChat.sendChatMessage(up.publicUrl);
+                            photoIn.value = '';
+                            return;
+                        }
+                    }
+                } catch (err) {}
+            }
             Nexus.compressImage(f, 700, 0.72, url => { NexusChat.sendChatMessage(url); photoIn.value = ''; });
         });
     }
