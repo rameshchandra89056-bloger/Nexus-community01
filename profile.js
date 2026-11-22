@@ -67,7 +67,7 @@
         /* Keep Edit Profile & Auth Modals safely above Android keyboard */
         #nx-edit-ig-profile-modal { overscroll-behavior: contain; }
         /* Hide legacy overlapping post containers inside #tab-home; keep ONLY Story Bar & Clean Feed */
-        #tab-home > *:not(#nx-stories-bar):not(#nx-clean-home-feed-v31) {
+        #tab-home > *:not(#nx-stories-bar):not(#nx-home-topic-bar):not(#nx-clean-home-feed-v31) {
             display: none !important;
         }
         #nx-clean-home-feed-v31 {
