@@ -1,7 +1,13 @@
 // ================= DM.JS (100% ORIGINAL UI STRUCTURE + ALL INTERNAL BUG FIXES): EXACT ORIGINAL HEADER & COMPOSER LAYOUT + ZERO OVERLAPPING CODE AT BOTTOM + STRICT 1:1 ROOM-KEY LOCK + INSTANT DELETE FOR EVERYONE + VOICE NOTE HOOK =================
 
 (function() {
+    if (window.__NEXUS_DM_FIXED_V2__) return;
+    window.__NEXUS_DM_FIXED_V2__ = true;
     let activeDmPartner = null;
+    function getDmPrivacyPrefs() {
+        try { return JSON.parse(localStorage.getItem('nx_ig_user_preferences_v1') || '{}'); } catch (e) { return {}; }
+    }
+    const dmDraftKey = (partner) => 'nx_dm_draft_v2_' + normalizeUname(partner);
     let dmUnsubscribe = null;
     let dmPartnerUnsub = null;
     let dmInboxUnsub = null;
@@ -162,8 +168,8 @@
         .nx-msg-action-backdrop {
             position: fixed;
             inset: 0;
-            background: rgba(2, 6, 23, 0.78);
-            z-index: 100005;
+            background: rgba(2, 6, 23, 0.82);
+            z-index: 275000;
             display: none;
             align-items: center;
             justify-content: center;
@@ -346,6 +352,24 @@
     async function compressSelectedDmPhotos(files) {
         const selected = Array.from(files || []).slice(0, 5);
         if (!selected.length) return [];
+
+        // FIXED: Prefer permanent 50MB Supabase Storage URLs first (zero Base64 RAM lag!)
+        if (window.NexusSecurity && typeof window.NexusSecurity.uploadPublicMedia === 'function') {
+            try {
+                const uid = await window.NexusSecurity.getAuthenticatedUserId();
+                if (uid) {
+                    const urls = [];
+                    for (const file of selected) {
+                        if (file.size <= 50 * 1024 * 1024) {
+                            const up = await window.NexusSecurity.uploadPublicMedia(file, 'dm-photos');
+                            if (up && up.publicUrl) urls.push(up.publicUrl);
+                        }
+                    }
+                    if (urls.length === selected.length) return urls;
+                }
+            } catch (e) {}
+        }
+
         let result = [];
         for (const file of selected) result.push(await compressOneDmPhoto(file, 520, 0.52));
         let totalLength = result.reduce((sum, url) => sum + url.length, 0);
@@ -518,7 +542,7 @@
         if (document.getElementById('nx-img-lightbox')) return;
         const lb = document.createElement('div');
         lb.id = 'nx-img-lightbox';
-        lb.style.cssText = "display:none; position:fixed; inset:0; background:rgba(5,8,15,0.96); z-index:100010; flex-direction:column; align-items:center; justify-content:center; padding:16px;";
+        lb.style.cssText = "display:none; position:fixed; inset:0; background:rgba(5,8,15,0.96); z-index:294000; flex-direction:column; align-items:center; justify-content:center; padding:16px;";
         lb.innerHTML = `
             <div style="position:absolute; top:16px; right:16px; display:flex; gap:10px; z-index:2;">
                 <a id="nx-lightbox-dl" href="" download="Nexus_Study_Note.jpg" style="background:#00a884; color:#020617; text-decoration:none; padding:8px 14px; border-radius:20px; font-size:12px; font-weight:900; display:flex; align-items:center; gap:5px;">⬇️ Save Image</a>
@@ -613,6 +637,8 @@
     function pingDmTyping(roomKey) {
         let me = Nexus.getCurrentUser();
         if (!me || !Nexus.db) return;
+        const prefs = getDmPrivacyPrefs();
+        if (roomKey && prefs.typingIndicator === false) return;
         Nexus.db.collection("nexus_accounts").doc(normalizeUname(me.username)).set({
             isOnlineNow: true,
             lastOnline: Date.now(),
@@ -649,9 +675,31 @@
                 return (isUserTrulyOnline(b) ? 1 : 0) - (isUserTrulyOnline(a) ? 1 : 0);
             });
 
-            let listHTML = others.length === 0
-                ? `<div style="text-align:center; padding:24px; color:#64748b; font-size:13px;">No other members yet.</div>`
-                : others.map(u => {
+            let onlineCount = others.filter(u => isUserTrulyOnline(u)).length;
+            let mySafeU = normalizeUname(me.username).replace(/'/g, "\\'");
+            let savedVaultCard = `
+                <div onclick="NexusDM.openDirectChat('${mySafeU}', 'Saved Messages (Cloud)', '')" style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:linear-gradient(135deg,rgba(0,168,132,0.18),rgba(15,23,42,0.95)); border:1.5px solid #00a884; border-radius:14px; cursor:pointer;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <div style="width:42px; height:42px; border-radius:50%; background:#00a884; color:#020617; display:flex; align-items:center; justify-content:center; font-size:19px;">🔖</div>
+                        <div>
+                            <div style="font-weight:800; font-size:13.5px; color:#5eead4;">Saved Messages</div>
+                            <div style="font-size:11px; color:#cbd5e1;">Personal Cloud Vault (Notes, Links &amp; Photos)</div>
+                        </div>
+                    </div>
+                    <span style="background:#00a884; color:#020617; padding:4px 9px; border-radius:10px; font-size:11px; font-weight:900;">Vault →</span>
+                </div>
+            `;
+
+            const buildInboxRows = (qStr, unreadOnly) => {
+                const q = String(qStr || '').toLowerCase().replace(/^@/, '').trim();
+                const filtered = others.filter(u => {
+                    const uK = normalizeUname(u.username);
+                    if (unreadOnly && !(unreadCountsByUser[uK] > 0)) return false;
+                    if (!q) return true;
+                    return uK.includes(q) || String(u.name || '').toLowerCase().includes(q) || String(u.bio || '').toLowerCase().includes(q);
+                });
+                if (!filtered.length) return `<div style="text-align:center; padding:24px; color:#64748b; font-size:13px;">${unreadOnly ? '🎉 No unread messages!' : 'No matching members found.'}</div>`;
+                return filtered.map(u => {
                     let uKey = normalizeUname(u.username);
                     let safeUname = uKey.replace(/'/g, "\\'");
                     let safeName = (u.name || u.username).replace(/'/g, "\\'");
@@ -661,37 +709,61 @@
                     let lastM = lastMsgByUser[uKey];
 
                     let subText = lastM
-                        ? (lastM.deleted ? '🚫 Message deleted' : (lastM.sticker ? '✨ Sticker' : (((lastM.imgUrls && lastM.imgUrls.length) || lastM.imgUrl) ? '📷 Photo' : lastM.text)))
+                        ? (lastM.deleted ? '🚫 Message deleted' : (lastM.sticker ? '✨ Sticker' : (((lastM.imgUrls && lastM.imgUrls.length) || lastM.imgUrl) ? '📷 Photo' : (lastM.text || ''))))
                         : `@${u.username} • ${u.bio || 'JEE Aspirant'}`;
 
-                    let av = (u.dp && u.dp.startsWith('data:image'))
-                        ? `<img src="${u.dp}" style="width:44px; height:44px; border-radius:50%; object-fit:cover;">`
-                        : `<div style="width:44px; height:44px; border-radius:50%; background:#00a884; color:#020617; display:flex; align-items:center; justify-content:center; font-weight:800;">${(u.name || 'U').charAt(0).toUpperCase()}</div>`;
+                    let av = (u.dp && (u.dp.startsWith('data:image') || u.dp.startsWith('http')))
+                        ? `<img src="${dmEscapeHTML(u.dp)}" loading="lazy" style="width:44px; height:44px; border-radius:50%; object-fit:cover;">`
+                        : `<div style="width:44px; height:44px; border-radius:50%; background:#00a884; color:#020617; display:flex; align-items:center; justify-content:center; font-weight:800;">${dmEscapeHTML((u.name || 'U').charAt(0).toUpperCase())}</div>`;
 
                     return `
-                        <div onclick="NexusDM.openDirectChat('${safeUname}', '${safeName}', '${safeDp}')" style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#182229; border:1px solid #233138; border-radius:14px; cursor:pointer;">
+                        <div onclick="NexusDM.openDirectChat('${safeUname}', '${safeName}', '${safeDp}')" style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#182229; border:1px solid ${unread > 0 ? '#00a884' : '#233138'}; border-radius:14px; cursor:pointer;">
                             <div style="display:flex; align-items:center; gap:10px; min-width:0; flex:1;">
                                 ${av}
                                 <div style="min-width:0; flex:1;">
-                                    <div style="font-weight:700; font-size:14px; color:white;">${u.name || u.username} ${isOnline ? '🟢' : ''}</div>
-                                    <div style="font-size:11.5px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${subText}</div>
+                                    <div style="font-weight:700; font-size:14px; color:white;">${dmEscapeHTML(u.name || u.username)} ${isOnline ? '🟢' : ''}</div>
+                                    <div style="font-size:11.5px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${dmEscapeHTML(subText)}</div>
                                 </div>
                             </div>
                             ${unread > 0 ? `<span class="nx-unread-pill">${unread}</span>` : `<span style="color:#00a884; font-size:12px; font-weight:800;">Chat →</span>`}
                         </div>
                     `;
                 }).join('');
+            };
 
+            let inboxUnreadOnly = false;
+            modal.style.zIndex = '265000';
             modal.innerHTML = `
-                <div class="nx-modal-box">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                        <h3 style="font-size:16px; color:#f8fafc;">💬 Nexus 1:1 Personal DM</h3>
-                        <button onclick="document.getElementById('nx-global-modal').style.display='none'" style="background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer;">✕</button>
+                <div class="nx-modal-box" style="border:1.5px solid #00a884;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <div>
+                            <h3 style="font-size:16px; color:#f8fafc; margin:0;">💬 Nexus 1:1 Personal DM</h3>
+                            <div style="font-size:11px; color:#34d399; font-weight:700;">🟢 ${onlineCount} Online • ${others.length} Members</div>
+                        </div>
+                        <button onclick="document.getElementById('nx-global-modal').style.display='none'" style="background:#1e293b; border:none; color:#cbd5e1; width:30px; height:30px; border-radius:50%; font-size:15px; cursor:pointer;">✕</button>
                     </div>
-                    <div style="display:flex; flex-direction:column; gap:8px; max-height:68vh; overflow-y:auto;">${listHTML}</div>
+                    <div style="display:flex; gap:6px; margin-bottom:10px;">
+                        <input type="text" id="nx-dm-inbox-search" placeholder="🔍 Search friend (@username)..." autocomplete="off" style="flex:1; padding:8px 12px; border-radius:12px; background:#090d16; border:1px solid #334155; color:#fff; font-size:12.5px; outline:none;">
+                        <button type="button" id="nx-dm-inbox-unread-btn" style="padding:8px 11px; border-radius:12px; background:#182229; border:1px solid #334155; color:#cbd5e1; font-size:11.5px; font-weight:800; cursor:pointer; white-space:nowrap;">Unread</button>
+                    </div>
+                    <div id="nx-dm-inbox-rows" style="display:flex; flex-direction:column; gap:8px; max-height:62vh; overflow-y:auto;">${savedVaultCard}${buildInboxRows('', false)}</div>
                 </div>
             `;
             modal.style.display = 'flex';
+            const srchIn = modal.querySelector('#nx-dm-inbox-search');
+            const unrBtn = modal.querySelector('#nx-dm-inbox-unread-btn');
+            const rowsBox = modal.querySelector('#nx-dm-inbox-rows');
+            const refreshInboxList = () => {
+                if (!rowsBox) return;
+                rowsBox.innerHTML = (!inboxUnreadOnly && !(srchIn && srchIn.value.trim()) ? savedVaultCard : '') + buildInboxRows(srchIn ? srchIn.value : '', inboxUnreadOnly);
+            };
+            if (srchIn) srchIn.oninput = refreshInboxList;
+            if (unrBtn) unrBtn.onclick = () => {
+                inboxUnreadOnly = !inboxUnreadOnly;
+                unrBtn.style.background = inboxUnreadOnly ? '#00a884' : '#182229';
+                unrBtn.style.color = inboxUnreadOnly ? '#020617' : '#cbd5e1';
+                refreshInboxList();
+            };
         },
 
         openDirectChat: function(partnerUsername, partnerName, partnerDp) {
@@ -812,8 +884,35 @@
                 });
             }
 
+            // FIXED: Wire Sticker Search Input (previously had no oninput handler!)
+            const stkSrch = document.getElementById('nx-stk-search-in');
+            if (stkSrch) {
+                stkSrch.oninput = () => NexusDM.renderStickerGrid(currentStickerCat, stkSrch.value);
+            }
+
+            // Floating Jump-to-Bottom Button when user scrolls up in long chat
+            if (dmMessageBox && !document.getElementById('nx-dm-jump-btm')) {
+                const jBtn = document.createElement('button');
+                jBtn.id = 'nx-dm-jump-btm';
+                jBtn.type = 'button';
+                jBtn.textContent = '↓';
+                jBtn.style.cssText = 'display:none; position:fixed; bottom:74px; right:16px; width:36px; height:36px; border-radius:50%; background:#00a884; color:#020617; border:none; font-size:18px; font-weight:900; box-shadow:0 4px 14px rgba(0,0,0,0.6); z-index:99995; cursor:pointer;';
+                jBtn.onclick = () => { dmMessageBox.scrollTop = dmMessageBox.scrollHeight; jBtn.style.display = 'none'; };
+                root.appendChild(jBtn);
+                dmMessageBox.addEventListener('scroll', () => {
+                    const dist = dmMessageBox.scrollHeight - dmMessageBox.scrollTop - dmMessageBox.clientHeight;
+                    jBtn.style.display = dist > 260 ? 'block' : 'none';
+                }, { passive: true });
+            }
+
             const inp = document.getElementById('nx-dm-input');
             if (inp) {
+                // Restore unsent draft for this chat partner!
+                try {
+                    const savedD = localStorage.getItem(dmDraftKey(cleanPartnerUname)) || '';
+                    if (savedD) { inp.value = savedD; resizeDmComposer(); }
+                } catch (e) {}
+
                 inp.addEventListener('focus', () => {
                     const dr = document.getElementById('nx-dm-sticker-drawer');
                     if (dr) dr.style.display = 'none';
@@ -827,6 +926,10 @@
                 });
                 inp.addEventListener('input', () => {
                     resizeDmComposer();
+                    try {
+                        if (inp.value.trim()) localStorage.setItem(dmDraftKey(cleanPartnerUname), inp.value);
+                        else localStorage.removeItem(dmDraftKey(cleanPartnerUname));
+                    } catch (e) {}
                     let now = Date.now();
                     if (now - lastDmTypingPing > 2000) {
                         lastDmTypingPing = now;
@@ -1093,6 +1196,10 @@
         },
 
         openPhotoPreview: function(src) {
+            if (window.NexusPower && typeof NexusPower.openImageLightbox === 'function') {
+                NexusPower.openImageLightbox(src);
+                return;
+            }
             initImageZoomLightbox();
             const lb = document.getElementById('nx-img-lightbox');
             const img = document.getElementById('nx-lightbox-img');
@@ -1249,7 +1356,7 @@
                         const tU = normalizeUname(m.toUser);
                         if ((fU === cleanMy && tU === cleanPartner) || (fU === cleanPartner && tU === cleanMy) || (fU === cleanMy && cleanMy === cleanPartner)) {
                             list.push(m);
-                            if (tU === cleanMy && !m.seen && !m.deleted) {
+                            if (tU === cleanMy && !m.seen && !m.deleted && getDmPrivacyPrefs().readReceipts !== false) {
                                 Nexus.db.collection("nexus_private_dms").doc(m.id).update({ seen: true }).catch(() => {});
                             }
                         }
@@ -1271,9 +1378,10 @@
             if (!cleanMyUname || !cleanTargetUname) return;
 
             let text = inp ? inp.value.trim() : '';
+            const isImgUrl = (url) => typeof url === 'string' && (/^data:image\//i.test(url) || /^https?:\/\//i.test(url));
             const imageUrls = Array.isArray(customImgData)
-                ? customImgData.filter(url => typeof url === 'string' && url.startsWith('data:image/'))
-                : (typeof customImgData === 'string' && customImgData.startsWith('data:image/') ? [customImgData] : []);
+                ? customImgData.filter(isImgUrl)
+                : (isImgUrl(customImgData) ? [customImgData] : []);
             if (!text && imageUrls.length === 0 && !customStickerObj) return;
 
             let roomKey = getRoomKey(cleanMyUname, cleanTargetUname);
@@ -1313,6 +1421,7 @@
                 if (inp && !customStickerObj) {
                     inp.value = '';
                     resizeDmComposer();
+                    try { localStorage.removeItem(dmDraftKey(cleanTargetUname)); } catch (e) {}
                 }
                 this.cancelReply();
             } catch (error) {
@@ -1335,6 +1444,16 @@
             const root = document.getElementById('nx-dm-dedicated-root');
             if (root) root.style.display = 'none';
             window.scrollTo(0, savedScrollY);
+        },
+
+        exportCurrentChatTxt: function() {
+            if (!dmMessagesCache.length) return Nexus.toast('No messages to export.');
+            const lines = dmMessagesCache.filter(m => !m.deleted).map(m => `[${m.time || ''}] ${m.fromName || m.fromUser}: ${m.text || (m.imgUrl ? '[Photo]' : '[Media]')}`);
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' }));
+            a.download = `Nexus_Chat_${activeDmPartner ? activeDmPartner.username : 'dm'}_${Date.now()}.txt`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            Nexus.toast('📥 Chat Exported (.txt)!');
         },
 
         closeDirectChat: function() {
