@@ -1,12 +1,30 @@
 // ================= LIVE.JS (v36.0 EXACT SYNC & CROSS-PHONE GUARANTEED): ▶️ 100% PURE YOUTUBE VIDEO SEARCH (NO AUDIO MIXUP) + 🎵 PURE MP3 DJ + 📱 CROSS-PHONE PARTICIPANT AUTO-SYNC (OPENS ON PARTNER PHONE 100%) + ⌨️ AUTO-COMPACT ON TYPING + ⏱️ SECOND-TO-SECOND LIVE CLOCK SYNC =================
 
 (function() {
+    if (window.__NEXUS_LIVE_FIXED_V2__) return;
+    window.__NEXUS_LIVE_FIXED_V2__ = true;
     const PROTO = 'https:' + '//';
+    const isTypingOrHidden = () => {
+        if (document.visibilityState === 'hidden') return true;
+        const ae = document.activeElement;
+        if (!ae) return false;
+        const t = (ae.tagName || '').toUpperCase();
+        return t === 'INPUT' || t === 'TEXTAREA' || ae.isContentEditable === true;
+    };
+    const isDndOrRingMuted = () => {
+        try {
+            const p = JSON.parse(localStorage.getItem('nx_ig_user_preferences_v1') || '{}');
+            return Boolean(p.dndMode === true || p.callRingtone === false);
+        } catch (e) { return false; }
+    };
     const RTC_ICE = {
         iceServers: [
             { urls: "stun:stun.l.google.com:19302" },
             { urls: "stun:stun1.l.google.com:19302" },
-            { urls: "stun:stun2.l.google.com:19302" }
+            { urls: "stun:stun.cloudflare.com:3478" },
+            { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+            { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+            { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" }
         ]
     };
 
@@ -138,7 +156,7 @@
                 let u = Nexus.getCurrentUser();
                 if (u && u.username) return u;
             }
-            let raw = localStorage.getItem('nx_active_account') || localStorage.getItem('nx_legacy_backup_account');
+            let raw = localStorage.getItem('nx_active_account');
             if (raw) return JSON.parse(raw);
         } catch (e) {}
         return { username: 'guest', name: 'Member' };
@@ -497,6 +515,7 @@
                     <button type="button" class="nx-tw-pill" onclick="NexusWatchParty.togglePlayPause()">⏯️</button>
                     <button type="button" class="nx-tw-pill" onclick="NexusWatchParty.seekYtVideo(15)">⏩15s</button>
                     <button type="button" class="nx-tw-pill" style="background:#10b981; color:#020617; border:none;" onclick="NexusWatchParty.syncExactSecondNow()">🔄 Sync</button>
+                    <button type="button" id="nx-wp-speed-btn" class="nx-tw-pill" style="border-color:#38bdf8; color:#38bdf8;" onclick="NexusWatchParty.cyclePlaybackSpeed()">1x</button>
                     ${['🔥','❤️','😂'].map(em => `<button type="button" class="nx-tw-pill" onclick="NexusWatchParty.sendLiveEmoji('${em}')">${em}</button>`).join('')}
                 </div>
             `;
@@ -564,7 +583,18 @@
         const grpRoom = document.getElementById('nx-chat-room');
         let isDm = dmRoot && dmRoot.style.display !== 'none';
         let isGrp = grpRoom && grpRoom.style.display !== 'none';
-        if (!isDm && !isGrp) return;
+        if (!isDm && !isGrp) {
+            if (activeWpRoom) {
+                activeWpRoom = '';
+                currentMediaKey = '';
+                activeDocData = null;
+                if (wpUnsub) { wpUnsub(); wpUnsub = null; }
+                if (wpParticipantUnsub) { wpParticipantUnsub(); wpParticipantUnsub = null; }
+                const dock = document.getElementById('nx-wp-dock');
+                if (dock) { dock.style.display = 'none'; dock.innerHTML = ''; }
+            }
+            return;
+        }
 
         let ctx = getChatCtx(isDm);
 
@@ -773,6 +803,19 @@
             if (window.Nexus && Nexus.toast) Nexus.toast(`🔄 Synced both phones to ${Math.floor(curSec / 60)}:${String(curSec % 60).padStart(2, '0')}!`);
         },
 
+        cyclePlaybackSpeed: function() {
+            const rates = [1, 1.25, 1.5, 2, 0.75];
+            const cur = Number(window.__nxWpRate || 1);
+            const next = rates[(rates.indexOf(cur) + 1) % rates.length];
+            window.__nxWpRate = next;
+            const btn = document.getElementById('nx-wp-speed-btn');
+            if (btn) btn.textContent = next + 'x';
+            const aud = document.getElementById('nx-wp-audio-el');
+            if (aud) aud.playbackRate = next;
+            sendYouTubeCommand('setPlaybackRate', [next]);
+            if (window.Nexus && Nexus.toast) Nexus.toast(`⚡ Playback Speed: ${next}x`);
+        },
+
         toggleMainPlayer: function() {
             isMainHidden = !isMainHidden;
             const el = document.getElementById('nx-wp-main-stage');
@@ -805,6 +848,7 @@
     // =========================================================================
     function playRingBeep() {
         stopRingBeep();
+        if (isDndOrRingMuted()) return;
         try {
             const Ctx = window.AudioContext || window.webkitAudioContext;
             if (!Ctx) return;
@@ -839,6 +883,7 @@
     window.endNexusLiveCallNow = async function(callDocId, notifyDb = true) {
         stopRingBeep();
         clearInterval(callTimerInt);
+        if (window.__nxRingTimeout) { clearTimeout(window.__nxRingTimeout); window.__nxRingTimeout = null; }
         if (callDocUnsub) { callDocUnsub(); callDocUnsub = null; }
         if (callIceUnsub) { callIceUnsub(); callIceUnsub = null; }
 
@@ -905,7 +950,7 @@
         const isVideoUI = callMode === 'video' || callMode === 'screen';
         const overlay = document.createElement('div');
         overlay.id = 'nx-live-call-overlay';
-        overlay.style.cssText = 'position:fixed;inset:0;background:radial-gradient(circle at top,#0f172a,#050811);z-index:260000;display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:30px 18px;color:#fff;user-select:none;';
+        overlay.style.cssText = 'position:fixed;inset:0;background:radial-gradient(circle at top,#0f172a,#050811);z-index:286000;display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:30px 18px;color:#fff;user-select:none;';
 
         if (!isVideoUI) {
             overlay.innerHTML = `
@@ -948,6 +993,22 @@
             `;
         }
 
+        const pipBtn = document.createElement('button');
+        pipBtn.type = 'button';
+        pipBtn.textContent = '🗗 PiP';
+        pipBtn.style.cssText = 'position:absolute;top:14px;left:14px;z-index:20;background:rgba(15,23,42,0.85);border:1px solid #38bdf8;color:#38bdf8;padding:6px 11px;border-radius:10px;font-size:11.5px;font-weight:900;cursor:pointer;';
+        let isPip = false;
+        pipBtn.onclick = () => {
+            isPip = !isPip;
+            if (isPip) {
+                overlay.style.cssText = 'position:fixed;bottom:76px;right:12px;width:168px;height:215px;border-radius:18px;border:2px solid #10b981;background:#050811;z-index:286000;display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:8px;overflow:hidden;box-shadow:0 14px 36px rgba(0,0,0,0.92);color:#fff;';
+                pipBtn.textContent = '⛶ Full';
+            } else {
+                overlay.style.cssText = 'position:fixed;inset:0;background:radial-gradient(circle at top,#0f172a,#050811);z-index:286000;display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:30px 18px;color:#fff;user-select:none;';
+                pipBtn.textContent = '🗗 PiP';
+            }
+        };
+        overlay.appendChild(pipBtn);
         document.body.appendChild(overlay);
 
         if (isVideoUI) {
@@ -1081,6 +1142,14 @@
                 updatedAt: Date.now()
             });
 
+            if (window.__nxRingTimeout) clearTimeout(window.__nxRingTimeout);
+            window.__nxRingTimeout = setTimeout(() => {
+                if (callPc && !callPc.currentRemoteDescription) {
+                    window.endNexusLiveCallNow(callDocId, true);
+                    if (window.Nexus && Nexus.toast) Nexus.toast('📵 No answer (Call Timed Out)');
+                }
+            }, 35000);
+
             callDocUnsub = callRef.onSnapshot(async snap => {
                 if (!snap.exists) return;
                 const d = snap.data();
@@ -1091,6 +1160,7 @@
                     return;
                 }
                 if (d.answer && callPc && !callPc.currentRemoteDescription) {
+                    if (window.__nxRingTimeout) { clearTimeout(window.__nxRingTimeout); window.__nxRingTimeout = null; }
                     await callPc.setRemoteDescription(new RTCSessionDescription(d.answer));
                     startCallClock();
                 }
@@ -1151,6 +1221,8 @@
     }
 
     function renderIncomingCallScreen(callData) {
+        if (isDndOrRingMuted()) return;
+        if (document.getElementById('nx-pro-call-window') || document.getElementById('nx-live-call-overlay')) return;
         document.getElementById('nx-incoming-ring-modal')?.remove();
         playRingBeep();
         const callerName = callData.callerName || callData.caller || 'Friend';
@@ -1158,7 +1230,7 @@
 
         const m = document.createElement('div');
         m.id = 'nx-incoming-ring-modal';
-        m.style.cssText = 'position:fixed;inset:0;background:rgba(5,8,17,0.96);z-index:265000;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:44px 24px;color:#fff;text-align:center;';
+        m.style.cssText = 'position:fixed;inset:0;background:rgba(5,8,17,0.96);z-index:292000;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:44px 24px;color:#fff;text-align:center;';
         m.innerHTML = `
             <div style="background:rgba(16,185,129,0.16);border:1px solid #10b981;color:#34d399;padding:6px 16px;border-radius:99px;font-size:12px;font-weight:900;">
                 🔔 Incoming ${isVid ? 'HD Video' : 'Voice'} Call
@@ -1205,23 +1277,27 @@
         startLiveScreenBroadcast: (isDm) => launchUnifiedWebRTCCall('screen', isDm !== false, false, null)
     });
 
-    function bindAllMediaAndCallHooks() {
+    function bindAllMediaAndCallHooks(forceRun) {
+        if (!forceRun && isTypingOrHidden()) return;
         subscribeActiveRoom();
         attachIncomingCallWatcher();
-        if (window.NexusAdvance) {
+        if (window.NexusAdvance && !NexusAdvance.__nxLiveHooked) {
+            NexusAdvance.__nxLiveHooked = true;
             NexusAdvance.openInAppYouTubeTV = (isDm) => window.NexusWatchParty.openModal(isDm, 'yt');
             NexusAdvance.startVideoCall = (isDm) => window.NexusLive.startOrJoinVideoRoom(isDm);
         }
-        if (window.NexusPower) {
+        if (window.NexusPower && !NexusPower.__nxLiveHooked) {
+            NexusPower.__nxLiveHooked = true;
             NexusPower.openWatchPartyModal = () => window.NexusWatchParty.openModal(true, 'yt');
             NexusPower.openSongSearchModal = () => window.NexusWatchParty.openModal(true, 'mp3');
             NexusPower.startInternetCall = () => window.NexusLive.startVoiceCall(true);
         }
-        if (window.NexusSuperChat) {
+        if (window.NexusSuperChat && !NexusSuperChat.__nxLiveHooked) {
+            NexusSuperChat.__nxLiveHooked = true;
             NexusSuperChat.openGroupSongModal = () => window.NexusWatchParty.openModal(false, 'mp3');
         }
     }
 
-    setInterval(bindAllMediaAndCallHooks, 800);
-    setTimeout(bindAllMediaAndCallHooks, 150);
+    setInterval(() => bindAllMediaAndCallHooks(false), 2500);
+    setTimeout(() => bindAllMediaAndCallHooks(true), 200);
 })(); // === END OF LIVE.JS ===
