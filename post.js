@@ -14,6 +14,8 @@
 
     const CHUNK_CHAR_SIZE = 600000;
     const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+    const DRAFT_KEY = 'nx_post_studio_draft_v24';
+    const escHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
     let studioMode = "media"; // 'media' | 'card' | 'poll'
     let selectedCardGradient = "";
@@ -55,8 +57,20 @@
         return Boolean(me && me.username && (me.googleVerified || me.verified));
     }
 
+    async function trySupabaseStorageUpload(file, folder) {
+        if (!window.NexusSecurity || typeof window.NexusSecurity.uploadPublicMedia !== "function") return "";
+        try {
+            const uid = await window.NexusSecurity.getAuthenticatedUserId();
+            if (!uid) return "";
+            const up = await window.NexusSecurity.uploadPublicMedia(file, folder);
+            return (up && up.publicUrl) ? up.publicUrl : "";
+        } catch (e) { return ""; }
+    }
+
     function compressPhotoForPost(file) {
-        return new Promise((resolve, reject) => {
+        return new Promise(async (resolve, reject) => {
+            const sbUrl = await trySupabaseStorageUpload(file, "posts");
+            if (sbUrl) { resolve(sbUrl); return; }
             const reader = new FileReader();
             reader.onload = (e) => {
                 const img = new Image();
@@ -90,7 +104,14 @@
     }
 
     function uploadVideoInChunks(file, onProgress) {
-        return new Promise((resolve, reject) => {
+        return new Promise(async (resolve, reject) => {
+            onProgress && onProgress(25);
+            const sbUrl = await trySupabaseStorageUpload(file, "videos");
+            if (sbUrl) {
+                onProgress && onProgress(100);
+                resolve(sbUrl);
+                return;
+            }
             const reader = new FileReader();
             reader.onload = async (e) => {
                 try {
@@ -158,7 +179,7 @@
         const modal = document.createElement("div");
         modal.id = "nx-official-creator-studio";
         modal.style.cssText =
-            "position:fixed; inset:0; background:rgba(2,6,23,0.94); z-index:200080; display:flex; align-items:flex-end; justify-content:center; backdrop-filter:blur(8px);";
+            "position:fixed; left:0; right:0; top:0; height:100dvh; background:rgba(2,6,23,0.94); z-index:272000; display:flex; align-items:flex-end; justify-content:center; backdrop-filter:blur(8px); box-sizing:border-box;";
 
         const dpHtml = me.dp
             ? `<img src="${me.dp}" style="width:42px; height:42px; border-radius:50%; object-fit:cover; border:2px solid #10b981;" />`
@@ -216,9 +237,18 @@
                         </button>
                     </div>
 
-                    <!-- Main Caption / Question Textarea -->
+                    <!-- Main Caption / Question Textarea + Live Counter + Quick Hashtag & JEE Formula Chips -->
                     <div id="nx-studio-text-wrap" style="border-radius:16px; border:1px solid #334155; background:#090d16; padding:12px; transition:all 0.2s ease;">
-                        <textarea id="nx-studio-caption" rows="4" placeholder="What's on your mind? Share a photo, video, JEE/NEET formula, doubt or update..." style="width:100%; background:transparent; border:none; color:#f8fafc; font-size:14px; line-height:1.5; outline:none; resize:none;"></textarea>
+                        <textarea id="nx-studio-caption" rows="4" maxlength="2000" placeholder="What's on your mind? Share a photo, video, JEE/NEET formula, doubt or update..." style="width:100%; background:transparent; border:none; color:#f8fafc; font-size:14px; line-height:1.5; outline:none; resize:none;"></textarea>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; padding-top:6px; border-top:1px solid rgba(51,65,85,0.45); font-size:10.5px; color:#94a3b8;">
+                            <span id="nx-studio-draft-badge" style="color:#34d399; font-weight:700;">💾 Auto-draft active</span>
+                            <span id="nx-studio-char-cnt">0 / 2000</span>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; padding-bottom:2px;">
+                        ${["#IITJEE", "#NEET", "#Coding", "#Doubt", "∫", "∑", "√", "π", "Δ", "θ", "→"].map(tok =>
+                            `<button type="button" class="nx-st-quick-tok" data-tok="${tok}" style="padding:4px 10px; border-radius:99px; background:#090d16; border:1px solid #334155; color:#38bdf8; font-size:11px; font-weight:800; white-space:nowrap; cursor:pointer; flex-shrink:0;">${tok}</button>`
+                        ).join("")}
                     </div>
 
                     <!-- MODE 1: PHOTO / 50MB VIDEO UPLOAD & CLEAN INSIDE-CARD PREVIEW -->
@@ -304,15 +334,60 @@
 
         document.body.appendChild(modal);
 
+        const syncStudioVp = () => {
+            if (!modal.isConnected || !window.visualViewport) return;
+            modal.style.height = Math.max(240, Math.round(window.visualViewport.height)) + "px";
+            modal.style.top = Math.max(0, Math.round(window.visualViewport.offsetTop)) + "px";
+        };
         const closeStudio = () => {
             if (previewAudio) previewAudio.pause();
+            if (window.visualViewport) {
+                window.visualViewport.removeEventListener("resize", syncStudioVp);
+                window.visualViewport.removeEventListener("scroll", syncStudioVp);
+            }
             modal.remove();
         };
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener("resize", syncStudioVp);
+            window.visualViewport.addEventListener("scroll", syncStudioVp);
+            syncStudioVp();
+        }
         modal.querySelector("#nx-studio-close").onclick = closeStudio;
 
         // Mode Switching (Photo/Video vs Gradient Card vs Poll)
         const textWrap = modal.querySelector("#nx-studio-text-wrap");
         const txtArea = modal.querySelector("#nx-studio-caption");
+        const charCnt = modal.querySelector("#nx-studio-char-cnt");
+        const draftBadge = modal.querySelector("#nx-studio-draft-badge");
+
+        // Restore saved draft if present
+        try {
+            const savedDraft = localStorage.getItem(DRAFT_KEY) || "";
+            if (savedDraft) {
+                txtArea.value = savedDraft;
+                if (charCnt) charCnt.textContent = `${savedDraft.length} / 2000`;
+                if (draftBadge) draftBadge.textContent = "📝 Draft restored!";
+            }
+        } catch (e) {}
+
+        txtArea.addEventListener("input", () => {
+            const v = txtArea.value || "";
+            if (charCnt) charCnt.textContent = `${v.length} / 2000`;
+            try {
+                if (v.trim()) localStorage.setItem(DRAFT_KEY, v);
+                else localStorage.removeItem(DRAFT_KEY);
+            } catch (e) {}
+        });
+
+        modal.querySelectorAll(".nx-st-quick-tok").forEach((b) => {
+            b.onclick = () => {
+                const tok = b.getAttribute("data-tok") || "";
+                const spacer = txtArea.value && !txtArea.value.endsWith(" ") ? " " : "";
+                txtArea.value = (txtArea.value + spacer + tok + " ").slice(0, 2000);
+                txtArea.dispatchEvent(new Event("input"));
+                txtArea.focus();
+            };
+        });
         const mediaPanel = modal.querySelector("#nx-studio-media-panel");
         const cardPanel = modal.querySelector("#nx-studio-card-panel");
         const pollPanel = modal.querySelector("#nx-studio-poll-panel");
@@ -451,15 +526,32 @@
                     .filter((t) => t.previewUrl)
                     .map(
                         (t, idx) => `
-                        <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 8px; background:#0f172a; border-radius:8px; border:1px solid #1e293b;">
-                            <div style="font-size:11.5px; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:190px;">
-                                🎵 ${t.trackName} - ${t.artistName}
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; padding:6px 8px; background:#0f172a; border-radius:8px; border:1px solid #1e293b;">
+                            <div style="font-size:11.5px; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0;">
+                                🎵 ${escHtml(t.trackName)} - ${escHtml(t.artistName)}
                             </div>
-                            <button type="button" data-sidx="${idx}" style="padding:4px 9px; border-radius:6px; background:#10b981; color:#020617; border:none; font-size:11px; font-weight:900; cursor:pointer;">Select ✓</button>
+                            <div style="display:flex; gap:5px; flex-shrink:0;">
+                                <button type="button" data-sprev="${escHtml(t.previewUrl)}" style="padding:4px 8px; border-radius:6px; background:#1e293b; color:#38bdf8; border:1px solid #334155; font-size:11px; font-weight:800; cursor:pointer;">▶️</button>
+                                <button type="button" data-sidx="${idx}" style="padding:4px 9px; border-radius:6px; background:#10b981; color:#020617; border:none; font-size:11px; font-weight:900; cursor:pointer;">Select ✓</button>
+                            </div>
                         </div>
                     `
                     )
                     .join("");
+
+                resDiv.querySelectorAll("[data-sprev]").forEach((pb) => {
+                    pb.onclick = () => {
+                        const u = pb.getAttribute("data-sprev");
+                        if (previewAudio && previewAudio.src === u && !previewAudio.paused) {
+                            previewAudio.pause(); pb.textContent = "▶️"; return;
+                        }
+                        if (previewAudio) previewAudio.pause();
+                        previewAudio = new Audio(u);
+                        previewAudio.play().catch(() => {});
+                        pb.textContent = "⏸️";
+                        previewAudio.onended = () => { pb.textContent = "▶️"; };
+                    };
+                });
 
                 resDiv.querySelectorAll("[data-sidx]").forEach((b) => {
                     b.onclick = () => {
@@ -529,7 +621,11 @@
                 mediaType: attachedMedia.mType || (studioMode === "poll" ? "poll" : studioMode === "card" ? "card" : "text"),
                 cardGradient: studioMode === "card" ? selectedCardGradient : "",
                 pollOptions: pollOptions.length ? JSON.stringify(pollOptions) : "",
+                poll: pollOptions.length ? { options: pollOptions, voters: {} } : null,
                 postSong: attachedSong ? JSON.stringify(attachedSong) : "",
+                songUrl: attachedSong ? attachedSong.audioUrl : "",
+                songTitle: attachedSong ? `${attachedSong.title} • ${attachedSong.artist}` : "",
+                songArtist: attachedSong ? attachedSong.artist : "",
                 likes: 1,
                 likedBy: [me.username],
                 views: 1,
@@ -541,7 +637,27 @@
                 if (window.Nexus && Nexus.db) {
                     const docRef = await Nexus.db.collection("nexus_real_posts").add(postDoc);
                     postDoc.id = docRef.id;
+                } else if (window.NexusSecurity && window.NexusSecurity.sb) {
+                    const uid = await window.NexusSecurity.getAuthenticatedUserId();
+                    if (uid) {
+                        const { data } = await window.NexusSecurity.sb.from("posts").insert({
+                            author_id: uid,
+                            author_username: me.username,
+                            author_name: me.name || me.username,
+                            author_dp: me.dp || "",
+                            bio: me.bio || "",
+                            content: finalContent,
+                            image_url: attachedMedia.ref || "",
+                            media_type: postDoc.mediaType,
+                            likes_list: [me.username],
+                            comments_list: [],
+                            views_count: 1,
+                            is_pinned: Boolean(isPinned)
+                        }).select("id").single();
+                        if (data && data.id) postDoc.id = "sb_" + data.id;
+                    }
                 }
+                try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
                 if (window.Nexus && Array.isArray(Nexus.posts)) {
                     Nexus.posts.unshift(postDoc);
                     Nexus.notifyAll && Nexus.notifyAll();
@@ -582,9 +698,10 @@
         true
     );
 
-    setInterval(() => {
-        if (window.Nexus && Nexus.openPostModal !== window.openOfficialNexusCreatorStudio) {
-            Nexus.openPostModal = window.openOfficialNexusCreatorStudio;
-        }
-    }, 300);
+    setTimeout(() => {
+        if (window.Nexus) Nexus.openPostModal = window.openOfficialNexusCreatorStudio;
+    }, 500);
+    window.addEventListener("load", () => {
+        if (window.Nexus) Nexus.openPostModal = window.openOfficialNexusCreatorStudio;
+    });
 })();
