@@ -1,6 +1,15 @@
 // ================= FINAL SUPERCHAT.JS: AUTO UTF-8 EMOJI REPAIR ENGINE + OFFICIAL PWA APP INSTALLER (NO .HTML FILE) + CLEAN GROUP & DM HUB =================
 
 (function() {
+    if (window.__NEXUS_SUPERCHAT_FIXED_V2__) return;
+    window.__NEXUS_SUPERCHAT_FIXED_V2__ = true;
+    const isTypingOrHidden = () => {
+        if (document.visibilityState === 'hidden') return true;
+        const ae = document.activeElement;
+        if (!ae) return false;
+        const t = (ae.tagName || '').toUpperCase();
+        return t === 'INPUT' || t === 'TEXTAREA' || ae.isContentEditable === true;
+    };
     let groupWatchPartyUnsub = null;
     let groupMusicSyncUnsub = null;
     let lastObservedGroupRoom = '';
@@ -72,7 +81,7 @@
 
     // 2. INJECT REAL PWA MANIFEST SO CHROME/ANDROID INSTALLS REAL OFFICIAL NEXUS APP (NOT app.html!)
     function setupRealOfficialPwaManifest() {
-        if (document.getElementById('nx-real-pwa-manifest')) return;
+        if (document.querySelector('link[rel="manifest"]')) return;
         const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="115" fill="#090d16"/><circle cx="256" cy="256" r="200" fill="none" stroke="#10b981" stroke-width="24"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="#38bdf8" font-family="sans-serif" font-weight="900" font-size="250">N</text></svg>`;
         const iconUrl = 'data:image/svg+xml;base64,' + btoa(iconSvg);
 
@@ -101,10 +110,10 @@
     const superStyle = document.createElement('style');
     superStyle.innerHTML = `
         #nx-global-modal {
-            z-index: 100085 !important;
+            z-index: 265000 !important;
         }
         #nx-cmsg-action-modal, #nx-msg-action-modal {
-            z-index: 100080 !important;
+            z-index: 275000 !important;
         }
         #nx-img-lightbox {
             display: none !important;
@@ -418,6 +427,7 @@
                 let me = Nexus.getCurrentUser();
                 const modal = document.getElementById('nx-global-modal');
                 if (!me || !modal || document.getElementById('nx-personal-vault-row')) return;
+                if ((modal.textContent || '').includes('Saved Messages')) return;
                 const listContainer = modal.querySelector('.nx-modal-box > div:last-child');
                 if (!listContainer) return;
 
@@ -789,8 +799,7 @@
 
                 if (grpAudioChunks.length === 0) return;
                 const blob = new Blob(grpAudioChunks, { type: 'audio/webm' });
-                const reader = new FileReader();
-                reader.onloadend = () => {
+                const sendAudioUrl = (audioRef) => {
                     let me = Nexus.getCurrentUser();
                     if (!me || !Nexus.db) return;
                     Nexus.db.collection("nexus_real_msgs").add({
@@ -798,7 +807,7 @@
                         sender: me.name,
                         username: me.username,
                         role: me.bio || 'JEE Aspirant',
-                        text: `🎤VOICE|${reader.result}`,
+                        text: `🎤VOICE|${audioRef}`,
                         imgUrl: "",
                         replyTo: null,
                         likes: [],
@@ -806,7 +815,21 @@
                         createdAt: Date.now()
                     }).then(() => Nexus.toast("\u{1F3A4} Group Voice Note Sent!"));
                 };
-                reader.readAsDataURL(blob);
+                (async () => {
+                    if (window.NexusSecurity && typeof window.NexusSecurity.uploadPublicMedia === 'function') {
+                        try {
+                            const uid = await window.NexusSecurity.getAuthenticatedUserId();
+                            if (uid) {
+                                const f = new File([blob], 'grp_voice.webm', { type: 'audio/webm' });
+                                const up = await window.NexusSecurity.uploadPublicMedia(f, 'group-voice');
+                                if (up && up.publicUrl) { sendAudioUrl(up.publicUrl); return; }
+                            }
+                        } catch (e) {}
+                    }
+                    const reader = new FileReader();
+                    reader.onloadend = () => sendAudioUrl(reader.result);
+                    reader.readAsDataURL(blob);
+                })();
             };
 
             grpMediaRecorder.start();
@@ -820,25 +843,55 @@
         if (grpMediaRecorder && grpMediaRecorder.state !== 'inactive') grpMediaRecorder.stop();
     }
 
-    function sendGroupDocumentFile(file) {
+    async function sendGroupDocumentFile(file) {
         if (!file) return;
-        if (file.size > 750 * 1024) {
-            Nexus.toast("File must be under 750 KB!");
-            return;
-        }
         let me = Nexus.getCurrentUser();
         if (!me || !Nexus.db) return;
+
+        const sizeLbl = file.size >= 1024 * 1024
+            ? (file.size / (1024 * 1024)).toFixed(1) + ' MB'
+            : Math.max(1, Math.round(file.size / 1024)) + ' KB';
+
+        if (window.NexusSecurity && typeof window.NexusSecurity.uploadPublicMedia === 'function') {
+            try {
+                const uid = await window.NexusSecurity.getAuthenticatedUserId();
+                if (uid && file.size <= 50 * 1024 * 1024) {
+                    Nexus.toast(`Uploading "${file.name}" (${sizeLbl}) to Group...`);
+                    const up = await window.NexusSecurity.uploadPublicMedia(file, 'group-files');
+                    if (up && up.publicUrl) {
+                        await Nexus.db.collection("nexus_real_msgs").add({
+                            roomId: currentGroupRoomId || 'casual_chat',
+                            sender: me.name,
+                            username: me.username,
+                            role: me.bio || 'JEE Aspirant',
+                            text: `📂FILE|${file.name}|${sizeLbl}|${up.publicUrl}`,
+                            imgUrl: "",
+                            replyTo: null,
+                            likes: [],
+                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            createdAt: Date.now()
+                        });
+                        Nexus.toast("\u{1F4C2} File Shared in Group (50MB Cloud)!");
+                        return;
+                    }
+                }
+            } catch (e) {}
+        }
+
+        if (file.size > 750 * 1024) {
+            Nexus.toast("⚠️ 750 KB+ files ke liye Supabase Login karein (50MB limit)!");
+            return;
+        }
 
         Nexus.toast(`Uploading "${file.name}" to Group...`);
         const reader = new FileReader();
         reader.onload = ev => {
-            let sizeKb = Math.max(1, Math.round(file.size / 1024)) + ' KB';
             Nexus.db.collection("nexus_real_msgs").add({
                 roomId: currentGroupRoomId || 'casual_chat',
                 sender: me.name,
                 username: me.username,
                 role: me.bio || 'JEE Aspirant',
-                text: `📂FILE|${file.name}|${sizeKb}|${ev.target.result}`,
+                text: `📂FILE|${file.name}|${sizeLbl}|${ev.target.result}`,
                 imgUrl: "",
                 replyTo: null,
                 likes: [],
@@ -1077,7 +1130,9 @@
                         <button type="button" onclick="NexusSuperChat.setSketchPen('#f43f5e')" style="width:26px; height:26px; border-radius:50%; background:#f43f5e; border:2px solid white; cursor:pointer;"></button>
                         <button type="button" onclick="NexusSuperChat.setSketchPen('#fde047')" style="width:26px; height:26px; border-radius:50%; background:#fde047; border:2px solid white; cursor:pointer;"></button>
                         <button type="button" onclick="NexusSuperChat.setSketchPen('#ffffff')" style="width:26px; height:26px; border-radius:50%; background:#ffffff; border:2px solid #334155; cursor:pointer;"></button>
-                        <button type="button" onclick="NexusSuperChat.clearSketchCanvas()" style="background:#1e293b; color:#f87171; border:1px solid #334155; padding:3px 10px; border-radius:8px; font-size:11.5px; font-weight:800; cursor:pointer;">Clear</button>
+                        <button type="button" onclick="NexusSuperChat.setSketchPen('#050811')" title="Eraser" style="background:#1e293b; color:#cbd5e1; border:1px solid #334155; padding:3px 8px; border-radius:8px; font-size:11px; font-weight:800; cursor:pointer;">🧽 Erase</button>
+                        <button type="button" onclick="NexusSuperChat.undoSketchStroke()" title="Undo" style="background:#1e293b; color:#38bdf8; border:1px solid #334155; padding:3px 8px; border-radius:8px; font-size:11px; font-weight:800; cursor:pointer;">↩️ Undo</button>
+                        <button type="button" onclick="NexusSuperChat.clearSketchCanvas()" style="background:#1e293b; color:#f87171; border:1px solid #334155; padding:3px 9px; border-radius:8px; font-size:11px; font-weight:800; cursor:pointer;">Clear</button>
                     </div>
                     <button type="button" onclick="NexusSuperChat.sendSketchToChat(${isDmChat ? 'true' : 'false'})" style="width:100%; background:#10b981; color:#020617; border:none; padding:11px; border-radius:12px; font-weight:900; font-size:14px; cursor:pointer;">\u{1F680} Send Sketch to Chat</button>
                 </div>
@@ -1093,6 +1148,8 @@
             ctx.lineWidth = 3.2;
 
             let drawing = false;
+            const undoStack = [];
+            cvs.__nxUndoStack = undoStack;
             const getPos = (e) => {
                 const rect = cvs.getBoundingClientRect();
                 const clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
@@ -1105,8 +1162,10 @@
 
             const startDraw = (e) => {
                 e.preventDefault();
+                try { undoStack.push(ctx.getImageData(0, 0, cvs.width, cvs.height)); if (undoStack.length > 20) undoStack.shift(); } catch (err) {}
                 drawing = true;
                 const p = getPos(e);
+                ctx.lineWidth = sketchColor === '#050811' ? 14 : 3.2;
                 ctx.beginPath();
                 ctx.moveTo(p.x, p.y);
             };
@@ -1129,6 +1188,12 @@
         },
 
         setSketchPen: function(col) { sketchColor = col; },
+        undoSketchStroke: function() {
+            const cvs = document.getElementById('nx-sketch-canvas');
+            if (!cvs || !cvs.__nxUndoStack || !cvs.__nxUndoStack.length) return;
+            const prev = cvs.__nxUndoStack.pop();
+            cvs.getContext('2d').putImageData(prev, 0, 0);
+        },
 
         clearSketchCanvas: function() {
             const cvs = document.getElementById('nx-sketch-canvas');
@@ -1486,7 +1551,6 @@
 
         postRenderChatEnhancements: function() {
             repairDmBottomPlusAndOfficialApp();
-            repairBrokenEmojisInDOM(document.body);
             document.querySelectorAll('#nx-dm-msgs-box span, #nx-room-messages span').forEach(el => {
                 if (el.closest('.nx-floating-react-pill') || el.closest('.nx-group-react-pill') || el.getAttribute('onclick')) return;
                 if (el.children.length === 0 && !el.classList.contains('nx-jumbo-checked')) {
@@ -1548,6 +1612,11 @@
             localStorage.setItem('nx_active_account', JSON.stringify(me));
             document.getElementById('nx-global-modal').style.display = 'none';
 
+            if (window.NexusSecurity && window.NexusSecurity.sb) {
+                window.NexusSecurity.getAuthenticatedUserId().then(uid => {
+                    if (uid) window.NexusSecurity.sb.from('profiles').update({ mood_note: clean }).eq('id', uid).then(() => {});
+                }).catch(() => {});
+            }
             Nexus.db.collection("nexus_accounts").doc(me.username).set({
                 moodNote: clean
             }, { merge: true }).then(() => {
@@ -1622,16 +1691,17 @@
             ensureTopHeaderAppButton();
             decorateStoriesWithMoodNotes(false);
             upgradeDmInboxAndProfileQR();
-            repairBrokenEmojisInDOM(document.body);
         });
         Nexus.listeners.onPosts.push(() => {
             decorateStoriesWithMoodNotes(false);
             upgradeDmInboxAndProfileQR();
-            repairBrokenEmojisInDOM(document.body);
         });
     }
 
+    let __nxSuperBooted = false;
     function bootEverythingClean() {
+        if (__nxSuperBooted) return;
+        __nxSuperBooted = true;
         setupRealOfficialPwaManifest();
         ensureTopHeaderAppButton();
         decorateStoriesWithMoodNotes(false);
@@ -1642,18 +1712,16 @@
         patchPowerSongEngine();
         upgradeDmInboxAndProfileQR();
         checkDirectDmUrlLink();
-        repairBrokenEmojisInDOM(document.body);
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        bootEverythingClean();
+        // Run emoji repair ONCE on boot (NEVER inside setInterval!)
+        setTimeout(() => repairBrokenEmojisInDOM(document.body), 900);
         setInterval(() => {
+            if (isTypingOrHidden()) return;
             repairDmBottomPlusAndOfficialApp();
             upgradeCommunityGroupRoom();
             upgradeDmInboxAndProfileQR();
-            repairBrokenEmojisInDOM(document.body);
-        }, 700);
-    });
+        }, 4000);
+    }
 
-    setTimeout(bootEverythingClean, 200);
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootEverythingClean);
+    else setTimeout(bootEverythingClean, 180);
 })();
