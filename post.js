@@ -634,33 +634,58 @@
             };
 
             try {
-                if (window.Nexus && Nexus.db) {
+                let savedToSupabase = false;
+                const sbClient = (window.NexusSecurity && window.NexusSecurity.sb) || (window.Nexus && Nexus.getSbClient && Nexus.getSbClient());
+
+                // 1. SUPABASE FIRST: All new posts go into Supabase `posts` table!
+                if (sbClient) {
+                    try {
+                        let uid = null;
+                        if (window.NexusSecurity && typeof window.NexusSecurity.getAuthenticatedUserId === "function") {
+                            uid = await window.NexusSecurity.getAuthenticatedUserId();
+                        } else {
+                            const { data: { session } } = await sbClient.auth.getSession();
+                            uid = session && session.user ? session.user.id : null;
+                        }
+                        if (uid) {
+                            const { data, error } = await sbClient.from("posts").insert({
+                                author_id: uid,
+                                author_username: me.username.toLowerCase().trim(),
+                                author_name: me.name || me.username,
+                                author_dp: me.dp || "",
+                                bio: me.bio || "",
+                                content: finalContent,
+                                image_url: attachedMedia.ref || "",
+                                media_type: postDoc.mediaType,
+                                likes_list: [me.username.toLowerCase().trim()],
+                                comments_list: [],
+                                views_count: 1,
+                                is_pinned: Boolean(isPinned)
+                            }).select("id").single();
+                            if (!error && data && data.id) {
+                                postDoc.id = "sb_" + data.id;
+                                postDoc.sbRawId = data.id;
+                                savedToSupabase = true;
+                            }
+                        }
+                    } catch (sbErr) {}
+                }
+
+                // 2. Fallback to Firebase ONLY if user is on a legacy Firebase-only login without Supabase session
+                if (!savedToSupabase && window.Nexus && Nexus.db) {
                     const docRef = await Nexus.db.collection("nexus_real_posts").add(postDoc);
                     postDoc.id = docRef.id;
-                } else if (window.NexusSecurity && window.NexusSecurity.sb) {
-                    const uid = await window.NexusSecurity.getAuthenticatedUserId();
-                    if (uid) {
-                        const { data } = await window.NexusSecurity.sb.from("posts").insert({
-                            author_id: uid,
-                            author_username: me.username,
-                            author_name: me.name || me.username,
-                            author_dp: me.dp || "",
-                            bio: me.bio || "",
-                            content: finalContent,
-                            image_url: attachedMedia.ref || "",
-                            media_type: postDoc.mediaType,
-                            likes_list: [me.username],
-                            comments_list: [],
-                            views_count: 1,
-                            is_pinned: Boolean(isPinned)
-                        }).select("id").single();
-                        if (data && data.id) postDoc.id = "sb_" + data.id;
-                    }
                 }
+
                 try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
-                if (window.Nexus && Array.isArray(Nexus.posts)) {
-                    Nexus.posts.unshift(postDoc);
-                    Nexus.notifyAll && Nexus.notifyAll();
+                if (window.Nexus) {
+                    if (savedToSupabase && Array.isArray(Nexus._sbPosts)) Nexus._sbPosts.unshift(postDoc);
+                    else if (Array.isArray(Nexus._fbPosts)) Nexus._fbPosts.unshift(postDoc);
+                    if (Nexus.syncDualCloudMerge) Nexus.syncDualCloudMerge();
+                    else if (Array.isArray(Nexus.posts)) {
+                        Nexus.posts.unshift(postDoc);
+                        Nexus.notifyAll && Nexus.notifyAll();
+                    }
                 }
                 closeStudio();
                 if (window.Nexus && Nexus.switchTab) Nexus.switchTab("tab-home");
