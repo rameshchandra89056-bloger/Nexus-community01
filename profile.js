@@ -19,6 +19,19 @@
     const realLastSeenCache = {};
     const videoBlobCache = {};
     const backStackLayers = [];
+    const escAttr = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const isTypingOrHidden = () => {
+        if (document.visibilityState === 'hidden') return true;
+        const ae = document.activeElement;
+        if (!ae) return false;
+        const t = (ae.tagName || '').toUpperCase();
+        return t === 'INPUT' || t === 'TEXTAREA' || ae.isContentEditable === true;
+    };
+    const openProSupabaseAuth = (mode) => {
+        const opener = (window.NexusSecurity && window.NexusSecurity.openAdvancedNexusAuthModal) || window.openNexusSupabaseAuthModal || window.openAdvancedGoogleAuthModal;
+        if (typeof opener === 'function') opener(mode || 'login');
+        else if (window.Nexus && Nexus.toast) Nexus.toast('⏳ Login system load ho raha hai, 1 second baad tap karein...');
+    };
 
     document.getElementById("nx-all-groups-hub")?.remove();
     document.getElementById("nx-group-chat-fullscreen")?.remove();
@@ -48,10 +61,11 @@
             opacity: 1 !important;
             visibility: visible !important;
         }
-        #tab-profile.active > #nx-ig-profile-root,
-        #tab-profile.active > #nx-google-auth-hub {
+        #tab-profile.active > #nx-ig-profile-root {
             display: block !important;
         }
+        /* Keep Edit Profile & Auth Modals safely above Android keyboard */
+        #nx-edit-ig-profile-modal { overscroll-behavior: contain; }
         /* Hide legacy overlapping post containers inside #tab-home; keep ONLY Story Bar & Clean Feed */
         #tab-home > *:not(#nx-stories-bar):not(#nx-clean-home-feed-v31) {
             display: none !important;
@@ -100,28 +114,29 @@
     document.head.appendChild(v34MasterStyle);
 
     function purgeRogueVoiceAndLegacyPopups() {
+        if (isTypingOrHidden()) return;
         document.querySelectorAll("body > .nx-voice-note-card, body > audio, #nx-floating-voice-btn, .nx-floating-mic-widget").forEach((el) => {
             el.remove();
         });
-        document.querySelectorAll("div, section").forEach((el) => {
+        // FIXED (HANG KILLER): Only inspect visible modal overlays instead of every <div>/<section> in the DOM!
+        document.querySelectorAll(".nx-modal-overlay, body > div[style*='fixed']").forEach((el) => {
             if (
                 el.id !== "nx-public-profile-modal" &&
+                el.style.display !== "none" &&
                 el.textContent &&
-                el.textContent.includes("Member Full Profile") &&
-                el.offsetHeight > 80 &&
-                el.offsetWidth < window.innerWidth
+                el.textContent.includes("Member Full Profile")
             ) {
-                const match = (el.innerText || "").match(/@([a-zA-Z0-9_.\-]+)/);
+                const match = (el.textContent || "").match(/@([a-zA-Z0-9_.\-]+)/);
                 const uname = match ? match[1] : null;
-                const popupRoot = el.closest(".nx-modal-overlay, [style*='fixed']") || el;
-                popupRoot.remove();
+                el.remove();
                 if (uname && typeof window.openPublicUserProfileModal === "function") {
                     window.openPublicUserProfileModal(uname);
                 }
             }
         });
     }
-    setInterval(purgeRogueVoiceAndLegacyPopups, 500);
+    setTimeout(purgeRogueVoiceAndLegacyPopups, 600);
+    setInterval(purgeRogueVoiceAndLegacyPopups, 3500);
 
     // =========================================================================
     // 1. SINGLE-STEP HARDWARE BACK BUTTON ROUTER
@@ -211,7 +226,7 @@
 
     function getActiveUser() {
         try {
-            const raw = localStorage.getItem("nx_active_account") || localStorage.getItem("nx_legacy_backup_account");
+            const raw = localStorage.getItem("nx_active_account");
             if (!raw) return null;
             const parsed = JSON.parse(raw);
             if (parsed && parsed.username) {
@@ -490,7 +505,11 @@
             renderCleanZeroOverlapHomeFeed(true);
         });
     }
-    setInterval(() => renderCleanZeroOverlapHomeFeed(false), 450);
+    window.__NX_PROF_CORE__ = window.__NX_PROF_CORE__ || {};
+    window.__NX_PROF_CORE__.renderCleanZeroOverlapHomeFeed = renderCleanZeroOverlapHomeFeed;
+    window.renderHomeFeedTab = () => renderCleanZeroOverlapHomeFeed(true);
+    setTimeout(() => renderCleanZeroOverlapHomeFeed(true), 120);
+    setInterval(() => { if (!isTypingOrHidden()) renderCleanZeroOverlapHomeFeed(false); }, 2500);
 
     // =========================================================================
     // 4. FOLLOWERS / FOLLOWING AUTO-CROSS-SYNC ENGINE
@@ -539,7 +558,8 @@
             }
         }
     }
-    setInterval(crossSyncAllFollowersAndSongs, 800);
+    setTimeout(crossSyncAllFollowersAndSongs, 300);
+    setInterval(() => { if (!isTypingOrHidden()) crossSyncAllFollowersAndSongs(); }, 4000);
 
     // =========================================================================
     // 5. STRICT REAL TIMESTAMP & STORY BAR ENGINE
@@ -628,14 +648,19 @@
     }
 
     function syncUnifiedStoryBarPresence() {
-        document.querySelectorAll("#tab-home span, #tab-home div, #tab-profile span, #tab-profile div").forEach((el) => {
-            if (el.children.length === 0 && (el.innerText || "").trim().includes("DM Open")) {
-                el.classList.add("nx-dm-open-pill-hidden");
-                el.style.display = "none";
-            }
-        });
+        if (isTypingOrHidden()) return;
+        const homeTab = document.getElementById("tab-home");
+        if (!homeTab || !homeTab.classList.contains("active")) return;
 
         const storyBar = document.getElementById("nx-stories-bar") || document.querySelector("#tab-home > div:first-child");
+        if (storyBar) {
+            storyBar.querySelectorAll("span, div").forEach((el) => {
+                if (el.children.length === 0 && (el.textContent || "").trim().includes("DM Open")) {
+                    el.classList.add("nx-dm-open-pill-hidden");
+                    el.style.display = "none";
+                }
+            });
+        }
         if (!storyBar || !window.Nexus || !Array.isArray(Nexus.users)) return;
 
         storyBar.querySelectorAll(".nx-auto-seen-pill").forEach((el) => el.remove());
@@ -716,7 +741,8 @@
             }
         });
     }
-    setInterval(syncUnifiedStoryBarPresence, 500);
+    setTimeout(syncUnifiedStoryBarPresence, 450);
+    setInterval(syncUnifiedStoryBarPresence, 3000);
 
     // =========================================================================
     // 6. 🖼️ OFFICIAL NEXUS HD MEDIA LIGHTBOX VIEWER
@@ -724,15 +750,20 @@
     async function recordRealPostView(postObj) {
         const myKey = getMyUsername();
         if (!postObj || !postObj.id || !myKey) return;
+        const pid = String(postObj.id);
         const viewedArr = cleanUniqueList(postObj.viewedBy || []);
         if (!viewedArr.includes(myKey)) {
             viewedArr.push(myKey);
             postObj.viewedBy = viewedArr;
             postObj.views = Math.max(Number(postObj.views || 0) + 1, viewedArr.length);
-            if (window.Nexus && Nexus.db) {
+            if (pid.startsWith("sb_")) {
+                if (window.NexusSecurity && window.NexusSecurity.sb && postObj.sbId) {
+                    window.NexusSecurity.sb.from("posts").update({ views_count: postObj.views }).eq("id", postObj.sbId).then(() => {});
+                }
+            } else if (window.Nexus && Nexus.db) {
                 await Nexus.db
                     .collection("nexus_real_posts")
-                    .doc(postObj.id)
+                    .doc(pid)
                     .set({ viewedBy: viewedArr, views: postObj.views }, { merge: true })
                     .catch(() => {});
             }
@@ -1794,7 +1825,7 @@
 
         return postsArray
             .map((p, idx) => {
-                recordRealPostView(p);
+                // FIXED (HANG KILLER): Never fire 75 Firestore writes inside feed HTML render loop!
 
                 const pOwnerName = p.author || (ownerUserObj && (ownerUserObj.name || ownerUserObj.username)) || "Mohit_01";
                 const pOwnerUname = p.username || (ownerUserObj && ownerUserObj.username) || "mohiy";
@@ -2721,50 +2752,76 @@
 
         const modal = document.createElement("div");
         modal.id = "nx-edit-ig-profile-modal";
+        // FIXED: Top-aligned scrollable overlay + visualViewport resize so Android keyboard NEVER hides inputs!
         modal.style.cssText =
-            "position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:200085; display:flex; align-items:flex-end; justify-content:center;";
+            "position:fixed; left:0; right:0; top:0; height:100dvh; background:rgba(2,6,23,0.92); z-index:260000; display:flex; align-items:flex-start; justify-content:center; overflow-y:auto; padding:18px 12px 120px 12px; box-sizing:border-box; backdrop-filter:blur(6px);";
 
         modal.innerHTML = `
-            <div style="background:#0f172a; border-top:1.5px solid #10b981; border-radius:24px 24px 0 0; width:100%; max-width:600px; max-height:88dvh; overflow-y:auto; padding:18px 16px 28px; color:#fff;">
+            <div style="background:#0f172a; border:1.5px solid #10b981; border-radius:22px; width:100%; max-width:520px; padding:18px 16px 24px; color:#fff; box-shadow:0 20px 55px rgba(0,0,0,0.95); margin:auto 0;">
                 <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid #1e293b;">
-                    <h3 style="font-size:16.5px; font-weight:900; color:#f8fafc;">✏️ Edit Your Profile & Bio</h3>
+                    <h3 style="font-size:16.5px; font-weight:900; color:#f8fafc;">✏️ Edit Your Profile &amp; Bio</h3>
                     <button type="button" id="nx-close-edit-prof" style="width:30px; height:30px; border-radius:50%; background:#1e293b; border:none; color:#fff; font-weight:900; cursor:pointer;">✕</button>
                 </div>
 
                 <div style="display:flex; flex-direction:column; gap:10px;">
                     <div>
                         <label style="font-size:10.5px; font-weight:800; color:#94a3b8; display:block; margin-bottom:3px;">DISPLAY NAME</label>
-                        <input type="text" id="nx-ep-name" value="${me.name || ""}" style="width:100%; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; outline:none;" />
+                        <input type="text" id="nx-ep-name" value="${escAttr(me.name || "")}" style="width:100%; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13.5px; outline:none; box-sizing:border-box;" />
                     </div>
                     <div>
-                        <label style="font-size:10.5px; font-weight:800; color:#34d399; display:block; margin-bottom:3px;">YOUR CUSTOM BIO (UPDATES ON PROFILE & ALL YOUR POSTS)</label>
-                        <textarea id="nx-ep-bio" rows="3" placeholder="Write your custom bio here..." style="width:100%; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #10b981; color:#fff; font-size:13px; outline:none; resize:none;">${
+                        <label style="font-size:10.5px; font-weight:800; color:#34d399; display:block; margin-bottom:3px;">YOUR CUSTOM BIO (UPDATES ON PROFILE &amp; ALL YOUR POSTS)</label>
+                        <textarea id="nx-ep-bio" rows="3" placeholder="Write your custom bio here..." style="width:100%; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #10b981; color:#fff; font-size:13.5px; outline:none; resize:none; box-sizing:border-box;">${escAttr(
                             me.bio || ""
-                        }</textarea>
+                        )}</textarea>
                     </div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
                         <div>
                             <label style="font-size:10.5px; font-weight:800; color:#94a3b8; display:block; margin-bottom:3px;">MOOD NOTE (ABOVE DP)</label>
-                            <input type="text" id="nx-ep-mood" value="${
+                            <input type="text" id="nx-ep-mood" value="${escAttr(
                                 me.moodNote || ""
-                            }" placeholder="e.g. Studying ⚡" style="width:100%; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:12.5px; outline:none;" />
+                            )}" placeholder="e.g. Studying ⚡" style="width:100%; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:12.5px; outline:none; box-sizing:border-box;" />
                         </div>
                         <div>
                             <label style="font-size:10.5px; font-weight:800; color:#94a3b8; display:block; margin-bottom:3px;">WEBSITE / LINK</label>
-                            <input type="text" id="nx-ep-link" value="${
+                            <input type="text" id="nx-ep-link" value="${escAttr(
                                 me.website || ""
-                            }" placeholder="https://..." style="width:100%; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:12.5px; outline:none;" />
+                            )}" placeholder="https://..." style="width:100%; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:12.5px; outline:none; box-sizing:border-box;" />
                         </div>
                     </div>
                     <button type="button" id="nx-save-ep-btn" style="width:100%; padding:13px; border-radius:13px; background:linear-gradient(90deg,#10b981,#06b6d4); color:#020617; font-weight:900; font-size:13.5px; border:none; cursor:pointer; margin-top:6px;">
-                        ✅ Save Bio & Profile Changes
+                        ✅ Save Bio &amp; Profile Changes
                     </button>
                 </div>
             </div>
         `;
 
         document.body.appendChild(modal);
-        modal.querySelector("#nx-close-edit-prof").onclick = () => modal.remove();
+
+        const syncEditViewport = () => {
+            if (!modal.isConnected) return;
+            const vv = window.visualViewport;
+            if (vv) {
+                modal.style.height = Math.max(240, Math.round(vv.height)) + "px";
+                modal.style.top = Math.max(0, Math.round(vv.offsetTop)) + "px";
+            }
+        };
+        const closeEditModal = () => {
+            if (window.visualViewport) {
+                window.visualViewport.removeEventListener("resize", syncEditViewport);
+                window.visualViewport.removeEventListener("scroll", syncEditViewport);
+            }
+            modal.remove();
+        };
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener("resize", syncEditViewport);
+            window.visualViewport.addEventListener("scroll", syncEditViewport);
+            syncEditViewport();
+        }
+        modal.querySelectorAll("input, textarea").forEach((el) => {
+            el.addEventListener("focus", () => setTimeout(() => { syncEditViewport(); el.scrollIntoView({ behavior: "smooth", block: "center" }); }, 160));
+        });
+        modal.querySelector("#nx-close-edit-prof").onclick = closeEditModal;
+        modal.onclick = (e) => { if (e.target === modal) closeEditModal(); };
 
         modal.querySelector("#nx-save-ep-btn").onclick = async function () {
             this.disabled = true;
@@ -2777,7 +2834,20 @@
             me.website = (modal.querySelector("#nx-ep-link").value || "").trim();
 
             localStorage.setItem("nx_active_account", JSON.stringify(me));
-            localStorage.setItem("nx_legacy_backup_account", JSON.stringify(me));
+            if (window.NexusSecurity && window.NexusSecurity.sb) {
+                try {
+                    const uid = await window.NexusSecurity.getAuthenticatedUserId();
+                    if (uid) {
+                        await window.NexusSecurity.sb.from("profiles").update({
+                            display_name: me.name.slice(0, 60),
+                            bio: me.bio.slice(0, 220),
+                            mood_note: me.moodNote.slice(0, 120),
+                            website: me.website.slice(0, 180),
+                            last_online: new Date().toISOString()
+                        }).eq("id", uid);
+                    }
+                } catch (e) {}
+            }
 
             if (window.Nexus) {
                 if (Array.isArray(Nexus.users)) {
@@ -2841,7 +2911,7 @@
                 Nexus.notifyAll && Nexus.notifyAll();
                 Nexus.toast && Nexus.toast("✅ Bio & Profile Updated Everywhere!");
             }
-            modal.remove();
+            closeEditModal();
             renderMyInstagramProfileTab();
         };
     }
@@ -2853,27 +2923,31 @@
         crossSyncAllFollowersAndSongs();
         const me = (window.Nexus && Nexus.getCurrentUser && Nexus.getCurrentUser()) || getActiveUser();
 
-        // If user is not logged in yet, show a clean Sign-In card inside #nx-ig-profile-root so #tab-profile is NEVER blank!
+        // FIXED: When logged out, render ONLY ONE clean Pro Login card (never duplicates #nx-google-auth-hub!)
         if (!me || !me.username) {
+            document.getElementById("nx-google-auth-hub")?.remove();
             document.body.classList.remove("nx-auth-locked");
             container.innerHTML = `
                 <div id="nx-ig-profile-root" style="padding:24px 16px; text-align:center; color:#fff;">
                     <div style="background:linear-gradient(145deg,#0f172a,#090d16); border:1.5px solid #10b981; border-radius:24px; padding:26px 18px; max-width:380px; margin:16px auto; box-shadow:0 18px 45px rgba(0,0,0,0.85);">
-                        <div style="font-size:36px; margin-bottom:8px;">🛡️</div>
-                        <h2 style="font-size:19px; font-weight:900; color:#f8fafc; margin-bottom:6px;">Sign In to Your Profile</h2>
-                        <p style="font-size:12px; color:#94a3b8; margin-bottom:18px; line-height:1.5;">Apne @username ya Google account se Sign In karke apni Profile, Posts aur Settings unlock karein.</p>
-                        <button type="button" id="nx-fallback-signin-btn" style="width:100%; padding:13px; border-radius:14px; background:linear-gradient(90deg,#10b981,#06b6d4); color:#020617; font-weight:900; font-size:13.5px; border:none; cursor:pointer;">
-                            🔓 Sign In / Verify Account
-                        </button>
+                        <div style="width:54px;height:54px;border-radius:16px;background:linear-gradient(135deg,#10b981,#06b6d4);color:#020617;font-size:26px;font-weight:900;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;box-shadow:0 8px 24px rgba(16,185,129,0.4);">N</div>
+                        <h2 style="font-size:19px; font-weight:900; color:#f8fafc; margin-bottom:6px;">Sign In to Nexus Community</h2>
+                        <p style="font-size:12px; color:#94a3b8; margin-bottom:18px; line-height:1.5;">Gmail + Password, 6-Digit Verified OTP ya Google 1-Click se login karein.</p>
+                        <div style="display:flex; flex-direction:column; gap:10px;">
+                            <button type="button" id="nx-fallback-signin-btn" style="width:100%; padding:13px; border-radius:14px; background:linear-gradient(90deg,#10b981,#06b6d4); color:#020617; font-weight:900; font-size:13.5px; border:none; cursor:pointer;">
+                                🔓 Log In / 6-Digit OTP
+                            </button>
+                            <button type="button" id="nx-fallback-signup-btn" style="width:100%; padding:12px; border-radius:14px; background:rgba(16,185,129,0.12); border:1.5px solid #10b981; color:#34d399; font-weight:900; font-size:13px; cursor:pointer;">
+                                ✨ Create Verified Account
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
-            const b = container.querySelector("#nx-fallback-signin-btn");
-            if (b) {
-                b.onclick = () => {
-                    if (window.openAdvancedGoogleAuthModal) window.openAdvancedGoogleAuthModal("signin");
-                };
-            }
+            const bIn = container.querySelector("#nx-fallback-signin-btn");
+            if (bIn) bIn.onclick = () => openProSupabaseAuth("login");
+            const bUp = container.querySelector("#nx-fallback-signup-btn");
+            if (bUp) bUp.onclick = () => openProSupabaseAuth("signup");
             return;
         }
 
@@ -3088,7 +3162,11 @@
         `;
 
         container.querySelector("#nx-prof-switch-trigger").onclick = () => {
-            if (window.openAdvancedGoogleAuthModal) window.openAdvancedGoogleAuthModal("signin");
+            if (window.NexusSecurity && typeof window.NexusSecurity.openSecurityCenterModal === "function") {
+                window.NexusSecurity.openSecurityCenterModal();
+            } else {
+                openProSupabaseAuth("login");
+            }
         };
         container.querySelector("#nx-prof-new-post").onclick = () => {
             if (window.openOfficialNexusCreatorStudio) window.openOfficialNexusCreatorStudio();
@@ -3116,19 +3194,40 @@
 
         const dpInp = container.querySelector("#nx-inp-upload-dp");
         if (dpInp) {
-            dpInp.onchange = (e) => {
+            dpInp.onchange = async (e) => {
                 const file = e.target.files && e.target.files[0];
-                if (!file || !window.Nexus || !Nexus.compressImage) return;
-                Nexus.compressImage(file, 420, 0.72, async (b64) => {
-                    me.dp = b64;
-                    localStorage.setItem("nx_active_account", JSON.stringify(me));
-                    if (Nexus.db) {
-                        await Nexus.db.collection("nexus_accounts").doc(myKey).set({ dp: b64 }, { merge: true }).catch(() => {});
-                    }
-                    Nexus.rebuildAllUsersMasterList && Nexus.rebuildAllUsersMasterList();
-                    renderMyInstagramProfileTab();
-                    Nexus.toast && Nexus.toast("📸 Profile Picture Updated!");
-                });
+                if (!file || !window.Nexus) return;
+                if (window.NexusSecurity && window.NexusSecurity.sb && typeof window.NexusSecurity.uploadPublicMedia === "function") {
+                    try {
+                        const uid = await window.NexusSecurity.getAuthenticatedUserId();
+                        if (uid) {
+                            Nexus.toast && Nexus.toast("⏳ Uploading HD Profile Photo...");
+                            const up = await window.NexusSecurity.uploadPublicMedia(file, "avatars");
+                            if (up && up.publicUrl) {
+                                await window.NexusSecurity.sb.from("profiles").update({ avatar_url: up.publicUrl }).eq("id", uid);
+                                me.dp = up.publicUrl;
+                                localStorage.setItem("nx_active_account", JSON.stringify(me));
+                                if (Nexus.db) Nexus.db.collection("nexus_accounts").doc(myKey).set({ dp: up.publicUrl }, { merge: true }).catch(() => {});
+                                Nexus.rebuildAllUsersMasterList && Nexus.rebuildAllUsersMasterList();
+                                renderMyInstagramProfileTab();
+                                Nexus.toast && Nexus.toast("📸 HD Profile Picture Updated!");
+                                return;
+                            }
+                        }
+                    } catch (err) {}
+                }
+                if (typeof Nexus.compressImage === "function") {
+                    Nexus.compressImage(file, 420, 0.72, async (b64) => {
+                        me.dp = b64;
+                        localStorage.setItem("nx_active_account", JSON.stringify(me));
+                        if (Nexus.db) {
+                            await Nexus.db.collection("nexus_accounts").doc(myKey).set({ dp: b64 }, { merge: true }).catch(() => {});
+                        }
+                        Nexus.rebuildAllUsersMasterList && Nexus.rebuildAllUsersMasterList();
+                        renderMyInstagramProfileTab();
+                        Nexus.toast && Nexus.toast("📸 Profile Picture Updated!");
+                    });
+                }
             };
         }
 
@@ -3201,6 +3300,7 @@
     }
 
     setInterval(() => {
+        if (isTypingOrHidden()) return;
         if (window.Nexus && Nexus.openUserProfile !== window.openPublicUserProfileModal) {
             Nexus.openUserProfile = window.openPublicUserProfileModal;
         }
@@ -3208,7 +3308,7 @@
         if (pTab && pTab.classList.contains("active") && !pTab.querySelector("#nx-ig-profile-root")) {
             window.renderMyInstagramProfileTab();
         }
-    }, 350);
+    }, 2000);
 })();
 /* ============================================================================
    REPLACE THE LAST PATCH AT THE BOTTOM OF profile.js WITH THIS CLEAN BLOCK
@@ -3261,8 +3361,14 @@
                     .filter((u) => u && u.username && u.username.toLowerCase() !== "member");
 
                 if (users.length > 0) {
-                    Nexus.cloudAccounts = users;
-                    Nexus.users = users;
+                    // FIXED: Merge with existing Supabase + Firebase users instead of overwriting!
+                    const uMap = new Map();
+                    (Nexus.cloudAccounts || []).forEach((u) => { if (u && u.username) uMap.set(u.username.toLowerCase(), u); });
+                    users.forEach((u) => {
+                        const k = u.username.toLowerCase();
+                        if (!uMap.has(k)) uMap.set(k, u);
+                    });
+                    Nexus.cloudAccounts = Array.from(uMap.values());
                 }
             }
 
@@ -3286,12 +3392,19 @@
                         p.views = Math.max(p.viewedBy.length, Number(p.views || 1), p.likes);
                         return p;
                     })
-                    .filter((p) => p.username !== "member" && (p.image || (p.content && p.content !== ".")))
-                    .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.createdAt - a.createdAt);
+                    .filter((p) => p.username !== "member" && (p.image || (p.content && p.content !== ".")));
 
                 if (posts.length > 0) {
-                    Nexus.posts = posts;
-                    window.__NX_INSTANT_POSTS__ = posts;
+                    // FIXED: Merge with existing Supabase posts instead of overwriting!
+                    const pMap = new Map();
+                    [...(Nexus.posts || []), ...posts].forEach((p) => {
+                        if (!p) return;
+                        const sig = `${p.username}::${(p.content || "").slice(0, 40)}::${(p.image || "").slice(0, 80)}`;
+                        if (!pMap.has(sig)) pMap.set(sig, p);
+                    });
+                    const merged = Array.from(pMap.values()).sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.createdAt - a.createdAt);
+                    Nexus.posts = merged;
+                    window.__NX_INSTANT_POSTS__ = merged;
                     const stuckBox = document.getElementById("nx-clean-home-feed-v31");
                     if (stuckBox && stuckBox.innerText.includes("Loading real community posts")) {
                         stuckBox.innerHTML = "";
@@ -3304,8 +3417,12 @@
         } catch (err) {}
     }
 
-    forceFetchFirebasePostsAndUsersNow();
-    setTimeout(forceFetchFirebasePostsAndUsersNow, 700);
+    // FIXED (HANG KILLER): Only run ONCE as a safety fallback if posts are still empty after 1.8s!
+    setTimeout(() => {
+        if (!window.Nexus || !Array.isArray(Nexus.posts) || Nexus.posts.length === 0) {
+            forceFetchFirebasePostsAndUsersNow();
+        }
+    }, 1800);
 })();
 /* ============================================================================
    PASTE AT THE VERY BOTTOM OF profile.js
@@ -3326,7 +3443,7 @@
                 const u = Nexus.getCurrentUser();
                 if (u && u.username) return u;
             }
-            const raw = localStorage.getItem("nx_active_account") || localStorage.getItem("nx_legacy_backup_account");
+            const raw = localStorage.getItem("nx_active_account");
             if (raw) return JSON.parse(raw);
         } catch (e) {}
         return null;
@@ -3784,8 +3901,13 @@
         });
     }
 
-    setInterval(bindHeaderSearchAndNotifButtons, 700);
-    setTimeout(bindHeaderSearchAndNotifButtons, 150);
+    setTimeout(bindHeaderSearchAndNotifButtons, 180);
+    setInterval(() => {
+        if (document.visibilityState === 'hidden') return;
+        const ae = document.activeElement;
+        if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+        bindHeaderSearchAndNotifButtons();
+    }, 3500);
 })();
 /* ============================================================================
    REPLACE THE LAST PATCH AT THE BOTTOM OF profile.js WITH THIS (V38 MASTER):
@@ -3803,7 +3925,6 @@
             #nx-global-modal { z-index: 250000 !important; }
             #nx-public-profile-modal { z-index: 255000 !important; }
             #nx-sys-post-3dot-sheet, #nx-home-post-admin-sheet { z-index: 256000 !important; }
-            #nx-instant-auth-modal { z-index: 270000 !important; }
         `;
         document.head.appendChild(zStyle);
     }
@@ -3978,244 +4099,17 @@
         }
     }, true);
 
-    // 5. 100% WORKING INSTANT SIGNUP & LOGIN SYSTEM (ZERO POPUP ERRORS FOR NEW USERS!)
-    window.openAdvancedGoogleAuthModal = function (initialMode) {
-        document.getElementById("nx-instant-auth-modal")?.remove();
-        let mode = initialMode === "signin" ? "signin" : "signup";
-
-        const modal = document.createElement("div");
-        modal.id = "nx-instant-auth-modal";
-        modal.style.cssText =
-            "position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:270000; display:flex; align-items:center; justify-content:center; padding:16px; backdrop-filter:blur(6px);";
-
-        const getDb = () => (window.Nexus && Nexus.db) || (window.firebase && firebase.firestore ? firebase.firestore() : null);
-
-        const completeLogin = (accObj) => {
-            accObj.verified = true;
-            accObj.googleVerified = true;
-            accObj.isOnlineNow = true;
-            accObj.lastOnline = Date.now();
-            accObj.lastSeenAt = Date.now();
-            localStorage.setItem("nx_active_account", JSON.stringify(accObj));
-            localStorage.setItem("nx_legacy_backup_account", JSON.stringify(accObj));
-            document.body.classList.remove("nx-auth-locked");
-            document.getElementById("nx-google-auth-hub")?.remove();
-            modal.remove();
-
-            if (window.Nexus) {
-                if (Array.isArray(Nexus.users)) {
-                    const idx = Nexus.users.findIndex(u => u && u.username && u.username.toLowerCase() === accObj.username.toLowerCase());
-                    if (idx === -1) Nexus.users.unshift(accObj);
-                    else Nexus.users[idx] = Object.assign({}, Nexus.users[idx], accObj);
-                }
-                Nexus.rebuildAllUsersMasterList && Nexus.rebuildAllUsersMasterList();
-                Nexus.notifyAll && Nexus.notifyAll();
-                Nexus.toast && Nexus.toast(`✅ Welcome, ${accObj.name}!`);
-                Nexus.switchTab && Nexus.switchTab("tab-profile");
+    // 5. OLD 4-DIGIT PIN LOGIN PERMANENTLY REMOVED -> CLEAN BRIDGE TO NEW SUPABASE PRO OTP AUTH
+    if (!window.openAdvancedGoogleAuthModal) {
+        window.openAdvancedGoogleAuthModal = function (initialMode) {
+            const opener = (window.NexusSecurity && window.NexusSecurity.openAdvancedNexusAuthModal) || window.openNexusSupabaseAuthModal;
+            if (typeof opener === "function") {
+                opener(initialMode === "signup" ? "signup" : "login");
+            } else if (window.Nexus && Nexus.toast) {
+                Nexus.toast("⏳ Login system load ho raha hai, 1 second baad tap karein...");
             }
         };
-
-        const renderAuthUI = () => {
-            const isSignup = mode === "signup";
-            modal.innerHTML = `
-                <div style="background:linear-gradient(155deg,#0f172a,#090d16); border:1.5px solid #10b981; border-radius:22px; width:100%; max-width:390px; padding:20px 18px; color:#fff; box-shadow:0 22px 55px rgba(0,0,0,0.95);">
-                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-                        <h3 style="font-size:17px; font-weight:900; color:#34d399;">
-                            ${isSignup ? "✨ Create New Nexus Account" : "🔓 Sign In to Nexus"}
-                        </h3>
-                        <button type="button" id="nx-auth-x" style="width:30px; height:30px; border-radius:50%; background:#1e293b; border:none; color:#cbd5e1; font-weight:900; cursor:pointer;">✕</button>
-                    </div>
-
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; background:#050811; padding:4px; border-radius:12px; margin-bottom:14px;">
-                        <button type="button" id="nx-tab-signup" style="padding:9px; border-radius:9px; border:none; background:${isSignup ? "#10b981" : "transparent"}; color:${isSignup ? "#020617" : "#94a3b8"}; font-weight:900; font-size:12.5px; cursor:pointer;">New Account</button>
-                        <button type="button" id="nx-tab-signin" style="padding:9px; border-radius:9px; border:none; background:${!isSignup ? "#10b981" : "transparent"}; color:${!isSignup ? "#020617" : "#94a3b8"}; font-weight:900; font-size:12.5px; cursor:pointer;">Login</button>
-                    </div>
-
-                    <div id="nx-auth-err" style="display:none; background:rgba(244,63,94,0.16); border:1px solid #f43f5e; color:#fda4af; padding:8px 10px; border-radius:10px; font-size:12px; font-weight:700; margin-bottom:10px;"></div>
-
-                    <div style="display:flex; flex-direction:column; gap:10px;">
-                        ${isSignup ? `
-                            <div>
-                                <label style="font-size:10.5px; font-weight:800; color:#94a3b8;">YOUR NAME</label>
-                                <input type="text" id="nx-a-name" placeholder="e.g. Rahul Sharma" style="width:100%; margin-top:4px; padding:11px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13.5px; outline:none;" />
-                            </div>
-                        ` : ""}
-                        <div>
-                            <label style="font-size:10.5px; font-weight:800; color:#94a3b8;">USERNAME (NO SPACES)</label>
-                            <input type="text" id="nx-a-uname" placeholder="e.g. rahul_07" autocapitalize="none" style="width:100%; margin-top:4px; padding:11px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13.5px; outline:none;" />
-                        </div>
-                        <div>
-                            <label style="font-size:10.5px; font-weight:800; color:#94a3b8;">4-DIGIT SECRET PIN / PASSWORD</label>
-                            <input type="password" id="nx-a-pin" maxlength="16" placeholder="e.g. 1234" style="width:100%; margin-top:4px; padding:11px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13.5px; outline:none;" />
-                        </div>
-                        ${isSignup ? `
-                            <div>
-                                <label style="font-size:10.5px; font-weight:800; color:#94a3b8;">SHORT BIO (OPTIONAL)</label>
-                                <input type="text" id="nx-a-bio" placeholder="e.g. Class 11 Student / JEE Aspirant" style="width:100%; margin-top:4px; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; outline:none;" />
-                            </div>
-                        ` : ""}
-
-                        <button type="button" id="nx-a-submit" style="width:100%; padding:13px; border-radius:13px; background:linear-gradient(90deg,#10b981,#06b6d4); color:#020617; font-weight:900; font-size:14px; border:none; cursor:pointer; margin-top:4px;">
-                            ${isSignup ? "🚀 Create Account Instantly" : "🔓 Login Now"}
-                        </button>
-
-                        <div style="text-align:center; font-size:11px; color:#64748b; margin:2px 0;">— OR —</div>
-
-                        <button type="button" id="nx-a-google" style="width:100%; padding:11px; border-radius:12px; background:#ffffff; color:#0f172a; font-weight:900; font-size:12.5px; border:none; cursor:pointer;">
-                            Continue with Google (Chrome Only)
-                        </button>
-                    </div>
-                </div>
-            `;
-
-            const showErr = (msg) => {
-                const box = modal.querySelector("#nx-auth-err");
-                if (box) { box.textContent = msg; box.style.display = "block"; }
-            };
-
-            modal.querySelector("#nx-auth-x").onclick = () => modal.remove();
-            modal.querySelector("#nx-tab-signup").onclick = () => { mode = "signup"; renderAuthUI(); };
-            modal.querySelector("#nx-tab-signin").onclick = () => { mode = "signin"; renderAuthUI(); };
-
-            modal.querySelector("#nx-a-submit").onclick = async function () {
-                const db = getDb();
-                if (!db) return showErr("⚠️ Internet slow hai, 2 second baad dobara try karein.");
-
-                const rawU = (modal.querySelector("#nx-a-uname").value || "").trim();
-                const uname = rawU.toLowerCase().replace(/^@/, "").replace(/[^a-z0-9_]/g, "");
-                const pin = (modal.querySelector("#nx-a-pin").value || "").trim();
-
-                if (uname.length < 3) return showErr("⚠️ Username kam se kam 3 letters ka hona chahiye (e.g. rahul_01).");
-                if (uname === "member" || uname === "nexus_official") return showErr("⚠️ Yeh username reserved hai, koi aur chunein.");
-                if (pin.length < 4) return showErr("⚠️ Kam se kam 4 digit ka PIN ya password dalein.");
-
-                this.disabled = true;
-                this.textContent = isSignup ? "⏳ Creating Account..." : "⏳ Logging In...";
-
-                try {
-                    const docRef = db.collection("nexus_accounts").doc(uname);
-                    const snap = await docRef.get();
-
-                    if (isSignup) {
-                        if (snap.exists) {
-                            this.disabled = false;
-                            this.textContent = "🚀 Create Account Instantly";
-                            return showErr(`⚠️ @${uname} pehle se bana hua hai! Koi aur username dalein ya Login tab mein jayein.`);
-                        }
-                        const name = (modal.querySelector("#nx-a-name").value || "").trim() || uname;
-                        const bio = (modal.querySelector("#nx-a-bio").value || "").trim() || "Nexus Community Member ✨";
-                        const newAcc = {
-                            username: uname,
-                            name: name,
-                            bio: bio,
-                            authPin: pin,
-                            pin: pin,
-                            email: `${uname}@nexus.app`,
-                            dp: "",
-                            verified: true,
-                            googleVerified: true,
-                            isOnlineNow: true,
-                            followersList: [],
-                            followingList: [],
-                            createdAt: Date.now(),
-                            lastOnline: Date.now(),
-                            lastSeenAt: Date.now()
-                        };
-                        await docRef.set(newAcc);
-                        completeLogin(newAcc);
-                    } else {
-                        if (!snap.exists) {
-                            this.disabled = false;
-                            this.textContent = "🔓 Login Now";
-                            return showErr(`⚠️ @${uname} naam ka koi account nahi mila. Naya account banane ke liye "New Account" par tap karein.`);
-                        }
-                        const data = snap.data() || {};
-                        if (data.isBanned) {
-                            this.disabled = false;
-                            this.textContent = "🔓 Login Now";
-                            return showErr("🚫 This account has been suspended by Admin.");
-                        }
-                        const savedPin = String(data.authPin || data.pin || "").trim();
-                        if (savedPin && savedPin !== pin) {
-                            this.disabled = false;
-                            this.textContent = "🔓 Login Now";
-                            return showErr("❌ Galat PIN/Password! Dobara check karke dalein.");
-                        }
-                        const merged = Object.assign({}, data, {
-                            username: uname,
-                            authPin: savedPin || pin,
-                            pin: savedPin || pin,
-                            verified: true,
-                            googleVerified: true,
-                            isOnlineNow: true,
-                            lastOnline: Date.now(),
-                            lastSeenAt: Date.now()
-                        });
-                        await docRef.set({
-                            authPin: merged.authPin,
-                            isOnlineNow: true,
-                            lastOnline: Date.now(),
-                            lastSeenAt: Date.now()
-                        }, { merge: true }).catch(() => {});
-                        completeLogin(merged);
-                    }
-                } catch (err) {
-                    this.disabled = false;
-                    this.textContent = isSignup ? "🚀 Create Account Instantly" : "🔓 Login Now";
-                    showErr("❌ Server error: " + (err.message || "Please retry."));
-                }
-            };
-
-            // Optional Google Login with Clean Error Handling
-            modal.querySelector("#nx-a-google").onclick = async function () {
-                const db = getDb();
-                if (!window.firebase || !firebase.auth || !db) {
-                    return showErr("⚠️ Google Login yahan available nahi hai. Upar Username + PIN se 2 second mein account banayein!");
-                }
-                this.disabled = true;
-                this.textContent = "⏳ Opening Google...";
-                try {
-                    const provider = new firebase.auth.GoogleAuthProvider();
-                    const res = await firebase.auth().signInWithPopup(provider);
-                    const gUser = res.user;
-                    const email = (gUser.email || "").toLowerCase();
-                    const snapByEmail = await db.collection("nexus_accounts").where("email", "==", email).limit(1).get();
-                    if (!snapByEmail.empty) {
-                        const existing = snapByEmail.docs[0].data();
-                        existing.username = existing.username || snapByEmail.docs[0].id;
-                        completeLogin(existing);
-                    } else {
-                        const baseU = (email.split("@")[0] || "user").replace(/[^a-z0-9_]/g, "").slice(0, 14) + "_" + Math.floor(10 + Math.random() * 89);
-                        const newAcc = {
-                            username: baseU,
-                            name: gUser.displayName || baseU,
-                            email: email,
-                            bio: "Nexus Community Member ✨",
-                            dp: gUser.photoURL || "",
-                            verified: true,
-                            googleVerified: true,
-                            isOnlineNow: true,
-                            followersList: [],
-                            followingList: [],
-                            createdAt: Date.now(),
-                            lastOnline: Date.now(),
-                            lastSeenAt: Date.now()
-                        };
-                        await db.collection("nexus_accounts").doc(baseU).set(newAcc);
-                        completeLogin(newAcc);
-                    }
-                } catch (err) {
-                    this.disabled = false;
-                    this.textContent = "Continue with Google (Chrome Only)";
-                    showErr("⚠️ Is browser mein Google popup blocked hai. Upar apna Name + Username + 4-digit PIN daal kar turant Account banayein!");
-                }
-            };
-        };
-
-        renderAuthUI();
-        document.body.appendChild(modal);
-        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-    };
+    }
 
     // Sync profile hooks cleanly
     function syncHooks() {
@@ -4225,5 +4119,5 @@
         }
     }
     syncHooks();
-    setInterval(syncHooks, 2000);
+    setInterval(() => { if (document.visibilityState !== 'hidden') syncHooks(); }, 5000);
 })();
