@@ -1,6 +1,16 @@
 // ================= DOTSMENU.JS (v36.0 MULTIPLAYER GAME ARCADE + EXACT REPLY JUMP & REACTION FIX): ⚙️ ⋮ 3-DOTS PRO MENU + 🎮 LIVE 1v1 GAME HUB (AUTO-INVITE BANNER ON PARTNER PHONE, STRICT TURN LOCK, WINNER TROPHY, SCOREBOARD, TIC-TAC-TOE + STONE-PAPER-SCISSORS + MATH DUEL) + ↩️ EXACT REPLY TARGET SCROLL FIX =================
 
 (function() {
+    if (window.__NEXUS_DOTSMENU_FIXED_V2__) return;
+    window.__NEXUS_DOTSMENU_FIXED_V2__ = true;
+    const escHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const isTypingOrHidden = () => {
+        if (document.visibilityState === 'hidden') return true;
+        const ae = document.activeElement;
+        if (!ae) return false;
+        const t = (ae.tagName || '').toUpperCase();
+        return t === 'INPUT' || t === 'TEXTAREA' || ae.isContentEditable === true;
+    };
     const dotsStyle = document.createElement('style');
     dotsStyle.innerHTML = `
         .nx-pro-dots-btn {
@@ -41,7 +51,7 @@
                 let u = Nexus.getCurrentUser();
                 if (u && u.username) return u;
             }
-            let raw = localStorage.getItem('nx_active_account') || localStorage.getItem('nx_legacy_backup_account');
+            let raw = localStorage.getItem('nx_active_account');
             if (raw) return JSON.parse(raw);
         } catch (e) {}
         return { username: 'guest', name: 'Member' };
@@ -79,8 +89,10 @@
     // 1. FIX "JUMPO" REPLY CLICK -> SCROLL TO EXACT TARGET MESSAGE (NOT OLD ONE!)
     // =========================================================================
     document.addEventListener('click', (e) => {
-        const msgBox = document.getElementById('nx-dm-msgs-box') || document.getElementById('nx-dm-messages');
-        if (!msgBox || !msgBox.contains(e.target)) return;
+        const dmBox = document.getElementById('nx-dm-msgs-box') || document.getElementById('nx-dm-messages');
+        const grpBox = document.getElementById('nx-room-messages');
+        const msgBox = (dmBox && dmBox.contains(e.target)) ? dmBox : ((grpBox && grpBox.contains(e.target)) ? grpBox : null);
+        if (!msgBox) return;
 
         // Detect if user tapped on a quoted reply block inside a message bubble
         const replyBlock = e.target.closest('div[style*="border-left"]');
@@ -187,7 +199,7 @@
 
         banner.innerHTML = `
             <div style="min-width:0;flex:1;">
-                <div style="font-weight:900;color:#34d399;">🎮 Live 1v1 Game (${gameData.gameType === 'rps' ? 'Stone-Paper-Scissors' : 'Tic-Tac-Toe'})</div>
+                <div style="font-weight:900;color:#34d399;">🎮 Live 1v1 Game (${gameData.gameType === 'rps' ? 'Stone-Paper-Scissors' : (gameData.gameType === 'math' ? '⚡ Math Duel' : 'Tic-Tac-Toe')})</div>
                 <div style="font-size:11px;color:#fde047;font-weight:800;">${statusText} • Score: ${gameData.scoreX || 0} - ${gameData.scoreO || 0}</div>
             </div>
             <div style="display:flex;gap:5px;flex-shrink:0;">
@@ -197,12 +209,37 @@
         `;
     }
 
+    function generateFastMathDuelProblem() {
+        const kind = Math.floor(Math.random() * 4);
+        let q = '', ans = 0;
+        if (kind === 0) {
+            const a = 12 + Math.floor(Math.random() * 38), b = 11 + Math.floor(Math.random() * 39);
+            q = `${a} + ${b} = ?`; ans = a + b;
+        } else if (kind === 1) {
+            const a = 6 + Math.floor(Math.random() * 14), b = 4 + Math.floor(Math.random() * 12);
+            q = `${a} × ${b} = ?`; ans = a * b;
+        } else if (kind === 2) {
+            const n = 7 + Math.floor(Math.random() * 16);
+            q = `${n}² − ${n} = ?`; ans = n * n - n;
+        } else {
+            const a = 2 + Math.floor(Math.random() * 7), b = 3 + Math.floor(Math.random() * 15);
+            q = `d/dx (${a}x² + ${b}x) at x=2 ?`; ans = 2 * a * 2 + b;
+        }
+        const opts = new Set([ans]);
+        while (opts.size < 4) {
+            const delta = (Math.floor(Math.random() * 9) + 1) * (Math.random() > 0.5 ? 1 : -1);
+            opts.add(ans + delta);
+        }
+        return { q, ans, options: Array.from(opts).sort(() => Math.random() - 0.5) };
+    }
+
     window.startNew1v1LiveGame = async function(gameType = 'ttt') {
         if (!window.Nexus || !Nexus.db) return;
         const ctx = getPartnerContext();
         const ref = Nexus.db.collection("nexus_live_games").doc(ctx.roomKey);
         const existing = await ref.get();
         const prev = existing.exists ? existing.data() : {};
+        const mathQ = gameType === 'math' ? generateFastMathDuelProblem() : null;
 
         const payload = {
             active: true,
@@ -217,6 +254,7 @@
             currentTurnUser: ctx.myU,
             board: ['', '', '', '', '', '', '', '', ''],
             rpsMoves: {},
+            mathQuestion: mathQ,
             winner: '',
             winningLine: [],
             scoreX: Number(prev.scoreX || 0),
@@ -255,7 +293,20 @@
         const isMyTurn = normU(g.currentTurnUser) === ctx.myU || normU(g.currentTurnUser) === ctx.myName;
 
         let bodyHTML = '';
-        if (g.gameType === 'rps') {
+        if (g.gameType === 'math') {
+            const mq = g.mathQuestion || { q: '12 × 8 = ?', ans: 96, options: [84, 96, 104, 88] };
+            bodyHTML = `
+                <div style="margin:10px 0 12px;padding:14px;border-radius:14px;background:#111827;border:1.5px solid #fbbf24;">
+                    <div style="font-size:11px;font-weight:900;color:#fbbf24;margin-bottom:6px;">⚡ FASTEST CORRECT ANSWER WINS +1 POINT!</div>
+                    <div style="font-size:21px;font-weight:900;color:#fff;margin-bottom:12px;">${escHtml(mq.q)}</div>
+                    ${g.winner
+                        ? `<div style="padding:10px;border-radius:11px;background:rgba(16,185,129,0.2);border:1px solid #10b981;color:#34d399;font-weight:900;font-size:13.5px;">🏆 ${escHtml(g.winner)} (Ans: ${mq.ans})</div>`
+                        : `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                            ${(mq.options || []).map(opt => `<button type="button" onclick="window.answerMathDuel('${g.docId}', ${Number(opt)})" style="padding:12px;border-radius:11px;background:#1e293b;border:1.5px solid #38bdf8;color:#fff;font-size:16px;font-weight:900;cursor:pointer;">${opt}</button>`).join('')}
+                           </div>`}
+                </div>
+            `;
+        } else if (g.gameType === 'rps') {
             const moves = g.rpsMoves || {};
             const myMove = moves[ctx.myU] || '';
             const partnerMove = moves[ctx.pU] || moves[ctx.pDisplayLower] || '';
@@ -313,10 +364,11 @@
                 <button type="button" onclick="document.getElementById('nx-global-modal').style.display='none'" style="background:none;border:none;color:#94a3b8;font-size:18px;cursor:pointer;">✕</button>
             </div>
 
-            <!-- Switch Game Mode Tabs -->
-            <div style="display:flex;gap:6px;margin-bottom:10px;">
-                <button type="button" onclick="window.startNew1v1LiveGame('ttt')" style="flex:1;padding:7px;border-radius:9px;border:none;background:${g.gameType !== 'rps' ? '#10b981' : '#1e293b'};color:${g.gameType !== 'rps' ? '#020617' : '#fff'};font-weight:900;font-size:11.5px;cursor:pointer;">❌⭕ Tic-Tac-Toe</button>
-                <button type="button" onclick="window.startNew1v1LiveGame('rps')" style="flex:1;padding:7px;border-radius:9px;border:none;background:${g.gameType === 'rps' ? '#10b981' : '#1e293b'};color:${g.gameType === 'rps' ? '#020617' : '#fff'};font-weight:900;font-size:11.5px;cursor:pointer;">🪨📄✂️ Stone-Paper</button>
+            <!-- Switch Game Mode Tabs (3 Real Live Games!) -->
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:10px;">
+                <button type="button" onclick="window.startNew1v1LiveGame('ttt')" style="padding:7px 4px;border-radius:9px;border:none;background:${(!g.gameType || g.gameType === 'ttt') ? '#10b981' : '#1e293b'};color:${(!g.gameType || g.gameType === 'ttt') ? '#020617' : '#fff'};font-weight:900;font-size:11px;cursor:pointer;">❌⭕ TTT</button>
+                <button type="button" onclick="window.startNew1v1LiveGame('rps')" style="padding:7px 4px;border-radius:9px;border:none;background:${g.gameType === 'rps' ? '#10b981' : '#1e293b'};color:${g.gameType === 'rps' ? '#020617' : '#fff'};font-weight:900;font-size:11px;cursor:pointer;">🪨📄 RPS</button>
+                <button type="button" onclick="window.startNew1v1LiveGame('math')" style="padding:7px 4px;border-radius:9px;border:none;background:${g.gameType === 'math' ? '#fbbf24' : '#1e293b'};color:${g.gameType === 'math' ? '#020617' : '#fff'};font-weight:900;font-size:11px;cursor:pointer;">⚡ Math Duel</button>
             </div>
 
             <!-- Live Player vs Player Scoreboard -->
@@ -429,6 +481,28 @@
             scoreO: sO,
             updatedAt: Date.now()
         }, { merge: true });
+    };
+
+    window.answerMathDuel = async function(docId, chosenVal) {
+        if (!window.Nexus || !Nexus.db) return;
+        const ctx = getPartnerContext();
+        const ref = Nexus.db.collection("nexus_live_games").doc(docId);
+        const doc = await ref.get();
+        if (!doc.exists) return;
+        const g = doc.data();
+        if (g.winner || !g.mathQuestion) return;
+        if (Number(chosenVal) !== Number(g.mathQuestion.ans)) {
+            if (Nexus.toast) Nexus.toast('❌ Wrong Answer! Try fast!');
+            return;
+        }
+        const isX = ctx.myU === normU(g.playerX) || ctx.myName === normU(g.playerX);
+        await ref.set({
+            winner: `@${ctx.myU} Solved First!`,
+            scoreX: Number(g.scoreX || 0) + (isX ? 1 : 0),
+            scoreO: Number(g.scoreO || 0) + (isX ? 0 : 1),
+            updatedAt: Date.now()
+        }, { merge: true });
+        if (Nexus.toast) Nexus.toast('⚡ Correct! +1 Point!');
     };
 
     window.endLive1v1Game = async function(docId) {
@@ -584,6 +658,46 @@
                         </div>
                     </button>
 
+                    <button type="button" class="nx-pro-dots-btn" onclick="document.getElementById('nx-global-modal').style.display='none'; if(window.NexusPower) NexusPower.openAdvanceVanishModal();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(250,204,21,0.16);">⏳</span>
+                        <div>
+                            <div style="color:#fde047;">Auto-Vanish Disappearing Mode</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Self-destruct timer (1m / 5m / 1h / 24h)</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" onclick="document.getElementById('nx-global-modal').style.display='none'; if(window.NexusPower) NexusPower.toggleChatPinLock();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(56,189,248,0.16);">🔒</span>
+                        <div>
+                            <div style="color:#93c5fd;">Secret Chat PIN Lock</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Protect this private chat with a PIN</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" onclick="document.getElementById('nx-global-modal').style.display='none'; if(window.NexusPower) NexusPower.toggleChatSearch();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(56,189,248,0.16);">🔍</span>
+                        <div>
+                            <div style="color:#e2e8f0;">Search in Chat &amp; 🎨 Wallpaper</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Find old messages instantly</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" onclick="document.getElementById('nx-global-modal').style.display='none'; if(window.NexusPower) NexusPower.openWallpaperPicker();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(168,85,247,0.18);">🎨</span>
+                        <div>
+                            <div style="color:#d8b4fe;">Change 1:1 Chat Wallpaper</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">AMOLED, Cyberpunk, Emerald &amp; Galaxy themes</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" onclick="document.getElementById('nx-global-modal').style.display='none'; if(window.NexusDM && NexusDM.exportCurrentChatTxt) NexusDM.exportCurrentChatTxt();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(16,185,129,0.18);">📥</span>
+                        <div>
+                            <div style="color:#34d399;">Export Chat Backup (.txt)</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Download full conversation as a text file</div>
+                        </div>
+                    </button>
+
                     <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(239,68,68,0.4);" onclick="window.clearCurrent1v1DmHistory();">
                         <span class="nx-pro-dots-icon" style="background:rgba(239,68,68,0.18);">🧹</span>
                         <div>
@@ -594,6 +708,7 @@
                 </div>
             </div>
         `;
+        modal.style.zIndex = '272000';
         modal.style.display = 'flex';
     }
 
@@ -645,46 +760,78 @@
                         </div>
                     </button>
 
-                    <button type="button" class="nx-pro-dots-btn" onclick="document.getElementById('nx-global-modal').style.display='none'; if(window.NexusVoice && NexusVoice.startRec) NexusVoice.startRec('group');">
+                    <button type="button" class="nx-pro-dots-btn" onclick="document.getElementById('nx-global-modal').style.display='none'; if(window.NexusVoice && NexusVoice.startRec) NexusVoice.startRec('group'); else if(window.NexusSuperChat) NexusSuperChat.toggleGroupVoiceRecording();">
                         <span class="nx-pro-dots-icon" style="background:rgba(251,191,36,0.18);">🎙️</span>
                         <div>
                             <div style="color:#fde047;">Record Group Voice Note (1x/1.5x/2x)</div>
                             <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Send audio note to group</div>
                         </div>
                     </button>
+
+                    <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(251,191,36,0.4);" onclick="document.getElementById('nx-global-modal').style.display='none'; if(window.NexusSuperChat) NexusSuperChat.openGroupPollModal();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(251,191,36,0.18);">📊</span>
+                        <div>
+                            <div style="color:#fde047;">Create Live Group Poll</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Vote live inside this channel</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(168,85,247,0.4);" onclick="document.getElementById('nx-global-modal').style.display='none'; if(window.NexusAdvance && NexusAdvance.openLiveGameModal) NexusAdvance.openLiveGameModal(false, 1);">
+                        <span class="nx-pro-dots-icon" style="background:rgba(168,85,247,0.18);">🎮</span>
+                        <div>
+                            <div style="color:#d8b4fe;">Group 2-Player Game Arena (3 Tables)</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Play Tic-Tac-Toe live with members</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" onclick="document.getElementById('nx-global-modal').style.display='none'; if(window.NexusAdvance && NexusAdvance.openPasswordLockComposer) NexusAdvance.openPasswordLockComposer(false);">
+                        <span class="nx-pro-dots-icon" style="background:rgba(250,204,21,0.16);">🔑</span>
+                        <div>
+                            <div style="color:#fde047;">Send Password-Locked Secret</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Only members with the password can unlock</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" onclick="document.getElementById('nx-global-modal').style.display='none'; if(window.NexusSuperChat) NexusSuperChat.openLiveSketchpadModal(false);">
+                        <span class="nx-pro-dots-icon" style="background:rgba(16,185,129,0.18);">🎨</span>
+                        <div>
+                            <div style="color:#34d399;">Formula Whiteboard &amp; Sketchpad</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Draw math/physics diagrams with Eraser &amp; Undo</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" onclick="document.getElementById('nx-global-modal').style.display='none'; if(window.NexusChat && NexusChat.toggleGroupSearch) NexusChat.toggleGroupSearch(true);">
+                        <span class="nx-pro-dots-icon" style="background:rgba(56,189,248,0.16);">🔍</span>
+                        <div>
+                            <div style="color:#93c5fd;">Search Group Messages</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Filter room messages instantly</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" onclick="document.getElementById('nx-global-modal').style.display='none'; if(window.NexusSuperChat) NexusSuperChat.pinGroupAnnouncementPrompt();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(16,185,129,0.16);">📌</span>
+                        <div>
+                            <div style="color:#5eead4;">Pin Announcement to Group Top</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Highlight an important study notice</div>
+                        </div>
+                    </button>
                 </div>
             </div>
         `;
+        modal.style.zIndex = '272000';
         modal.style.display = 'flex';
     }
 
-    function bindThreeDotsButtonsEverywhere() {
+    function bindThreeDotsButtonsEverywhere(forceRun) {
+        if (!forceRun && isTypingOrHidden()) return;
         watchIncomingGameBannerInChat();
         if (window.NexusSuperChat) NexusSuperChat.openGroupDotsMenu = openUnifiedGroupThreeDotsMenu;
         if (window.NexusPower) {
+            NexusPower.openCleanHeaderMenu = openUnifiedDmThreeDotsMenu;
             NexusPower.openDmHeaderMenu = openUnifiedDmThreeDotsMenu;
             NexusPower.openDmDotsMenu = openUnifiedDmThreeDotsMenu;
         }
         if (window.NexusDM) NexusDM.openChatMenu = openUnifiedDmThreeDotsMenu;
-
-        const dmRoot = document.getElementById('nx-dm-dedicated-root');
-        if (dmRoot) {
-            dmRoot.querySelectorAll('button').forEach(btn => {
-                let txt = (btn.innerText || '').trim();
-                let oc = btn.getAttribute('onclick') || '';
-                if (txt === '⋮' || txt === '•••' || oc.includes('openDmHeaderMenu') || oc.includes('openChatMenu') || oc.includes('openDmDotsMenu')) {
-                    if (!btn.getAttribute('data-nx-dots-bound')) {
-                        btn.setAttribute('data-nx-dots-bound', '1');
-                        btn.removeAttribute('onclick');
-                        btn.onclick = (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            openUnifiedDmThreeDotsMenu();
-                        };
-                    }
-                }
-            });
-        }
     }
 
     window.NexusDotsMenu = {
@@ -692,7 +839,7 @@
         openGroupMenu: openUnifiedGroupThreeDotsMenu
     };
 
-    setInterval(bindThreeDotsButtonsEverywhere, 700);
-    setTimeout(bindThreeDotsButtonsEverywhere, 120);
+    setInterval(() => bindThreeDotsButtonsEverywhere(false), 3000);
+    setTimeout(() => bindThreeDotsButtonsEverywhere(true), 250);
 })();
 // === END OF DOTSMENU.JS ===
