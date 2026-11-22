@@ -1,6 +1,16 @@
 // ================= ADVANCE.JS: ⋮ MENU VOICE & VIDEO CALL + 🔍 1-FINGER DRAG/PAN PHOTO ZOOM + ▶️ IN-APP YOUTUBE TV WITH UP-NEXT FEED + ⚡ GROUP FAST LOAD + 🛡️ ANTI-MISCLICK SWIPE + 🤝 PARTNER TEST SERIES PORTAL + 👑 100% NEXUS BRANDING =================
 
 (function() {
+    if (window.__NEXUS_ADVANCE_FIXED_V2__) return;
+    window.__NEXUS_ADVANCE_FIXED_V2__ = true;
+    const escHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const isTypingOrHidden = () => {
+        if (document.visibilityState === 'hidden') return true;
+        const ae = document.activeElement;
+        if (!ae) return false;
+        const t = (ae.tagName || '').toUpperCase();
+        return t === 'INPUT' || t === 'TEXTAREA' || ae.isContentEditable === true;
+    };
     let activeGameUnsub = null;
     let currentSelectedTable = 1;
     let currentGameIsDm = false;
@@ -23,7 +33,11 @@
     const RTC_SERVERS = {
         iceServers: [
             { urls: "stun:stun.l.google.com:19302" },
-            { urls: "stun:stun1.l.google.com:19302" }
+            { urls: "stun:stun1.l.google.com:19302" },
+            { urls: "stun:stun.cloudflare.com:3478" },
+            { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+            { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+            { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" }
         ]
     };
 
@@ -39,10 +53,7 @@
             padding-bottom: 6px !important;
             justify-content: flex-start !important;
         }
-        #nx-chat-room, #nx-dm-dedicated-root {
-            height: 100dvh !important;
-            max-height: 100dvh !important;
-        }
+        /* FIXED: Removed height:100dvh !important override so visualViewport keyboard resize works in dm.js & chat.js! */
         @keyframes nxShineGlow {
             0% { background-position: 0% 50%; box-shadow: 0 0 15px rgba(250, 204, 21, 0.45); }
             50% { background-position: 100% 50%; box-shadow: 0 0 28px rgba(16, 185, 129, 0.85); }
@@ -203,8 +214,11 @@
     `;
     document.head.appendChild(advStyle);
 
-    // 1. SCRUB ANY "WHATSAPP" TEXT & REPLACE WITH "NEXUS OFFICIAL" ACROSS ENTIRE APP
+    // 1. ONE-TIME BRANDING SCRUB (FIXED: Never runs inside setInterval loop!)
+    let __nxBrandingScrubbed = false;
     function enforceNexusOfficialBranding() {
+        if (__nxBrandingScrubbed) return;
+        __nxBrandingScrubbed = true;
         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
         let node;
         while ((node = walker.nextNode())) {
@@ -228,6 +242,13 @@
         let scale = 1, panX = 0, panY = 0;
         let isDragging = false, startX = 0, startY = 0;
         let initialPinchDist = 0, initialPinchScale = 1;
+        window.addEventListener('mousemove', e => {
+            if (!isDragging || scale <= 1) return;
+            panX = e.clientX - startX;
+            panY = e.clientY - startY;
+            updateImgTransform();
+        });
+        window.addEventListener('mouseup', () => { isDragging = false; });
 
         function updateImgTransform() {
             const imgEl = document.getElementById('nx-lightbox-img-el');
@@ -242,7 +263,7 @@
             if (!lb) {
                 lb = document.createElement('div');
                 lb.id = 'nx-pro-lightbox';
-                lb.style.cssText = "position:fixed; inset:0; background:rgba(2,6,23,0.97); z-index:100095; display:none; flex-direction:column; justify-content:space-between; padding:14px; user-select:none; touch-action:none; overflow:hidden;";
+                lb.style.cssText = "position:fixed; inset:0; background:rgba(2,6,23,0.97); z-index:296000; display:none; flex-direction:column; justify-content:space-between; padding:14px; user-select:none; touch-action:none; overflow:hidden;";
                 document.body.appendChild(lb);
             }
 
@@ -309,13 +330,7 @@
                 startX = e.clientX - panX;
                 startY = e.clientY - panY;
             });
-            window.addEventListener('mousemove', e => {
-                if (!isDragging || scale <= 1) return;
-                panX = e.clientX - startX;
-                panY = e.clientY - startY;
-                updateImgTransform();
-            });
-            window.addEventListener('mouseup', () => { isDragging = false; });
+            // Mousemove/mouseup bound once at installer init (zero memory leak)
 
             let lastTap = 0;
             stage.addEventListener('click', e => {
@@ -587,6 +602,12 @@
                             <button type="button" class="nx-menu-opt-btn" style="color:#fbbf24;" onclick="document.getElementById('nx-global-modal').style.display='none'; NexusSuperChat.openGroupPollModal();">
                                 <span>\u{1F4CA}</span> <span>Create Live Group Poll</span>
                             </button>
+                            <button type="button" class="nx-menu-opt-btn" style="color:#a78bfa; border-color:rgba(167,139,250,0.4);" onclick="document.getElementById('nx-global-modal').style.display='none'; NexusAdvance.openLiveGameModal(false, 1);">
+                                <span>\u{1F3AE}</span> <span>2-Player Live Game Arena (3 Tables)</span>
+                            </button>
+                            <button type="button" class="nx-menu-opt-btn" style="color:#fde047; border-color:rgba(250,204,21,0.4);" onclick="document.getElementById('nx-global-modal').style.display='none'; NexusAdvance.openPasswordLockComposer(false);">
+                                <span>\u{1F511}</span> <span>Send Password-Locked Secret</span>
+                            </button>
                             <button type="button" class="nx-menu-opt-btn" style="color:#34d399;" onclick="document.getElementById('nx-global-modal').style.display='none'; NexusSuperChat.openLiveSketchpadModal(false);">
                                 <span>\u{1F3A8}</span> <span>Open Formula Whiteboard / Sketch</span>
                             </button>
@@ -650,25 +671,7 @@
             });
         }
 
-        const dir = document.getElementById('nx-chat-directory');
-        if (dir && !document.getElementById('nx-partner-test-banner')) {
-            const banner = document.createElement('div');
-            banner.id = 'nx-partner-test-banner';
-            banner.style.cssText = "margin-bottom:12px;";
-            banner.innerHTML = `
-                <div onclick="NexusAdvance.openPartnerTestPortal()" style="background:linear-gradient(135deg, rgba(56,189,248,0.18), rgba(16,185,129,0.18)); border:1.5px solid #38bdf8; border-radius:16px; padding:11px 14px; display:flex; align-items:center; justify-content:space-between; cursor:pointer;">
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <div style="width:40px; height:40px; border-radius:12px; background:#38bdf8; color:#020617; display:flex; align-items:center; justify-content:center; font-size:19px; font-weight:900;">\u{1F4DD}</div>
-                        <div>
-                            <div style="font-weight:800; font-size:13.5px; color:#f8fafc;">Live JEE &amp; Student Test Series</div>
-                            <div style="font-size:11px; color:#93c5fd;">Daily Live Mock Tests \u2022 Partner Collaboration Hub</div>
-                        </div>
-                    </div>
-                    <span style="background:#38bdf8; color:#020617; padding:5px 10px; border-radius:12px; font-size:11px; font-weight:900;">Start Test \u2192</span>
-                </div>
-            `;
-            dir.insertBefore(banner, dir.firstChild);
-        }
+        // FIXED: Removed hidden duplicate #nx-partner-test-banner (chat.js already provides the Live Test Series button cleanly!)
     }
 
     // 8. NEXUS OFFICIAL GROUP VOICE CALL BAR
@@ -816,9 +819,10 @@
         isInGroupVoiceChat = false;
         isGroupMicMuted = false;
         if (grpLocalStream) {
-            grpLocalStream.getTracks().forEach(t => t.stop());
+            grpLocalStream.getTracks().forEach(t => { try { t.enabled = false; t.stop(); } catch (e) {} });
             grpLocalStream = null;
         }
+        if (typeof window.forceReleaseAllMicAndCamera === 'function') window.forceReleaseAllMicAndCamera();
         Object.values(grpPeerConnections).forEach(pc => {
             try { pc.close(); } catch (e) {}
         });
@@ -844,7 +848,13 @@
     }
 
     function parseSpecialAdvanceMessages() {
-        document.querySelectorAll('#nx-dm-msgs-box span, #nx-room-messages span').forEach(sp => {
+        const dmRoot = document.getElementById('nx-dm-dedicated-root');
+        const grpRoot = document.getElementById('nx-chat-room');
+        const dmOpen = dmRoot && dmRoot.style.display !== 'none';
+        const grpOpen = grpRoot && grpRoot.style.display !== 'none';
+        if (!dmOpen && !grpOpen) return;
+        const sel = (dmOpen && grpOpen) ? '#nx-dm-msgs-box span, #nx-room-messages span' : (dmOpen ? '#nx-dm-msgs-box span' : '#nx-room-messages span');
+        document.querySelectorAll(sel).forEach(sp => {
             let txt = sp.innerText || '';
             if (txt.startsWith('📞VCALL|') && !sp.getAttribute('data-vc-parsed')) {
                 sp.setAttribute('data-vc-parsed', '1');
@@ -942,7 +952,7 @@
             if (!portal) {
                 portal = document.createElement('div');
                 portal.id = 'nx-partner-collab-portal';
-                portal.style.cssText = "position:fixed; inset:0; background:#090d16; z-index:100098; display:flex; flex-direction:column;";
+                portal.style.cssText = "position:fixed; inset:0; background:#090d16; z-index:288000; display:flex; flex-direction:column;";
                 document.body.appendChild(portal);
             }
 
@@ -1068,10 +1078,17 @@
             `).join('');
         },
 
-        // 📹 NEXUS OFFICIAL LIVE VIDEO CALL (Camera Switch + Mic Toggle)
-        startVideoCall: async function() {
+        // 📹 NEXUS OFFICIAL LIVE VIDEO CALL (Delegates to Real 2-Way WebRTC in settings.js when available!)
+        startVideoCall: async function(isDm) {
             let me = Nexus.getCurrentUser();
             if (!me) return;
+            if (typeof window.startNexusProCall === 'function') {
+                const partner = isDm
+                    ? ((window.NexusDM && NexusDM.activePartner) || window.currentChatUser || 'partner')
+                    : ('group_' + getGroupSlug());
+                window.startNexusProCall(partner, true);
+                return;
+            }
             const modal = document.getElementById('nx-global-modal');
             if (!modal) return;
 
@@ -1155,11 +1172,181 @@
         leaveGroupVoiceChat: function() {
             leaveGroupVoiceInternal(true);
             Nexus.toast("\u{1F4F4} Left Nexus Voice Call");
+        },
+
+        // 🔑 WORKING PASSWORD-LOCKED SECRET MESSAGE (Previously missing & crashed on tap!)
+        openPasswordLockComposer: function(isDm) {
+            const modal = document.getElementById('nx-global-modal');
+            if (!modal) return;
+            modal.style.zIndex = '274000';
+            modal.innerHTML = `
+                <div class="nx-modal-box" style="border:1.5px solid #fbbf24;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <strong style="color:#fbbf24; font-size:15px;">🔑 Send Password-Locked Secret</strong>
+                        <button type="button" onclick="document.getElementById('nx-global-modal').style.display='none'" style="background:none; border:none; color:#94a3b8; font-size:17px; cursor:pointer;">✕</button>
+                    </div>
+                    <input type="text" id="nx-pl-hint" placeholder="Password Hint (e.g. My birthday / Roll no)" style="width:100%; padding:9px 11px; border-radius:10px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; margin-bottom:8px; outline:none;">
+                    <input type="password" id="nx-pl-pass" placeholder="Secret Password (min 3 chars)" style="width:100%; padding:9px 11px; border-radius:10px; background:#090d16; border:1px solid #fbbf24; color:#fff; font-size:13px; margin-bottom:8px; outline:none;">
+                    <textarea id="nx-pl-msg" rows="3" placeholder="Write secret message here..." style="width:100%; padding:9px 11px; border-radius:10px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; margin-bottom:10px; outline:none; resize:none;"></textarea>
+                    <button type="button" id="nx-pl-send-btn" style="width:100%; padding:11px; border-radius:11px; background:#fbbf24; color:#020617; font-weight:900; font-size:13.5px; border:none; cursor:pointer;">🔒 Lock &amp; Send Secret</button>
+                </div>
+            `;
+            modal.style.display = 'flex';
+            modal.querySelector('#nx-pl-send-btn').onclick = () => {
+                const hint = (modal.querySelector('#nx-pl-hint').value || 'Secret').replace(/\|/g, ' ').trim();
+                const pass = (modal.querySelector('#nx-pl-pass').value || '').trim();
+                const msg = (modal.querySelector('#nx-pl-msg').value || '').trim();
+                if (pass.length < 3 || !msg) return Nexus.toast('⚠️ Password (3+ chars) aur secret message likhein!');
+                const encPass = btoa(unescape(encodeURIComponent(pass)));
+                const encMsg = btoa(unescape(encodeURIComponent(msg)));
+                const payload = `🔑PASSLOCK|${hint}|${encPass}|${encMsg}`;
+                modal.style.display = 'none';
+                if (isDm && window.NexusDM) {
+                    const inp = document.getElementById('nx-dm-input');
+                    if (inp) { inp.value = payload; NexusDM.sendDM(); }
+                } else if (window.NexusChat) {
+                    const inp = document.getElementById('nx-chat-msg-in');
+                    if (inp) { inp.value = payload; NexusChat.sendChatMessage(); }
+                }
+                Nexus.toast('🔑 Password-Locked Secret Sent!');
+            };
+        },
+
+        unlockPasswordMessage: function(encPass, encMsg) {
+            let realPass = '', realMsg = '';
+            try { realPass = decodeURIComponent(escape(atob(encPass))); } catch (e) { realPass = encPass; }
+            try { realMsg = decodeURIComponent(escape(atob(encMsg))); } catch (e) { realMsg = encMsg; }
+            const entered = prompt('🔑 Enter Secret Password to Unlock this message:');
+            if (entered === null) return;
+            if (entered.trim() !== realPass) {
+                Nexus.toast('❌ Wrong Password!');
+                return;
+            }
+            const modal = document.getElementById('nx-global-modal');
+            if (!modal) return alert('🔓 Unlocked Secret:\n' + realMsg);
+            modal.style.zIndex = '274000';
+            modal.innerHTML = `
+                <div class="nx-modal-box" style="border:2px solid #10b981; text-align:center;">
+                    <div style="font-size:28px; margin-bottom:6px;">🔓</div>
+                    <h3 style="font-size:15.5px; color:#34d399; margin-bottom:10px;">Unlocked Secret Message</h3>
+                    <div style="background:#090d16; border:1px solid #334155; padding:14px; border-radius:12px; color:#f8fafc; font-size:14.5px; line-height:1.5; white-space:pre-wrap; word-break:break-word; margin-bottom:14px;">${escHtml(realMsg)}</div>
+                    <button type="button" onclick="document.getElementById('nx-global-modal').style.display='none'" style="width:100%; background:#10b981; color:#020617; border:none; padding:10px; border-radius:11px; font-weight:900; cursor:pointer;">Close</button>
+                </div>
+            `;
+            modal.style.display = 'flex';
+        },
+
+        // 🎮 WORKING LIVE 2-PLAYER TIC-TAC-TOE ARENA (3 Tables — Previously missing & crashed on tap!)
+        openLiveGameModal: function(isDm, tableNum) {
+            const me = Nexus.getCurrentUser();
+            if (!me || !Nexus.db) return Nexus.toast('⚠️ Login required for Live Game Arena!');
+            currentGameIsDm = Boolean(isDm);
+            currentSelectedTable = Number(tableNum || 1);
+            const partner = (window.NexusDM && NexusDM.activePartner) || window.currentChatUser || 'friend';
+            currentBaseGameId = currentGameIsDm
+                ? 'dm_' + [me.username.toLowerCase(), String(partner).toLowerCase()].sort().join('__')
+                : 'grp_' + getGroupSlug();
+
+            const modal = document.getElementById('nx-global-modal');
+            if (!modal) return;
+            modal.style.zIndex = '274000';
+
+            const bindTable = (tNum) => {
+                currentSelectedTable = tNum;
+                if (activeGameUnsub) { activeGameUnsub(); activeGameUnsub = null; }
+                const docId = `${currentBaseGameId}_t${tNum}`;
+                const docRef = Nexus.db.collection('nexus_live_games').doc(docId);
+
+                activeGameUnsub = docRef.onSnapshot(snap => {
+                    const g = (snap.exists && snap.data()) || { board: Array(9).fill(''), turn: 'X', pX: '', pO: '', winner: '', winLine: [] };
+                    const board = Array.isArray(g.board) && g.board.length === 9 ? g.board : Array(9).fill('');
+                    const myU = me.username.toLowerCase();
+                    const amX = g.pX === myU, amO = g.pO === myU;
+                    const mySym = amX ? 'X' : (amO ? 'O' : '');
+                    const isMyTurn = !g.winner && ((g.turn === 'X' && (amX || !g.pX)) || (g.turn === 'O' && (amO || (!g.pO && !amX))));
+
+                    const statusHtml = g.winner
+                        ? `<div class="nx-shining-winner-board">${g.winner === 'DRAW' ? '🤝 Match Drawn!' : `🏆 Winner: ${g.winner === 'X' ? ('@' + (g.pX || 'X')) : ('@' + (g.pO || 'O'))} (${g.winner})!`}</div>`
+                        : `<div class="${isMyTurn ? 'nx-turn-pill-my' : 'nx-turn-pill-wait'}">${isMyTurn ? `⚡ Your Turn (${mySym || g.turn})! Tap any empty box` : `⏳ Waiting for ${g.turn === 'X' ? ('@' + (g.pX || 'Player X')) : ('@' + (g.pO || 'Player O'))}...`}</div>`;
+
+                    modal.innerHTML = `
+                        <div class="nx-modal-box" style="border:1.5px solid #10b981; max-width:360px; text-align:center;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                <strong style="color:#34d399; font-size:15px;">🎮 Nexus Live Tic-Tac-Toe</strong>
+                                <button type="button" id="nx-game-close-x" style="background:#1e293b; border:none; color:#cbd5e1; width:28px; height:28px; border-radius:50%; cursor:pointer;">✕</button>
+                            </div>
+                            <div style="display:flex; gap:6px; margin-bottom:10px;">
+                                ${[1, 2, 3].map(n => `<button type="button" data-gtbl="${n}" class="nx-table-chip ${n === currentSelectedTable ? 'active' : ''}">Table #${n}</button>`).join('')}
+                            </div>
+                            ${statusHtml}
+                            <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px;">
+                                ${board.map((val, idx) => {
+                                    const isWin = Array.isArray(g.winLine) && g.winLine.includes(idx);
+                                    const col = val === 'X' ? '#38bdf8' : (val === 'O' ? '#f43f5e' : '#f8fafc');
+                                    return `<button type="button" data-gcell="${idx}" class="nx-ttt-cell ${isWin ? 'win-cell' : ''}" style="color:${col};">${val}</button>`;
+                                }).join('')}
+                            </div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                                <button type="button" id="nx-game-invite-btn" style="padding:9px; border-radius:10px; background:#38bdf8; color:#020617; font-weight:900; font-size:12px; border:none; cursor:pointer;">📤 Invite in Chat</button>
+                                <button type="button" id="nx-game-reset-btn" style="padding:9px; border-radius:10px; background:#1e293b; color:#fbbf24; border:1px solid #334155; font-weight:800; font-size:12px; cursor:pointer;">🔄 New Match</button>
+                            </div>
+                        </div>
+                    `;
+                    modal.style.display = 'flex';
+
+                    modal.querySelector('#nx-game-close-x').onclick = () => {
+                        if (activeGameUnsub) { activeGameUnsub(); activeGameUnsub = null; }
+                        modal.style.display = 'none';
+                    };
+                    modal.querySelectorAll('[data-gtbl]').forEach(b => {
+                        b.onclick = () => bindTable(Number(b.getAttribute('data-gtbl')));
+                    });
+                    modal.querySelector('#nx-game-reset-btn').onclick = () => {
+                        docRef.set({ board: Array(9).fill(''), turn: 'X', pX: '', pO: '', winner: '', winLine: [], updatedAt: Date.now() });
+                    };
+                    modal.querySelector('#nx-game-invite-btn').onclick = () => {
+                        const inviteCode = `🎮GAME|${currentSelectedTable}|${me.username}|${currentGameIsDm ? '1' : '0'}`;
+                        if (currentGameIsDm && window.NexusDM) {
+                            const inp = document.getElementById('nx-dm-input');
+                            if (inp) { inp.value = inviteCode; NexusDM.sendDM(); }
+                        } else if (window.NexusChat) {
+                            const inp = document.getElementById('nx-chat-msg-in');
+                            if (inp) { inp.value = inviteCode; NexusChat.sendChatMessage(); }
+                        }
+                        Nexus.toast(`🎮 Challenge sent for Table #${currentSelectedTable}!`);
+                    };
+                    modal.querySelectorAll('[data-gcell]').forEach(cell => {
+                        cell.onclick = () => {
+                            const idx = Number(cell.getAttribute('data-gcell'));
+                            if (g.winner || board[idx] || !isMyTurn) return;
+                            const nextBoard = [...board];
+                            const sym = g.turn === 'X' ? 'X' : 'O';
+                            const nextPX = g.pX || (sym === 'X' ? myU : '');
+                            const nextPO = g.pO || (sym === 'O' ? myU : '');
+                            nextBoard[idx] = sym;
+                            const wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+                            let winner = '', winLine = [];
+                            for (const ln of wins) {
+                                if (nextBoard[ln[0]] && nextBoard[ln[0]] === nextBoard[ln[1]] && nextBoard[ln[1]] === nextBoard[ln[2]]) {
+                                    winner = nextBoard[ln[0]]; winLine = ln; break;
+                                }
+                            }
+                            if (!winner && nextBoard.every(Boolean)) winner = 'DRAW';
+                            docRef.set({
+                                board: nextBoard, turn: sym === 'X' ? 'O' : 'X',
+                                pX: nextPX, pO: nextPO, winner, winLine, updatedAt: Date.now()
+                            });
+                        };
+                    });
+                });
+            };
+            bindTable(currentSelectedTable);
         }
     };
 
-    function runAdvanceLoop() {
-        enforceNexusOfficialBranding();
+    function runAdvanceLoop(isBoot) {
+        if (!isBoot && isTypingOrHidden()) return;
+        if (isBoot) enforceNexusOfficialBranding();
         installDraggablePanZoomPhotoViewer();
         installStrictAntiMisclickSwipe();
         enforceFastWindowedGroupChat();
@@ -1170,9 +1357,12 @@
         parseSpecialAdvanceMessages();
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-        runAdvanceLoop();
-        setInterval(runAdvanceLoop, 700);
-    });
-    setTimeout(runAdvanceLoop, 250);
+    function bootAdvanceOnce() {
+        if (window.__nxAdvanceBooted) return;
+        window.__nxAdvanceBooted = true;
+        setTimeout(() => runAdvanceLoop(true), 450);
+        setInterval(() => runAdvanceLoop(false), 3000);
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootAdvanceOnce);
+    else bootAdvanceOnce();
 })();
