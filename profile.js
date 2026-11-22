@@ -33,6 +33,52 @@
         else if (window.Nexus && Nexus.toast) Nexus.toast('⏳ Login system load ho raha hai, 1 second baad tap karein...');
     };
 
+    // UNIVERSAL DUAL-CLOUD WRITE HELPERS (Supabase posts `sb_*` -> Supabase; Legacy Firebase posts -> Firebase)
+    function getDualSbClient() {
+        return (window.NexusSecurity && window.NexusSecurity.sb) || (window.Nexus && Nexus.getSbClient && Nexus.getSbClient()) || null;
+    }
+    async function persistDualPostUpdate(postObj, fbFields, sbFields) {
+        if (!postObj || !postObj.id) return;
+        const pid = String(postObj.id);
+        const isSb = pid.startsWith("sb_") || Boolean(postObj.sbRawId);
+        if (isSb) {
+            const sbC = getDualSbClient();
+            const rawId = postObj.sbRawId || pid.replace(/^sb_/, "");
+            if (sbC && sbFields && rawId) {
+                await sbC.from("posts").update(sbFields).eq("id", rawId).catch(() => {});
+            }
+        } else if (window.Nexus && Nexus.db && fbFields) {
+            await Nexus.db.collection("nexus_real_posts").doc(pid).set(fbFields, { merge: true }).catch(() => {});
+        }
+    }
+    async function deleteDualPostCloud(postObj) {
+        if (!postObj || !postObj.id) return;
+        const pid = String(postObj.id);
+        const isSb = pid.startsWith("sb_") || Boolean(postObj.sbRawId);
+        if (isSb) {
+            const sbC = getDualSbClient();
+            const rawId = postObj.sbRawId || pid.replace(/^sb_/, "");
+            if (sbC && rawId) await sbC.from("posts").delete().eq("id", rawId).catch(() => {});
+            if (window.Nexus && Array.isArray(Nexus._sbPosts)) Nexus._sbPosts = Nexus._sbPosts.filter((x) => x && x.id !== pid);
+        } else if (window.Nexus && Nexus.db) {
+            await Nexus.db.collection("nexus_real_posts").doc(pid).delete().catch(() => {});
+            if (window.Nexus && Array.isArray(Nexus._fbPosts)) Nexus._fbPosts = Nexus._fbPosts.filter((x) => x && x.id !== pid);
+        }
+    }
+    async function syncFollowListsDualCloud(myU, myFollowing, targetU, targetFollowers) {
+        const ops = [];
+        const sbC = getDualSbClient();
+        if (sbC) {
+            ops.push(sbC.from("profiles").update({ following_list: myFollowing }).eq("username", myU).catch(() => {}));
+            ops.push(sbC.from("profiles").update({ followers_list: targetFollowers }).eq("username", targetU).catch(() => {}));
+        }
+        if (window.Nexus && Nexus.db) {
+            ops.push(Nexus.db.collection("nexus_accounts").doc(targetU).set({ followersList: targetFollowers }, { merge: true }).catch(() => {}));
+            ops.push(Nexus.db.collection("nexus_accounts").doc(myU).set({ followingList: myFollowing }, { merge: true }).catch(() => {}));
+        }
+        await Promise.allSettled(ops);
+    }
+
     document.getElementById("nx-all-groups-hub")?.remove();
     document.getElementById("nx-group-chat-fullscreen")?.remove();
     document.getElementById("nx-missing-posts-restorer-box")?.remove();
@@ -756,17 +802,7 @@
             viewedArr.push(myKey);
             postObj.viewedBy = viewedArr;
             postObj.views = Math.max(Number(postObj.views || 0) + 1, viewedArr.length);
-            if (pid.startsWith("sb_")) {
-                if (window.NexusSecurity && window.NexusSecurity.sb && postObj.sbId) {
-                    window.NexusSecurity.sb.from("posts").update({ views_count: postObj.views }).eq("id", postObj.sbId).then(() => {});
-                }
-            } else if (window.Nexus && Nexus.db) {
-                await Nexus.db
-                    .collection("nexus_real_posts")
-                    .doc(pid)
-                    .set({ viewedBy: viewedArr, views: postObj.views }, { merge: true })
-                    .catch(() => {});
-            }
+            await persistDualPostUpdate(postObj, { viewedBy: viewedArr, views: postObj.views }, { views_count: postObj.views });
         }
     }
 
@@ -908,9 +944,7 @@
                 p.likedBy = arr;
                 renderLightboxUI();
                 renderCleanZeroOverlapHomeFeed(true);
-                if (window.Nexus && Nexus.db && p.id) {
-                    await Nexus.db.collection("nexus_real_posts").doc(p.id).set({ likedBy: arr, likes: p.likes }, { merge: true }).catch(() => {});
-                }
+                await persistDualPostUpdate(p, { likedBy: arr, likes: p.likes }, { likes_list: arr });
             };
 
             const stageEl = overlay.querySelector("#nx-lb-stage");
@@ -1178,12 +1212,7 @@
                     crossSyncAllFollowersAndSongs();
                     renderConnectionsUI(sInp ? sInp.value : "");
 
-                    if (window.Nexus && Nexus.db) {
-                        await Promise.allSettled([
-                            Nexus.db.collection("nexus_accounts").doc(targetU).set({ followersList: tObj.followersList }, { merge: true }),
-                            Nexus.db.collection("nexus_accounts").doc(myK).set({ followingList: curMe.followingList }, { merge: true })
-                        ]);
-                    }
+                    await syncFollowListsDualCloud(myK, curMe.followingList, targetU, tObj.followersList);
                 };
             });
         };
@@ -1302,9 +1331,7 @@
                 btn.onclick = async () => {
                     const cIdx = Number(btn.getAttribute("data-del-cidx"));
                     postObj.comments.splice(cIdx, 1);
-                    if (window.Nexus && Nexus.db && postObj.id) {
-                        await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ comments: postObj.comments }, { merge: true }).catch(() => {});
-                    }
+                    await persistDualPostUpdate(postObj, { comments: postObj.comments }, { comments_list: postObj.comments });
                     renderCommentsContent();
                     if (onCommentChange) onCommentChange();
                 };
@@ -1337,9 +1364,7 @@
                 renderCommentsContent();
                 if (onCommentChange) onCommentChange();
 
-                if (window.Nexus && Nexus.db && postObj.id) {
-                    await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ comments: postObj.comments }, { merge: true }).catch(() => {});
-                }
+                await persistDualPostUpdate(postObj, { comments: postObj.comments }, { comments_list: postObj.comments });
             };
 
             cBtn.onclick = submitComment;
@@ -1718,9 +1743,7 @@
         if (isMyOwnPost) {
             sheet.querySelector("#nx-3d-pin").onclick = async () => {
                 postObj.pinned = !postObj.pinned;
-                if (window.Nexus && Nexus.db && postObj.id) {
-                    await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ pinned: postObj.pinned }, { merge: true }).catch(() => {});
-                }
+                await persistDualPostUpdate(postObj, { pinned: postObj.pinned }, { is_pinned: postObj.pinned });
                 sheet.remove();
                 renderCleanZeroOverlapHomeFeed(true);
                 if (onUpdateCallback) onUpdateCallback();
@@ -1744,9 +1767,7 @@
                         postObj.image = videoRef;
                         postObj.videoUrl = videoRef;
                         postObj.mediaType = "video";
-                        if (window.Nexus && Nexus.db && postObj.id) {
-                            await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ image: videoRef, videoUrl: videoRef, mediaType: "video" }, { merge: true }).catch(() => {});
-                        }
+                        await persistDualPostUpdate(postObj, { image: videoRef, videoUrl: videoRef, mediaType: "video" }, { image_url: videoRef, media_type: "video" });
                         renderCleanZeroOverlapHomeFeed(true);
                         if (onUpdateCallback) onUpdateCallback();
                         if (window.Nexus && Nexus.toast) Nexus.toast("🎬 Post Video Updated!");
@@ -1755,9 +1776,7 @@
                     Nexus.compressImage(file, 780, 0.72, async (b64) => {
                         postObj.image = b64;
                         postObj.mediaType = "image";
-                        if (window.Nexus && Nexus.db && postObj.id) {
-                            await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ image: b64, mediaType: "image" }, { merge: true }).catch(() => {});
-                        }
+                        await persistDualPostUpdate(postObj, { image: b64, mediaType: "image" }, { image_url: b64, media_type: "image" });
                         renderCleanZeroOverlapHomeFeed(true);
                         if (onUpdateCallback) onUpdateCallback();
                         if (window.Nexus && Nexus.toast) Nexus.toast("📸 Post Photo Updated!");
@@ -1770,9 +1789,7 @@
                 if (window.__nxMarkPostDeletedLocally && postObj.id) {
                     window.__nxMarkPostDeletedLocally(postObj.id);
                 }
-                if (window.Nexus && Nexus.db && postObj.id) {
-                    await Nexus.db.collection("nexus_real_posts").doc(postObj.id).delete().catch(() => {});
-                }
+                await deleteDualPostCloud(postObj);
                 sheet.remove();
                 document.getElementById("nx-scrollable-profile-feed-modal")?.remove();
                 renderCleanZeroOverlapHomeFeed(true);
@@ -1809,9 +1826,7 @@
             const newTxt = (modal.querySelector("#nx-new-cap-txt").value || "").trim();
             postObj.content = newTxt;
             postObj.text = newTxt;
-            if (window.Nexus && Nexus.db && postObj.id) {
-                await Nexus.db.collection("nexus_real_posts").doc(postObj.id).set({ content: newTxt, text: newTxt }, { merge: true }).catch(() => {});
-            }
+            await persistDualPostUpdate(postObj, { content: newTxt, text: newTxt }, { content: newTxt });
             modal.remove();
             renderCleanZeroOverlapHomeFeed(true);
             if (onUpdateCallback) onUpdateCallback();
@@ -2161,13 +2176,7 @@
                 p.likedBy = likedArr;
 
                 if (refreshViewFn) refreshViewFn();
-                if (window.Nexus && Nexus.db && p.id) {
-                    await Nexus.db
-                        .collection("nexus_real_posts")
-                        .doc(p.id)
-                        .set({ likedBy: likedArr, likes: p.likes }, { merge: true })
-                        .catch(() => {});
-                }
+                await persistDualPostUpdate(p, { likedBy: likedArr, likes: p.likes }, { likes_list: likedArr });
             };
         });
 
@@ -2661,12 +2670,7 @@
                 localStorage.setItem("nx_active_account", JSON.stringify(curMe));
                 crossSyncAllFollowersAndSongs();
 
-                if (window.Nexus && Nexus.db) {
-                    await Promise.allSettled([
-                        Nexus.db.collection("nexus_accounts").doc(targetKey).set({ followersList: userObj.followersList }, { merge: true }),
-                        Nexus.db.collection("nexus_accounts").doc(myK).set({ followingList: curMe.followingList }, { merge: true })
-                    ]);
-                }
+                await syncFollowListsDualCloud(myK, curMe.followingList, targetKey, userObj.followersList);
             };
 
             modal.querySelector("#nx-pub-msg-btn").onclick = () => {
