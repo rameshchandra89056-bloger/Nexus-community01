@@ -1,7 +1,22 @@
 // ================= FINAL POWER.JS: 📘 WELCOME GUIDE & ABOUT NEXUS + ➕ CLEAN BOTTOM TRAY + 🎵 FULL SONGS + 📞 CALL RINGTONE + 🛡️ ANTI-SCREENSHOT VIEW-ONCE + 🔍 PHOTO ZOOM + ⏳ VANISH MODE =================
 
 (function() {
+    if (window.__NEXUS_POWER_FIXED_V2__) return;
+    window.__NEXUS_POWER_FIXED_V2__ = true;
     let mediaRecorder = null;
+    const isUserTypingOrHidden = () => {
+        if (document.visibilityState === 'hidden') return true;
+        const ae = document.activeElement;
+        if (!ae) return false;
+        const t = (ae.tagName || '').toUpperCase();
+        return t === 'INPUT' || t === 'TEXTAREA' || ae.isContentEditable === true;
+    };
+    const isDndOrMuted = () => {
+        try {
+            const p = JSON.parse(localStorage.getItem('nx_ig_user_preferences_v1') || '{}');
+            return Boolean(p.dndMode === true || p.callRingtone === false);
+        } catch (e) { return false; }
+    };
     let audioChunks = [];
     let isRecordingVoice = false;
     let recordStartTime = 0;
@@ -45,6 +60,7 @@
 
     function startCallRingtone(isIncoming) {
         stopCallRingtone();
+        if (isIncoming && isDndOrMuted()) return;
         try {
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
             if (!ringAudioCtx) ringAudioCtx = new AudioCtx();
@@ -98,7 +114,11 @@
     const RTC_CONFIG = {
         iceServers: [
             { urls: "stun:stun.l.google.com:19302" },
-            { urls: "stun:stun1.l.google.com:19302" }
+            { urls: "stun:stun1.l.google.com:19302" },
+            { urls: "stun:stun.cloudflare.com:3478" },
+            { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+            { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+            { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" }
         ]
     };
 
@@ -255,7 +275,7 @@
             display: none;
             align-items: center;
             justify-content: space-between;
-            z-index: 100050;
+            z-index: 268000;
             box-shadow: 0 12px 30px rgba(0,0,0,0.85);
             color: white;
         }
@@ -332,7 +352,7 @@
         if (!lb) {
             lb = document.createElement('div');
             lb.id = 'nx-pro-lightbox';
-            lb.style.cssText = "position:fixed; inset:0; background:rgba(2,6,23,0.96); z-index:100090; display:none; flex-direction:column; justify-content:space-between; padding:14px; user-select:none;";
+            lb.style.cssText = "position:fixed; inset:0; background:rgba(2,6,23,0.96); z-index:295000; display:none; flex-direction:column; justify-content:space-between; padding:14px; user-select:none;";
             document.body.appendChild(lb);
         }
         return lb;
@@ -364,7 +384,7 @@
         if (!document.getElementById('nx-incoming-call-modal')) {
             const inc = document.createElement('div');
             inc.id = 'nx-incoming-call-modal';
-            inc.style.cssText = "position:fixed; inset:0; background:rgba(2,6,23,0.85); z-index:100060; display:none; align-items:center; justify-content:center; padding:18px;";
+            inc.style.cssText = "position:fixed; inset:0; background:rgba(2,6,23,0.85); z-index:292000; display:none; align-items:center; justify-content:center; padding:18px;";
             document.body.appendChild(inc);
         }
         if (!document.getElementById('nx-dm-doc-file-in')) {
@@ -383,19 +403,57 @@
         }
     }
 
-    function handleDirectFileUpload(file) {
+    async function handleDirectFileUpload(file) {
         if (!file) return;
-        if (file.size > 750 * 1024) {
-            Nexus.toast("⚠️ File size must be under 750 KB for fast cloud sync!");
-            return;
-        }
         let me = Nexus.getCurrentUser();
         if (!me || !currentChatPartnerUname || !Nexus.db) return;
+
+        const sizeLabel = file.size >= 1024 * 1024
+            ? (file.size / (1024 * 1024)).toFixed(1) + ' MB'
+            : Math.max(1, Math.round(file.size / 1024)) + ' KB';
+
+        // Prefer Permanent 50MB Supabase Storage when logged into Supabase!
+        if (window.NexusSecurity && typeof window.NexusSecurity.uploadPublicMedia === 'function') {
+            try {
+                const uid = await window.NexusSecurity.getAuthenticatedUserId();
+                if (uid && file.size <= 50 * 1024 * 1024) {
+                    Nexus.toast(`📂 Uploading "${file.name}" (${sizeLabel})...`);
+                    const up = await window.NexusSecurity.uploadPublicMedia(file, 'dm-files');
+                    if (up && up.publicUrl) {
+                        await Nexus.db.collection("nexus_private_dms").add({
+                            roomKey: currentActiveRoomKey,
+                            participants: [me.username.toLowerCase(), currentChatPartnerUname.toLowerCase()],
+                            fromUser: me.username,
+                            fromName: me.name,
+                            toUser: currentChatPartnerUname,
+                            text: `📄 ${file.name}`,
+                            fileData: up.publicUrl,
+                            fileName: file.name,
+                            fileSize: sizeLabel,
+                            imgUrl: "",
+                            sticker: null,
+                            replyTo: null,
+                            likes: [],
+                            seen: false,
+                            edited: false,
+                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                            createdAt: Date.now()
+                        });
+                        Nexus.toast("📂 File Sent Successfully (50MB Cloud)!");
+                        return;
+                    }
+                }
+            } catch (e) {}
+        }
+
+        if (file.size > 750 * 1024) {
+            Nexus.toast("⚠️ 750 KB+ files ke liye Supabase Login karein (50MB limit)!");
+            return;
+        }
 
         Nexus.toast(`📂 Uploading "${file.name}"...`);
         const reader = new FileReader();
         reader.onload = ev => {
-            let sizeKb = Math.max(1, Math.round(file.size / 1024)) + ' KB';
             Nexus.db.collection("nexus_private_dms").add({
                 roomKey: currentActiveRoomKey,
                 participants: [me.username.toLowerCase(), currentChatPartnerUname.toLowerCase()],
@@ -405,7 +463,7 @@
                 text: `📄 ${file.name}`,
                 fileData: ev.target.result,
                 fileName: file.name,
-                fileSize: sizeKb,
+                fileSize: sizeLabel,
                 imgUrl: "",
                 sticker: null,
                 replyTo: null,
@@ -419,43 +477,26 @@
         reader.readAsDataURL(file);
     }
 
-    // 2. NEW USER LOGIN ONBOARDING GUIDE + SETTINGS "WHAT IS NEXUS" BUTTON INJECTOR
+    // 2. NEW USER LOGIN ONBOARDING GUIDE + GROUP DJ FULL SONG UPGRADE (ZERO SETTINGS TAB OVERLAP!)
     function checkNewUserLoginGuideAndSettingsBtn() {
+        if (isUserTypingOrHidden()) return;
+
+        // Clean any old overlapping #nx-about-guide-btn-wrap injected above Settings header
+        document.getElementById('nx-about-guide-btn-wrap')?.remove();
+
         let me = window.Nexus && Nexus.getCurrentUser ? Nexus.getCurrentUser() : null;
         if (me && me.username) {
             let uKey = me.username.toLowerCase();
             if (lastCheckedLoggedUser !== uKey) {
                 lastCheckedLoggedUser = uKey;
                 let seenKey = 'nx_welcome_guide_seen_' + uKey;
-                if (!localStorage.getItem(seenKey)) {
+                if (!localStorage.getItem(seenKey) && !document.getElementById('nx-sb-auth-modal')) {
                     setTimeout(() => {
-                        if (window.NexusPower) NexusPower.openNexusGuideModal(true);
-                    }, 600);
+                        if (window.NexusPower && !document.getElementById('nx-sb-auth-modal')) {
+                            NexusPower.openNexusGuideModal(true);
+                        }
+                    }, 900);
                 }
-            }
-        }
-
-        // Inject "📘 What is Nexus? & All Features Guide" Button inside Settings Tab automatically!
-        const setTab = document.getElementById('tab-settings');
-        if (setTab && !document.getElementById('nx-about-guide-btn-wrap')) {
-            const firstCard = setTab.querySelector('div > div');
-            if (firstCard && firstCard.parentNode) {
-                const aboutWrap = document.createElement('div');
-                aboutWrap.id = 'nx-about-guide-btn-wrap';
-                aboutWrap.style.cssText = "background:linear-gradient(135deg,#0f172a,#1e1b4b); border:1.5px solid #38bdf8; border-radius:16px; padding:15px;";
-                aboutWrap.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                        <div>
-                            <h3 style="font-size:15.5px; color:#38bdf8; margin:0;">📘 What is Nexus? &amp; Features</h3>
-                            <p style="font-size:11.5px; color:#cbd5e1; margin:2px 0 0 0;">Know where every feature is &amp; how Nexus works</p>
-                        </div>
-                        <span style="font-size:22px;">🚀</span>
-                    </div>
-                    <button type="button" onclick="NexusPower.openNexusGuideModal(false)" style="width:100%; background:#38bdf8; color:#020617; border:none; padding:11px 14px; border-radius:12px; font-size:13px; font-weight:900; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
-                        <span>📖 Open Complete Nexus Guide &amp; About</span><span>→</span>
-                    </button>
-                `;
-                firstCard.parentNode.insertBefore(aboutWrap, firstCard);
             }
         }
 
@@ -590,9 +631,12 @@
             modal = document.createElement('div');
             modal.id = 'nx-msg-action-modal';
             modal.className = 'nx-msg-action-backdrop';
-            modal.style.cssText = "position:fixed; inset:0; background:rgba(2,6,23,0.82); z-index:100020; display:none; align-items:center; justify-content:center; padding:18px;";
+            modal.style.cssText = "position:fixed; inset:0; background:rgba(2,6,23,0.84); z-index:275000; display:none; align-items:center; justify-content:center; padding:18px; backdrop-filter:blur(4px);";
             modal.addEventListener('click', e => {
-                if (e.target === modal) modal.style.display = 'none';
+                if (e.target === modal) {
+                    if (modal.__cleanupVoTrap) { try { modal.__cleanupVoTrap(); } catch (err) {} modal.__cleanupVoTrap = null; }
+                    modal.style.display = 'none';
+                }
             });
             document.body.appendChild(modal);
         }
@@ -632,9 +676,15 @@
     // 3. ZERO-LAG WINDOWED DM ENGINE + CHAT PIN LOCK + VANISH AUTO-CLEANER
     function upgradeDmExperience() {
         if (!window.NexusDM) {
-            setTimeout(upgradeDmExperience, 200);
+            setTimeout(upgradeDmExperience, 250);
             return;
         }
+        // FIXED: Prevent double-wrapping NexusDM (previously prompted chat PIN twice!)
+        if (NexusDM.__nxPowerUpgradedV2) return;
+        NexusDM.__nxPowerUpgradedV2 = true;
+
+        // If Supabase v3 DM is active (has openViewOnce), only wrap PIN lock — do NOT overwrite Supabase listenToRoom/sendDM!
+        const isSupabaseDm = Boolean(typeof NexusDM.openViewOnce === 'function');
 
         const origOpenDirectChat = NexusDM.openDirectChat.bind(NexusDM);
         NexusDM.openDirectChat = function(partnerUsername, partnerName, partnerDp) {
@@ -650,6 +700,8 @@
             }
             origOpenDirectChat(partnerUsername, partnerName, partnerDp);
         };
+
+        if (isSupabaseDm) return;
 
         NexusDM.sendDM = function(customImgData, customStickerObj) {
             let me = Nexus.getCurrentUser();
@@ -1107,13 +1159,13 @@
         if (!root) return;
 
         const closeBtn = root.querySelector('button[onclick*="NexusDM.closeDM"]');
-        if (closeBtn && !document.getElementById('nx-dm-power-tools')) {
-            closeBtn.style.display = 'none';
+        const hasExistingDots = Array.from(root.querySelectorAll('button')).some(b => (b.textContent || '').trim() === '⋮');
+        if (closeBtn && !document.getElementById('nx-dm-power-tools') && !hasExistingDots) {
             const toolsWrap = document.createElement('div');
             toolsWrap.id = 'nx-dm-power-tools';
             toolsWrap.style.cssText = "display:flex; align-items:center; gap:6px; flex-shrink:0;";
             toolsWrap.innerHTML = `
-                <button type="button" onclick="NexusPower.openCleanHeaderMenu()" style="background:#2a3942; border:none; color:#e9edef; width:36px; height:36px; border-radius:50%; cursor:pointer; font-size:19px; font-weight:900; display:flex; align-items:center; justify-content:center;" title="All Chat Options">⋮</button>
+                <button type="button" onclick="NexusPower.openCleanHeaderMenu()" style="background:#2a3942; border:none; color:#e9edef; width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:18px; font-weight:900; display:flex; align-items:center; justify-content:center;" title="All Chat Options">⋮</button>
             `;
             closeBtn.parentNode.insertBefore(toolsWrap, closeBtn);
         }
@@ -1198,8 +1250,14 @@
             plusBtn.title = 'Open Nexus Action Hub';
             plusBtn.style.cssText = "width:30px; height:30px; border-radius:50%; background:rgba(0,168,132,0.18); border:1.5px solid #00a884; color:#00a884; font-size:18px; font-weight:900; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; transition:transform 0.2s ease;";
             plusBtn.innerText = '＋';
+            plusBtn.dataset.nxPowerPlus = '1';
             plusBtn.onclick = (e) => {
+                e.preventDefault();
                 e.stopPropagation();
+                if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+                // Close any competing index.html + popup sheet so trays NEVER overlap!
+                const otherSheet = document.getElementById('nx-whatsapp-plus-sheet');
+                if (otherSheet) otherSheet.style.display = 'none';
                 NexusPower.toggleBottomTray();
             };
             camBtn.parentNode.insertBefore(plusBtn, camBtn);
@@ -1284,6 +1342,7 @@
     }
 
     function showIncomingCallPopup(callId, data) {
+        if (isDndOrMuted()) return;
         if (currentCallDocId && currentCallDocId !== callId) return;
         currentCallDocId = callId;
         const inc = document.getElementById('nx-incoming-call-modal');
@@ -1338,8 +1397,11 @@
             peerConn = null;
         }
         if (localAudioStream) {
-            localAudioStream.getTracks().forEach(t => t.stop());
+            localAudioStream.getTracks().forEach(t => { try { t.enabled = false; t.stop(); } catch (e) {} });
             localAudioStream = null;
+        }
+        if (typeof window.forceReleaseAllMicAndCamera === 'function') {
+            window.forceReleaseAllMicAndCamera();
         }
         if (updateCloud && currentCallDocId && Nexus.db) {
             Nexus.db.collection("nexus_voice_calls").doc(currentCallDocId).update({ status: 'ended' }).catch(() => {});
@@ -2460,16 +2522,15 @@
         Nexus.listeners.onUsers.push(() => setTimeout(checkNewUserLoginGuideAndSettingsBtn, 150));
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
+    function bootPowerOnce() {
+        if (window.__nxPowerBooted) return;
+        window.__nxPowerBooted = true;
         upgradeDmExperience();
         syncHomeAndProfileFollowers();
         setTimeout(startGlobalIncomingCallListener, 800);
-        setInterval(checkNewUserLoginGuideAndSettingsBtn, 1200);
-    });
-    setTimeout(() => {
-        upgradeDmExperience();
-        syncHomeAndProfileFollowers();
-        startGlobalIncomingCallListener();
-        checkNewUserLoginGuideAndSettingsBtn();
-    }, 200);
+        setTimeout(checkNewUserLoginGuideAndSettingsBtn, 400);
+        setInterval(checkNewUserLoginGuideAndSettingsBtn, 5000);
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootPowerOnce);
+    else setTimeout(bootPowerOnce, 120);
 })();
