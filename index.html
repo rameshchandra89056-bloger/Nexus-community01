@@ -208,15 +208,91 @@
             return false;
         };
 
+        const NEXUS_SB_URL = "https://fegmtyoxijvktoxtealo.supabase.co";
+        const NEXUS_SB_PUB_KEY = "sb_publishable_jpH6tVu1sCNSwLmgvRTxrw_w8xq5thV";
+        const NEXUS_SB_ANON_JWT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZlZ210eW94aWp2a3RveHRlYWxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUxMTgyNDksImV4cCI6MjExMDY5NDI0OX0.MyFVlKvU1GhPuuAGQYjEV7-ealOBepnWiS_mcWLBXBA";
+        window.__NX_SB_CONFIG__ = { url: NEXUS_SB_URL, pubKey: NEXUS_SB_PUB_KEY, anonKey: NEXUS_SB_ANON_JWT };
+
         window.__nxPreloadPromise = (async function () {
             try {
                 const lightMask =
                     "?pageSize=90&mask.fieldPaths=username&mask.fieldPaths=name&mask.fieldPaths=bio&mask.fieldPaths=isOnlineNow&mask.fieldPaths=lastOnline&mask.fieldPaths=lastSeenAt&mask.fieldPaths=verified&mask.fieldPaths=googleVerified&mask.fieldPaths=email&mask.fieldPaths=followersList&mask.fieldPaths=followingList&mask.fieldPaths=profileSongJson";
+                const sbHeaders = {
+                    "apikey": NEXUS_SB_ANON_JWT,
+                    "Authorization": "Bearer " + NEXUS_SB_ANON_JWT
+                };
 
-                const [uLightRes, pRes] = await Promise.all([
-                    fetch(BASE_REST_URL + "/nexus_accounts" + lightMask, { cache: "no-store" }),
-                    fetch(BASE_REST_URL + "/nexus_real_posts?pageSize=80", { cache: "no-store" })
+                // TRUE 0ms PARALLEL PRE-FETCH: Firebase + Supabase fire simultaneously!
+                const [uLightRes, pRes, sbURes, sbPRes] = await Promise.all([
+                    fetch(BASE_REST_URL + "/nexus_accounts" + lightMask, { cache: "no-store" }).catch(() => ({ ok: false })),
+                    fetch(BASE_REST_URL + "/nexus_real_posts?pageSize=80", { cache: "no-store" }).catch(() => ({ ok: false })),
+                    fetch(NEXUS_SB_URL + "/rest/v1/profiles?select=*&limit=220", { headers: sbHeaders, cache: "no-store" }).catch(() => ({ ok: false })),
+                    fetch(NEXUS_SB_URL + "/rest/v1/posts?select=*&limit=100", { headers: sbHeaders, cache: "no-store" }).catch(() => ({ ok: false }))
                 ]);
+
+                if (sbURes && sbURes.ok) {
+                    const rawSbU = await sbURes.json().catch(() => []);
+                    if (Array.isArray(rawSbU) && rawSbU.length) {
+                        const mappedSbU = rawSbU.map((r) => ({
+                            id: r.id,
+                            sbId: r.id,
+                            username: String(r.username || r.firebase_uid || (r.email ? r.email.split("@")[0] : "")).toLowerCase().trim(),
+                            name: r.display_name || r.full_name || r.name || r.username || "Member",
+                            email: r.email || "",
+                            bio: r.bio || "Nexus Member",
+                            dp: r.avatar_url || r.dp || "",
+                            verified: Boolean(r.is_verified),
+                            googleVerified: true,
+                            isBanned: Boolean(r.is_banned),
+                            isOnlineNow: Boolean(r.is_online),
+                            lastOnline: Date.parse(r.last_seen_at || r.updated_at || r.created_at) || 0,
+                            followersList: Array.isArray(r.followers_list) ? r.followers_list : [],
+                            followingList: Array.isArray(r.following_list) ? r.following_list : [],
+                            moodNote: r.mood_note || ""
+                        })).filter((u) => u.username && !u.isBanned);
+                        if (mappedSbU.length) {
+                            window.__NX_INSTANT_SB_USERS__ = mappedSbU;
+                            if (window.Nexus) {
+                                Nexus._sbUsers = mappedSbU;
+                                Nexus.syncDualCloudMerge && Nexus.syncDualCloudMerge();
+                            }
+                        }
+                    }
+                }
+
+                if (sbPRes && sbPRes.ok) {
+                    const rawSbP = await sbPRes.json().catch(() => []);
+                    if (Array.isArray(rawSbP) && rawSbP.length) {
+                        const mappedSbP = rawSbP.map((p) => ({
+                            id: "sb_" + p.id,
+                            sbRawId: p.id,
+                            username: String(p.author_username || "").toLowerCase().trim(),
+                            author: p.author_name || p.author_username || "Member",
+                            dp: p.author_dp || "",
+                            bio: p.bio || "",
+                            content: p.content || "",
+                            text: p.content || "",
+                            image: p.image_url || "",
+                            videoUrl: p.media_type === "video" ? (p.image_url || "") : "",
+                            mediaType: p.media_type || (p.image_url ? "image" : "text"),
+                            pinned: Boolean(p.is_pinned),
+                            isOfficial: String(p.author_username || "").toLowerCase() === "nexus_official",
+                            verified: true,
+                            likedBy: Array.isArray(p.likes_list) ? p.likes_list : [],
+                            likes: Array.isArray(p.likes_list) ? p.likes_list.length : Number(p.likes_count || 0),
+                            comments: Array.isArray(p.comments_list) ? p.comments_list : [],
+                            views: Number(p.views_count || 1),
+                            createdAt: Date.parse(p.created_at) || Date.now()
+                        })).filter((p) => p.username && (p.content || p.image));
+                        if (mappedSbP.length) {
+                            window.__NX_INSTANT_SB_POSTS__ = mappedSbP;
+                            if (window.Nexus) {
+                                Nexus._sbPosts = mappedSbP;
+                                Nexus.syncDualCloudMerge && Nexus.syncDualCloudMerge();
+                            }
+                        }
+                    }
+                }
 
                 if (uLightRes.ok) {
                     const uJson = await uLightRes.json();
@@ -783,6 +859,13 @@
             } catch(e) { return []; }
         }
 
+        function loadSafeJsonArray(key) {
+            try {
+                const arr = JSON.parse(localStorage.getItem(key) || '[]');
+                return Array.isArray(arr) ? arr : [];
+            } catch (e) { return []; }
+        }
+
         let lastUsersProfileHash = '';
         const assembledVideoBlobMap = {};
 
@@ -805,10 +888,10 @@
             db: null,
             initialized: false,
             cloudReady: false,
-            _fbUsers: [],
-            _sbUsers: [],
-            _fbPosts: [],
-            _sbPosts: [],
+            _fbUsers: loadInitialUsersCache(),
+            _sbUsers: (window.__NX_INSTANT_SB_USERS__ && window.__NX_INSTANT_SB_USERS__.length) ? window.__NX_INSTANT_SB_USERS__ : loadSafeJsonArray('nx_v6_sb_users'),
+            _fbPosts: loadInitialPostsCache(),
+            _sbPosts: (window.__NX_INSTANT_SB_POSTS__ && window.__NX_INSTANT_SB_POSTS__.length) ? window.__NX_INSTANT_SB_POSTS__ : loadSafeJsonArray('nx_v6_sb_posts'),
             _sbClient: null,
             _sbChan: null,
             cloudAccounts: loadInitialUsersCache(),
@@ -884,40 +967,34 @@
                 }
             },
 
-            connectSupabaseInstant: async function() {
-                if (this._sbBooting) return;
+            _safeSbSelect: async function(sbClient, table, limit) {
+                let res = await sbClient.from(table).select("*").order("created_at", { ascending: false }).limit(limit);
+                if (res && res.error) {
+                    res = await sbClient.from(table).select("*").limit(limit);
+                }
+                return res;
+            },
+
+            getSbClient: function() {
+                if (window.NexusSecurity && window.NexusSecurity.sb) return window.NexusSecurity.sb;
+                if (!this._sbClient && window.supabase) {
+                    this._sbClient = window.supabase.createClient("https://fegmtyoxijvktoxtealo.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZlZ210eW94aWp2a3RveHRlYWxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUxMTgyNDksImV4cCI6MjExMDY5NDI0OX0.MyFVlKvU1GhPuuAGQYjEV7-ealOBepnWiS_mcWLBXBA");
+                }
+                return this._sbClient;
+            },
+
+            connectSupabaseInstant: async function(forceRebind) {
+                if (this._sbBooting && !forceRebind) return;
                 this._sbBooting = true;
                 try {
-                    let sbClient = (window.NexusSecurity && window.NexusSecurity.sb) || this._sbClient;
-                    if (!sbClient && window.supabase) {
-                        let sbUrl = "https://fegmtyoxijvktoxtealo.supabase.co";
-                        let sbKey = localStorage.getItem("nx_vault_sb_anon") || "";
-                        if (!sbKey) {
-                            for (const fn of ["nexus-supabase-bridge.js", "nexus-security.js"]) {
-                                try {
-                                    const r = await fetch(fn, { cache: "no-store" });
-                                    if (!r.ok) continue;
-                                    const t = await r.text();
-                                    const um = t.match(/https:\/\/[a-z0-9-]+\.supabase\.co/i);
-                                    if (um) sbUrl = um[0];
-                                    const jm = t.match(/eyJ[a-zA-Z0-9_-]{30,}\.[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]{20,}/);
-                                    const pm = t.match(/sb_publishable_[a-zA-Z0-9_-]{18,}/);
-                                    if (jm) { sbKey = jm[0]; break; }
-                                    if (pm) { sbKey = pm[0]; break; }
-                                } catch (e) {}
-                            }
-                        }
-                        if (sbKey) {
-                            sbClient = window.supabase.createClient(sbUrl, sbKey);
-                        }
-                    }
+                    const sbClient = this.getSbClient();
                     if (!sbClient) { this._sbBooting = false; return; }
                     this._sbClient = sbClient;
 
                     await this.pullSupabaseNow();
 
                     if (!this._sbChan) {
-                        this._sbChan = sbClient.channel("nx_index_live_dual_v45")
+                        this._sbChan = sbClient.channel("nx_index_live_dual_v47")
                             .on("postgres_changes", { event: "*", schema: "public", table: "posts" }, () => this.pullSupabaseNow())
                             .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => this.pullSupabaseNow())
                             .on("broadcast", { event: "vault_sync" }, () => this.forceInstantDualCloudSync())
@@ -932,18 +1009,18 @@
                 if (!sbClient) return;
                 try {
                     const [uRes, pRes] = await Promise.all([
-                        sbClient.from("profiles").select("*").order("created_at", { ascending: false }).limit(200),
-                        sbClient.from("posts").select("*").order("created_at", { ascending: false }).limit(100)
+                        this._safeSbSelect(sbClient, "profiles", 220),
+                        this._safeSbSelect(sbClient, "posts", 100)
                     ]);
                     if (uRes && Array.isArray(uRes.data)) {
                         this._sbUsers = uRes.data.map(r => ({
                             id: r.id,
                             sbId: r.id,
                             username: String(r.username || r.firebase_uid || "").toLowerCase().trim(),
-                            name: r.display_name || r.username || "Member",
+                            name: r.display_name || r.full_name || r.name || r.username || "Member",
                             email: r.email || "",
                             bio: r.bio || "Nexus Member",
-                            dp: r.avatar_url || "",
+                            dp: r.avatar_url || r.dp || "",
                             verified: Boolean(r.is_verified),
                             googleVerified: true,
                             isBanned: Boolean(r.is_banned),
@@ -953,6 +1030,7 @@
                             followingList: Array.isArray(r.following_list) ? r.following_list : [],
                             moodNote: r.mood_note || ""
                         })).filter(u => u.username && !u.isBanned);
+                        safeSetLocalCache('nx_v6_sb_users', this._sbUsers.slice(0, 60).map(u => Object.assign({}, u, { dp: (u.dp && u.dp.length > 45000) ? '' : u.dp })));
                     }
                     if (pRes && Array.isArray(pRes.data)) {
                         this._sbPosts = pRes.data.map(p => ({
@@ -976,6 +1054,7 @@
                             views: Number(p.views_count || 1),
                             createdAt: Date.parse(p.created_at) || Date.now()
                         })).filter(p => p.username && (p.content || p.image));
+                        safeSetLocalCache('nx_v6_sb_posts', this._sbPosts.slice(0, 20).map(p => Object.assign({}, p, { image: (p.image && p.image.length > 50000) ? '' : p.image })));
                     }
                     this.syncDualCloudMerge();
                 } catch (e) {}
@@ -1396,37 +1475,42 @@
     </script>
 
     <!-- ================= NEXUS SUPABASE DUAL-SYNC & PRO 6-DIGIT OTP AUTH BRIDGE ================= -->
-    <script src="nexus-supabase-bridge.js?v=62" charset="UTF-8"></script>
-    <script>if (window.Nexus && Nexus.connectSupabaseInstant) setTimeout(() => Nexus.connectSupabaseInstant(), 50);</script>
+    <script src="nexus-supabase-bridge.js?v=64" charset="UTF-8"></script>
+    <script>
+        if (window.Nexus && Nexus.connectSupabaseInstant) {
+            Nexus.connectSupabaseInstant(true);
+            setTimeout(() => Nexus.connectSupabaseInstant(true), 600);
+        }
+    </script>
 
-    <!-- ================= CORE NEXUS MODULES (ALL CACHE-BUSTED TO ?v=45) ================= -->
-    <script src="about.js?v=45" charset="UTF-8"></script>
-    <script src="advance.js?v=45" charset="UTF-8"></script>
-    <script src="board.js?v=45" charset="UTF-8"></script>
-    <script src="cards.js?v=45" charset="UTF-8"></script>
-    <script src="chat.js?v=45" charset="UTF-8"></script>
+    <!-- ================= CORE NEXUS MODULES (ALL CACHE-BUSTED TO ?v=47 • 3 CONFIRMED DUPLICATES DISABLED SAFELY) ================= -->
+    <script src="about.js?v=47" charset="UTF-8"></script>
+    <script src="advance.js?v=47" charset="UTF-8"></script>
+    <script src="board.js?v=47" charset="UTF-8"></script>
+    <script src="cards.js?v=47" charset="UTF-8"></script>
+    <script src="chat.js?v=47" charset="UTF-8"></script>
     <script src="core.js?v=86" charset="UTF-8"></script>
-    <script src="dm.js?v=45" charset="UTF-8"></script>
-    <script src="dminbox.js?v=45" charset="UTF-8"></script>
-    <script src="dmtools.js?v=45" charset="UTF-8"></script>
-    <script src="dotsmenu.js?v=45" charset="UTF-8"></script>
-    <script src="emojis.js?v=45" charset="UTF-8"></script>
-    <script src="home.js?v=45" charset="UTF-8"></script>
-    <script src="live.js?v=45" charset="UTF-8"></script>
-    <script src="mp3dj.js?v=45" charset="UTF-8"></script>
-    <script src="notify.js?v=45" charset="UTF-8"></script>
-    <script src="power.js?v=45" charset="UTF-8"></script>
-    <script src="pro.js?v=45" charset="UTF-8"></script>
-    <script src="pwa.js?v=45" charset="UTF-8"></script>
-    <script src="screen.js?v=45" charset="UTF-8"></script>
-    <script src="superchat.js?v=45" charset="UTF-8"></script>
-    <script src="ultra.js?v=45" charset="UTF-8"></script>
-    <script src="voice.js?v=45" charset="UTF-8"></script>
+    <script src="dm.js?v=47" charset="UTF-8"></script>
+    <!-- Disabled safe duplicate (already built into dm.js): <script src="dminbox.js?v=47" charset="UTF-8"></script> -->
+    <script src="dmtools.js?v=47" charset="UTF-8"></script>
+    <script src="dotsmenu.js?v=47" charset="UTF-8"></script>
+    <script src="emojis.js?v=47" charset="UTF-8"></script>
+    <script src="home.js?v=47" charset="UTF-8"></script>
+    <script src="live.js?v=47" charset="UTF-8"></script>
+    <!-- Disabled safe duplicate (already built into live.js): <script src="mp3dj.js?v=47" charset="UTF-8"></script> -->
+    <script src="notify.js?v=47" charset="UTF-8"></script>
+    <script src="power.js?v=47" charset="UTF-8"></script>
+    <script src="pro.js?v=47" charset="UTF-8"></script>
+    <script src="pwa.js?v=47" charset="UTF-8"></script>
+    <!-- Disabled safe duplicate (already built into live.js): <script src="screen.js?v=47" charset="UTF-8"></script> -->
+    <script src="superchat.js?v=47" charset="UTF-8"></script>
+    <script src="ultra.js?v=47" charset="UTF-8"></script>
+    <script src="voice.js?v=47" charset="UTF-8"></script>
 
-    <!-- MASTER UPGRADED MODULES LOADED LAST WITH ?v=45 CACHE-BUSTER -->
-    <script src="settings.js?v=45" charset="UTF-8"></script>
-    <script src="profile.js?v=45" charset="UTF-8"></script>
-    <script src="post.js?v=45" charset="UTF-8"></script>
+    <!-- MASTER UPGRADED MODULES LOADED LAST WITH ?v=47 CACHE-BUSTER -->
+    <script src="settings.js?v=47" charset="UTF-8"></script>
+    <script src="profile.js?v=47" charset="UTF-8"></script>
+    <script src="post.js?v=47" charset="UTF-8"></script>
     <!-- ============================================================================
          NEXUS V33 COMPLETE UNCUT MASTER ENGINE (PART 2 OF index.html):
          1. Instant Profile Tab Opener (Zero Blank Profile Screen!)
@@ -1705,8 +1789,12 @@
                     }
                     if (postObj && postObj.id) {
                         window.__nxMarkPostDeletedLocally(postObj.id);
-                        if (window.Nexus && Nexus.db) {
-                            await Nexus.db.collection("nexus_real_posts").doc(postObj.id).delete().catch(() => {});
+                        const pid = String(postObj.id);
+                        if (pid.startsWith("sb_") || postObj.sbRawId) {
+                            const sbC = window.Nexus && Nexus.getSbClient ? Nexus.getSbClient() : (window.NexusSecurity && window.NexusSecurity.sb);
+                            if (sbC) await sbC.from("posts").delete().eq("id", postObj.sbRawId || pid.replace(/^sb_/, "")).catch(() => {});
+                        } else if (window.Nexus && Nexus.db) {
+                            await Nexus.db.collection("nexus_real_posts").doc(pid).delete().catch(() => {});
                         }
                     }
                     if (window.Nexus && Nexus.toast) Nexus.toast("🗑️ Your Post Deleted!");
