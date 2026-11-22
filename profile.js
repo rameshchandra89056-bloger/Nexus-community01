@@ -45,10 +45,10 @@
             const sbC = getDualSbClient();
             const rawId = postObj.sbRawId || pid.replace(/^sb_/, "");
             if (sbC && sbFields && rawId) {
-                await sbC.from("posts").update(sbFields).eq("id", rawId).catch(() => {});
+                try { await sbC.from("posts").update(sbFields).eq("id", rawId); } catch (e) {}
             }
         } else if (window.Nexus && Nexus.db && fbFields) {
-            await Nexus.db.collection("nexus_real_posts").doc(pid).set(fbFields, { merge: true }).catch(() => {});
+            try { await Nexus.db.collection("nexus_real_posts").doc(pid).set(fbFields, { merge: true }); } catch (e) {}
         }
     }
     async function deleteDualPostCloud(postObj) {
@@ -58,10 +58,10 @@
         if (isSb) {
             const sbC = getDualSbClient();
             const rawId = postObj.sbRawId || pid.replace(/^sb_/, "");
-            if (sbC && rawId) await sbC.from("posts").delete().eq("id", rawId).catch(() => {});
+            if (sbC && rawId) { try { await sbC.from("posts").delete().eq("id", rawId); } catch (e) {} }
             if (window.Nexus && Array.isArray(Nexus._sbPosts)) Nexus._sbPosts = Nexus._sbPosts.filter((x) => x && x.id !== pid);
         } else if (window.Nexus && Nexus.db) {
-            await Nexus.db.collection("nexus_real_posts").doc(pid).delete().catch(() => {});
+            try { await Nexus.db.collection("nexus_real_posts").doc(pid).delete(); } catch (e) {}
             if (window.Nexus && Array.isArray(Nexus._fbPosts)) Nexus._fbPosts = Nexus._fbPosts.filter((x) => x && x.id !== pid);
         }
     }
@@ -69,12 +69,12 @@
         const ops = [];
         const sbC = getDualSbClient();
         if (sbC) {
-            ops.push(sbC.from("profiles").update({ following_list: myFollowing }).eq("username", myU).catch(() => {}));
-            ops.push(sbC.from("profiles").update({ followers_list: targetFollowers }).eq("username", targetU).catch(() => {}));
+            ops.push((async () => { try { await sbC.from("profiles").update({ following_list: myFollowing }).eq("username", myU); } catch (e) {} })());
+            ops.push((async () => { try { await sbC.from("profiles").update({ followers_list: targetFollowers }).eq("username", targetU); } catch (e) {} })());
         }
         if (window.Nexus && Nexus.db) {
-            ops.push(Nexus.db.collection("nexus_accounts").doc(targetU).set({ followersList: targetFollowers }, { merge: true }).catch(() => {}));
-            ops.push(Nexus.db.collection("nexus_accounts").doc(myU).set({ followingList: myFollowing }, { merge: true }).catch(() => {}));
+            ops.push((async () => { try { await Nexus.db.collection("nexus_accounts").doc(targetU).set({ followersList: targetFollowers }, { merge: true }); } catch (e) {} })());
+            ops.push((async () => { try { await Nexus.db.collection("nexus_accounts").doc(myU).set({ followingList: myFollowing }, { merge: true }); } catch (e) {} })());
         }
         await Promise.allSettled(ops);
     }
@@ -1363,7 +1363,9 @@
                 cInp.value = "";
                 renderCommentsContent();
                 if (onCommentChange) onCommentChange();
-
+                if (window.Nexus && Nexus.pushRealNotification && postObj.username) {
+                    Nexus.pushRealNotification(postObj.username, "comment", "commented on your post 💬:", txt);
+                }
                 await persistDualPostUpdate(postObj, { comments: postObj.comments }, { comments_list: postObj.comments });
             };
 
@@ -2176,6 +2178,9 @@
                 p.likedBy = likedArr;
 
                 if (refreshViewFn) refreshViewFn();
+                if (likedArr.includes(myKey) && window.Nexus && Nexus.pushRealNotification && p.username) {
+                    Nexus.pushRealNotification(p.username, "like", "liked your post ❤️:", p.content || p.text || "Media Post");
+                }
                 await persistDualPostUpdate(p, { likedBy: likedArr, likes: p.likes }, { likes_list: likedArr });
             };
         });
@@ -2670,6 +2675,9 @@
                 localStorage.setItem("nx_active_account", JSON.stringify(curMe));
                 crossSyncAllFollowersAndSongs();
 
+                if (userObj.followersList.includes(myK) && window.Nexus && Nexus.pushRealNotification) {
+                    Nexus.pushRealNotification(targetKey, "follow", "started following you on Nexus 👥", "");
+                }
                 await syncFollowListsDualCloud(myK, curMe.followingList, targetKey, userObj.followersList);
             };
 
@@ -3564,6 +3572,7 @@
     }
 
     function updateHeaderNotifBadge() {
+        if (window.__NEXUS_NOTIFY_MASTER_V12__ || window.__NEXUS_NOTIFY_MASTER_V11__) return;
         const dot = document.getElementById("nx-notif-dot");
         if (!dot) return;
         const { unreadCount } = gatherAllRealNotifications();
@@ -3600,6 +3609,10 @@
     // 1. REAL NOTIFICATION CENTER MODAL (Nexus.openNotifications)
     // =========================================================================
     window.openNexusRealNotificationsModal = function () {
+        if (window.NexusNotify && typeof window.openNotificationDrawer === "function") {
+            window.openNotificationDrawer();
+            return;
+        }
         document.getElementById("nx-real-notif-drawer")?.remove();
         const me = getActiveMe();
         const myU = me && me.username ? norm(me.username) : "";
