@@ -40,6 +40,8 @@
     <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
     <link rel="preconnect" href="https://apis.google.com" crossorigin>
     <link rel="preconnect" href="https://accounts.google.com" crossorigin>
+    <link rel="preconnect" href="https://fegmtyoxijvktoxtealo.supabase.co" crossorigin>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <!-- ================= 1. ANTI-THEFT & ANTI-INSPECTION SECURITY SHIELD ================= -->
     <script>
@@ -67,9 +69,7 @@
     <!-- ================= 2. 100% REAL DATABASE PRE-FETCHER (ZERO DUMMY 'member' POSTS!) ================= -->
     <script>
     (function () {
-        if ("caches" in window) {
-            caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => {});
-        }
+        // FIXED: Do not wipe all browser caches on every load (prevents 1.6MB re-download hang)
 
         if (!localStorage.getItem("nx_purged_dummy_member_v33")) {
             localStorage.removeItem("nx_light_posts_v1");
@@ -646,7 +646,8 @@
             display: none !important;
         }
         /* FIXED: Profile Tab will NEVER be hidden or blank when clicked! */
-        body.nx-auth-locked #tab-profile > *:not(#nx-google-auth-hub):not(#nx-ig-profile-root) {
+        /* FIXED: Show ONLY single #nx-google-auth-hub card when logged out (Zero Double Login Card!) */
+        body.nx-auth-locked #tab-profile > *:not(#nx-google-auth-hub) {
             display: none !important;
         }
         body.nx-auth-locked #tab-settings {
@@ -675,11 +676,11 @@
             <span class="nx-live-dot" id="nx-offline-dot"></span>
         </div>
         <div class="nx-header-actions">
-            <button type="button" class="nx-icon-btn" onclick="Nexus.openNotifications()">
+            <button type="button" class="nx-icon-btn" onclick="if(window.Nexus&&Nexus.openNotifications)Nexus.openNotifications()">
                 <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
                 <span class="nx-badge-dot" id="nx-notif-dot">0</span>
             </button>
-            <button type="button" class="nx-icon-btn" onclick="Nexus.openSearch()">
+            <button type="button" class="nx-icon-btn" onclick="if(window.Nexus&&Nexus.openSearch)Nexus.openSearch()">
                 <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             </button>
         </div>
@@ -702,7 +703,7 @@
         <button type="button" class="nx-nav-item" data-tab="tab-community" onclick="Nexus.switchTab('tab-community', this)">
             <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
         </button>
-        <button type="button" class="nx-fab-post" onclick="Nexus.openPostModal()">
+        <button type="button" class="nx-fab-post" onclick="if(window.Nexus&&Nexus.openPostModal)Nexus.openPostModal()">
             <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
         </button>
         <button type="button" class="nx-nav-item" data-tab="tab-profile" onclick="Nexus.switchTab('tab-profile', this)">
@@ -724,13 +725,11 @@
             try {
                 localStorage.setItem(key, JSON.stringify(dataObj));
             } catch (e) {
-                let me = localStorage.getItem('nx_active_account');
-                let sv = localStorage.getItem('nx_saved_posts');
-                let del = localStorage.getItem('nx_deleted_post_ids_v1');
-                localStorage.clear();
-                if (me) localStorage.setItem('nx_active_account', me);
-                if (sv) localStorage.setItem('nx_saved_posts', sv);
-                if (del) localStorage.setItem('nx_deleted_post_ids_v1', del);
+                // FIXED: Evict only heavy cache keys instead of wiping AI history, device SID & user prefs!
+                ['nx_light_posts_v1', 'nx_master_users_v1', 'nx_v6_sb_posts', 'nx_v6_sb_users'].forEach(k => {
+                    try { localStorage.removeItem(k); } catch (err) {}
+                });
+                try { localStorage.setItem(key, JSON.stringify(dataObj)); } catch (err) {}
             }
         }
 
@@ -995,7 +994,7 @@
                                 lastSeenAt: Date.now()
                             };
                             if (meObj.dp) updatePayload.dp = meObj.dp;
-                            this.db.collection("nexus_accounts").doc(meObj.username).set(updatePayload, { merge: true });
+                            this.db.collection("nexus_accounts").doc(meObj.username).set(updatePayload, { merge: true }).catch(() => {});
                         }
                     } catch(e) {}
                 }
@@ -1138,8 +1137,7 @@
                 const target = document.getElementById(tabId);
                 if (target) target.classList.add('active');
 
-                document.querySelectorAll('.nx-nav-item').forEach(b => b.classList.add('nx-nav-temp'));
-                document.querySelectorAll('.nx-nav-item').forEach(b => b.classList.remove('active', 'nx-nav-temp'));
+                document.querySelectorAll('.nx-nav-item').forEach(b => b.classList.remove('active'));
                 if (btnEl) btnEl.classList.add('active');
                 else {
                     const navBtn = document.querySelector(`.nx-nav-item[data-tab="${tabId}"]`);
@@ -1202,15 +1200,16 @@
         Nexus.init();
     </script>
 
-    <!-- ================= CORE NEXUS MODULES ================= -->
+    <!-- ================= NEXUS SUPABASE DUAL-SYNC & PRO 6-DIGIT OTP AUTH BRIDGE ================= -->
+    <script src="nexus-supabase-bridge.js?v=60" charset="UTF-8"></script>
+
+    <!-- ================= CORE NEXUS MODULES (ALL 25 REAL FILES KEPT, 4 DEAD 1-BYTE SCRIPTS REMOVED) ================= -->
     <script src="about.js" charset="UTF-8"></script>
     <script src="advance.js" charset="UTF-8"></script>
-    <script src="ai.js" charset="UTF-8"></script>
-    <script src="aifix.js" charset="UTF-8"></script>
     <script src="board.js" charset="UTF-8"></script>
     <script src="cards.js" charset="UTF-8"></script>
     <script src="chat.js" charset="UTF-8"></script>
-    <script src="core.js" charset="UTF-8"></script>
+    <script src="core.js?v=85" charset="UTF-8"></script>
     <script src="dm.js" charset="UTF-8"></script>
     <script src="dminbox.js" charset="UTF-8"></script>
     <script src="dmtools.js" charset="UTF-8"></script>
@@ -1227,8 +1226,6 @@
     <script src="superchat.js" charset="UTF-8"></script>
     <script src="ultra.js" charset="UTF-8"></script>
     <script src="voice.js" charset="UTF-8"></script>
-    <script src="watchparty.js" charset="UTF-8"></script>
-    <script src="ytparty.js" charset="UTF-8"></script>
 
     <!-- MASTER UPGRADED MODULES LOADED LAST WITH ?v=33 CACHE-BUSTER -->
     <script src="settings.js?v=33" charset="UTF-8"></script>
@@ -1291,21 +1288,29 @@
             deferredPwaPrompt = e;
         });
 
-        // FIXED: Any logged-in account with a username is treated as verified so Profile Tab NEVER locks out!
+        // FIXED (HANG KILLER): Memoized account reader — ZERO repeated localStorage.setItem writes on read!
+        let __nxLastAccRaw = null;
+        let __nxLastAccParsed = null;
         function getStoredAccount() {
             try {
-                const raw = localStorage.getItem("nx_active_account") || localStorage.getItem("nx_legacy_backup_account");
-                if (raw) {
-                    const acc = JSON.parse(raw);
-                    if (acc && acc.username) {
-                        const uLower = acc.username.toLowerCase().trim();
-                        acc.verified = true;
-                        acc.googleVerified = true;
-                        acc.email = acc.email || (ADMIN_USERNAMES.includes(uLower) ? "mohitgamerprajapati753@gmail.com" : uLower + "@nexus.app");
-                        localStorage.setItem("nx_active_account", JSON.stringify(acc));
-                        localStorage.setItem("nx_legacy_backup_account", JSON.stringify(acc));
-                        return acc;
-                    }
+                const raw = localStorage.getItem("nx_active_account");
+                if (!raw) {
+                    __nxLastAccRaw = null;
+                    __nxLastAccParsed = null;
+                    return null;
+                }
+                if (raw === __nxLastAccRaw && __nxLastAccParsed) {
+                    return __nxLastAccParsed;
+                }
+                const acc = JSON.parse(raw);
+                if (acc && acc.username) {
+                    const uLower = acc.username.toLowerCase().trim();
+                    acc.verified = true;
+                    acc.googleVerified = true;
+                    acc.email = acc.email || (ADMIN_USERNAMES.includes(uLower) ? "mohitgamerprajapati753@gmail.com" : uLower + "@nexus.app");
+                    __nxLastAccRaw = raw;
+                    __nxLastAccParsed = acc;
+                    return acc;
                 }
             } catch (e) {}
             return null;
@@ -1616,12 +1621,16 @@
 
             hub.querySelector("#nx-btn-google-redirect").onclick = (ev) => {
                 ev.stopPropagation();
-                if (window.openAdvancedGoogleAuthModal) window.openAdvancedGoogleAuthModal("signin");
+                const opener = (window.NexusSecurity && window.NexusSecurity.openAdvancedNexusAuthModal) || window.openAdvancedGoogleAuthModal || window.openNexusSupabaseAuthModal;
+                if (typeof opener === "function") opener("login");
+                else if (window.Nexus && Nexus.toast) Nexus.toast("⏳ Auth module load ho raha hai, 1 second baad tap karein...");
             };
 
             hub.querySelector("#nx-btn-open-ig-auth").onclick = (ev) => {
                 ev.stopPropagation();
-                if (window.openAdvancedGoogleAuthModal) window.openAdvancedGoogleAuthModal("signup");
+                const opener = (window.NexusSecurity && window.NexusSecurity.openAdvancedNexusAuthModal) || window.openAdvancedGoogleAuthModal || window.openNexusSupabaseAuthModal;
+                if (typeof opener === "function") opener("signup");
+                else if (window.Nexus && Nexus.toast) Nexus.toast("⏳ Auth module load ho raha hai, 1 second baad tap karein...");
             };
 
             hub.querySelector("#nx-btn-install-app-hub").onclick = async (ev) => {
@@ -1665,7 +1674,13 @@
                 renderGoogleAuthHubOnProfile();
             }
         }
-        setInterval(syncLockStateUI, 600);
+        setTimeout(syncLockStateUI, 150);
+        setInterval(() => {
+            if (document.visibilityState === 'hidden') return;
+            const ae = document.activeElement;
+            if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+            syncLockStateUI();
+        }, 2000);
 
         // =========================================================================
         // 4. LEFT & RIGHT SWIPE-TO-REPLY ON SENT PHOTOS & VIDEOS
@@ -2533,7 +2548,9 @@
                     <span id="nx-vo-timer-lbl">🔒 Protected View Once • Screenshot & Download Blocked (10s)</span>
                 </div>
                 <div id="nx-vo-canvas-stage" style="position:relative; display:flex; align-items:center; justify-content:center; max-width:100%; max-height:72dvh; border-radius:18px; overflow:hidden; border:1.5px solid rgba(56,189,248,0.4); box-shadow:0 12px 40px rgba(0,0,0,0.9);">
-                    <canvas id="nx-vo-protected-canvas" style="max-width:100%; max-height:72dvh; display:block; pointer-events:none;"></canvas>
+                    ${msg.mediaType === "video"
+                        ? `<video id="nx-vo-protected-video" src="${url}" autoplay playsinline controls controlsList="nodownload" style="max-width:100%; max-height:72dvh; display:block; background:#000;"></video>`
+                        : `<canvas id="nx-vo-protected-canvas" style="max-width:100%; max-height:72dvh; display:block; pointer-events:none;"></canvas>`}
                     <div style="position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; opacity:0.16; transform:rotate(-24deg); font-size:18px; font-weight:900; color:#fff; text-align:center;">
                         🔒 NEXUS VIEW-ONCE • @${getMyUsername() || "PROTECTED"}
                     </div>
@@ -2545,21 +2562,31 @@
             document.body.appendChild(overlay);
 
             const canvas = overlay.querySelector("#nx-vo-protected-canvas");
-            const img = new Image();
-            img.crossOrigin = "anonymous";
-            img.onload = () => {
-                canvas.width = img.width;
-                canvas.height = img.height;
-                const ctx = canvas.getContext("2d");
-                ctx.drawImage(img, 0, 0);
-            };
-            img.src = url;
+            if (canvas) {
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                img.onload = () => {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext("2d");
+                    ctx.drawImage(img, 0, 0);
+                };
+                img.src = url;
+            }
 
             let burned = false;
+            let countdownInterval = null;
+            const onVisChange = () => {
+                if (document.hidden) burnAndDestroyNow("🔒 View-Once Closed on App Switch!");
+            };
+            const onWinBlur = () => burnAndDestroyNow("🔒 View-Once Closed for Security!");
+
             const burnAndDestroyNow = (reasonMsg) => {
                 if (burned) return;
                 burned = true;
-                clearInterval(countdownInterval);
+                if (countdownInterval) clearInterval(countdownInterval);
+                document.removeEventListener("visibilitychange", onVisChange);
+                window.removeEventListener("blur", onWinBlur);
 
                 if (canvas) {
                     const ctx = canvas.getContext("2d");
@@ -2588,30 +2615,22 @@
                 }
             }, { passive: true });
 
-            const onVisChange = () => {
-                if (document.hidden) burnAndDestroyNow("🔒 View-Once Closed on App Switch!");
-            };
-            const onWinBlur = () => burnAndDestroyNow("🔒 View-Once Closed for Security!");
             document.addEventListener("visibilitychange", onVisChange);
             window.addEventListener("blur", onWinBlur);
 
-            let secLeft = 10;
+            let secLeft = msg.mediaType === "video" ? 25 : 10;
             const timerLbl = overlay.querySelector("#nx-vo-timer-lbl");
-            const countdownInterval = setInterval(() => {
+            countdownInterval = setInterval(() => {
                 secLeft--;
                 if (timerLbl) {
                     timerLbl.innerText = `🔒 Protected View Once • Auto-Closing in ${secLeft}s`;
                 }
                 if (secLeft <= 0) {
-                    document.removeEventListener("visibilitychange", onVisChange);
-                    window.removeEventListener("blur", onWinBlur);
                     burnAndDestroyNow("🔥 View-Once Auto-Burned!");
                 }
             }, 1000);
 
             overlay.querySelector("#nx-vo-close-btn").onclick = () => {
-                document.removeEventListener("visibilitychange", onVisChange);
-                window.removeEventListener("blur", onWinBlur);
                 burnAndDestroyNow("🔥 View-Once Burned!");
             };
         }
@@ -2782,7 +2801,22 @@
         }
 
         function uploadUpTo50MB(file, onProgress) {
-            return new Promise((resolve, reject) => {
+            return new Promise(async (resolve, reject) => {
+                // FIXED: Prefer permanent Supabase 50MB Storage first (never expires in 72h & zero Firestore chunk bloat!)
+                if (window.NexusSecurity && typeof window.NexusSecurity.uploadPublicMedia === "function") {
+                    try {
+                        const uid = await window.NexusSecurity.getAuthenticatedUserId();
+                        if (uid) {
+                            onProgress && onProgress(35);
+                            const up = await window.NexusSecurity.uploadPublicMedia(file, "chat-media");
+                            if (up && up.publicUrl) {
+                                onProgress && onProgress(100);
+                                resolve({ mode: "url", url: up.publicUrl });
+                                return;
+                            }
+                        }
+                    } catch (e) {}
+                }
                 if (file.size <= 12 * 1024 * 1024 && window.Nexus && Nexus.db) {
                     chunkFallback(file, onProgress).then(resolve).catch(reject);
                     return;
@@ -3125,11 +3159,11 @@
                     menu.style.display = "none";
                     const act = b.getAttribute("data-act");
                     if (act === "voice") toggleVoiceNote();
-                    else if (act === "yt-party") window.openNexusYouTubeWatchParty();
+                    else if (act === "yt-party") { if (typeof window.openNexusYouTubeWatchParty === "function") window.openNexusYouTubeWatchParty(); else if (window.Nexus) Nexus.toast("⚠️ YT Watch Party module loading..."); }
                     else if (act === "whiteboard") window.openSharedWhiteboardModal();
                     else if (act === "audio-call") startCleanAudioCall(false);
                     else if (act === "video-call") startCleanAudioCall(true);
-                    else if (act === "screen-share") window.startNexusRealCall("screen");
+                    else if (act === "screen-share") { if (typeof window.startNexusRealCall === "function") window.startNexusRealCall("screen"); else if (window.Nexus) Nexus.toast("⚠️ Call module loading..."); }
                     else if (act === "block-partner") window.toggleBlockCurrentChatPartner();
                 });
 
@@ -3211,7 +3245,9 @@
                             return;
                         }
                         if (data.videoId && !document.getElementById("nx-yt-party-search-sheet")) {
-                            window.launchNexusSyncedVideo(data.videoId, data.title || "Watch Party", true);
+                            if (typeof window.launchNexusSyncedVideo === "function") {
+                                window.launchNexusSyncedVideo(data.videoId, data.title || "Watch Party", true);
+                            }
                             return;
                         }
                         isPartnerSyncing = true;
@@ -3226,6 +3262,12 @@
             }
 
             const combined = getCombinedRoomMedia(rk);
+            const sig = rk + "|" + combined.map((m) => `${m.id}:${m.opened ? 1 : 0}:${m.reaction || ""}:${m.statusText || ""}`).join(",");
+            if (sig === chatBox.__nxLastMediaSig && chatBox.querySelectorAll(".nx-ig-media-bubble").length === combined.length) {
+                return;
+            }
+            chatBox.__nxLastMediaSig = sig;
+
             const validIds = new Set(combined.map((m) => m.id));
             chatBox.querySelectorAll(".nx-ig-media-bubble").forEach((b) => {
                 if (!validIds.has(b.id)) b.remove();
@@ -3234,7 +3276,12 @@
             combined.forEach((m) => renderChatMediaBubble(m, m.localUrl));
             sortChatMessagesChronologically(chatBox, rk);
         }
-        setInterval(syncActiveRoomStreams, 450);
+        setInterval(() => {
+            if (document.visibilityState === "hidden") return;
+            const ae = document.activeElement;
+            if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable)) return;
+            syncActiveRoomStreams();
+        }, 1500);
 
         function sendYtCmd(func, args = []) {
             document.querySelectorAll('iframe[src*="youtube"]').forEach((f) => {
@@ -3342,10 +3389,13 @@
             <div id="nxsv-cap" style="position:relative;z-index:5;padding:24px 16px;text-align:center;background:linear-gradient(transparent,#000d);font-weight:800;"></div>
         `;
         document.body.appendChild(modal);
-        modal.querySelector("#nxsv-close").onclick = () => modal.remove();
+        let storyImgTimer = null;
+        const closeStoryModal = () => { if (storyImgTimer) clearTimeout(storyImgTimer); modal.remove(); };
+        modal.querySelector("#nxsv-close").onclick = closeStoryModal;
 
         async function show(i) {
-            if (i >= liveStories.length) { modal.remove(); return; }
+            if (storyImgTimer) { clearTimeout(storyImgTimer); storyImgTimer = null; }
+            if (i >= liveStories.length) { closeStoryModal(); return; }
             idx = Math.max(0, i);
             const s = liveStories[idx];
             liveStories.forEach((_, j) => { const b = modal.querySelector(`#nxsv-p-${j}`); if (b) b.style.width = j < idx ? "100%" : "0%"; });
@@ -3367,7 +3417,7 @@
                 im.src = url; im.style.cssText = "width:100%;height:100%;object-fit:contain;";
                 stage.appendChild(im);
                 if (prog) prog.style.width = "100%";
-                setTimeout(() => { if (modal.isConnected) show(idx + 1); }, 6000);
+                storyImgTimer = setTimeout(() => { if (modal.isConnected) show(idx + 1); }, 6000);
             }
         }
         modal.querySelector("#nxsv-stage").onclick = (e) => show(e.clientX < window.innerWidth / 2 ? idx - 1 : idx + 1);
