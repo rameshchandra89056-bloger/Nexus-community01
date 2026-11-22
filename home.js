@@ -1,17 +1,21 @@
 // ================= HOME.JS (FINAL COMPLETE MASTER): DOUBLE-TAP LIKE ❤️ + SMOOTH COLOR-FILL SAVE 🔖 + 100% REAL VIEWS TRACKER 👁️ + COMMENT REPLY ↩️ & EDIT ✏️ + SINGLE MESSAGE BUTTON PROFILE + FULL VIEW BUTTON ONLY =================
 
 (function() {
+    if (window.__NEXUS_HOME_FIXED_V2__) return;
+    window.__NEXUS_HOME_FIXED_V2__ = true;
     const homeTab = document.getElementById('tab-home');
     if (!homeTab) return;
 
     let officialBroadcastData = {
         storyActive: true,
-        storyTitle: "Official Nexus Update 🚀",
-        storyText: "All members ek bar website ko refresh kar lain",
+        storyTitle: "Nexus Official Community 🚀",
+        storyText: "Welcome to Nexus Community! Share IIT-JEE, NEET & Coding notes, ask doubts, and connect with peers live.",
         storyMediaUrl: "",
         storyMediaType: "image",
         storyLink: ""
     };
+    let activeTopicFilter = 'all';
+    let lastStoriesRenderHash = '';
 
     const CARD_THEME_STYLES = {
         default: { bg: '#101726', border: '#1e293b' },
@@ -42,6 +46,37 @@
         }
         #nx-stories-bar::-webkit-scrollbar {
             display: none !important;
+        }
+        #tab-home > #nx-home-topic-bar {
+            display: flex !important;
+            align-items: center;
+            gap: 7px;
+            overflow-x: auto;
+            padding: 8px 12px 6px;
+            background: #090d16;
+            border-bottom: 1px solid rgba(30, 41, 59, 0.75);
+            scrollbar-width: none;
+        }
+        #tab-home > #nx-home-topic-bar::-webkit-scrollbar {
+            display: none !important;
+        }
+        .nx-topic-chip {
+            padding: 5px 12px;
+            border-radius: 999px;
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            color: #94a3b8;
+            font-size: 11.5px;
+            font-weight: 800;
+            white-space: nowrap;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: all 0.16s ease;
+        }
+        .nx-topic-chip.active {
+            background: linear-gradient(90deg, #10b981, #06b6d4);
+            color: #020617;
+            border-color: transparent;
         }
         .nx-story-card-item {
             width: 74px !important;
@@ -316,6 +351,15 @@
 
     homeTab.innerHTML = `
         <div id="nx-stories-bar"></div>
+        <div id="nx-home-topic-bar">
+            <button type="button" class="nx-topic-chip active" data-htopic="all" onclick="NexusHome.setTopicFilter('all', this)">🌟 All Feed</button>
+            <button type="button" class="nx-topic-chip" data-htopic="trending" onclick="NexusHome.setTopicFilter('trending', this)">🔥 Trending</button>
+            <button type="button" class="nx-topic-chip" data-htopic="jee" onclick="NexusHome.setTopicFilter('jee', this)">⚛️ IIT-JEE</button>
+            <button type="button" class="nx-topic-chip" data-htopic="neet" onclick="NexusHome.setTopicFilter('neet', this)">🩺 NEET</button>
+            <button type="button" class="nx-topic-chip" data-htopic="coding" onclick="NexusHome.setTopicFilter('coding', this)">💻 Coding</button>
+            <button type="button" class="nx-topic-chip" data-htopic="doubt" onclick="NexusHome.setTopicFilter('doubt', this)">❓ Doubts</button>
+            <button type="button" class="nx-topic-chip" onclick="NexusHome.manualRefreshFeed(this)" style="margin-left:auto; color:#38bdf8; border-color:#334155;">🔄 Refresh</button>
+        </div>
         <div id="nx-search-banner" style="display:none; margin:10px 12px 0 12px; padding:8px 12px; background:#161f33; border:1px solid #38bdf8; border-radius:12px; align-items:center; justify-content:space-between; font-size:12.5px; color:#f8fafc;">
             <span id="nx-search-banner-txt">🔍 Filtering posts...</span>
             <button type="button" onclick="NexusHome.clearSearchFilter()" style="background:#ef4444; color:white; border:none; padding:3px 9px; border-radius:8px; font-size:11px; font-weight:800; cursor:pointer;">Clear ✕</button>
@@ -352,7 +396,12 @@
         let a = [], b = [];
         try { a = JSON.parse(localStorage.getItem('nx_saved_posts') || '[]'); } catch (e) {}
         try { b = JSON.parse(localStorage.getItem('nx_saved') || '[]'); } catch (e) {}
-        return new Set([...a, ...b]);
+        const ids = new Set();
+        [...a, ...b].forEach(item => {
+            if (typeof item === 'string' && item) ids.add(item);
+            else if (item && typeof item === 'object' && item.id) ids.add(String(item.id));
+        });
+        return ids;
     }
 
     function isStrictlyPostOwner(post, me) {
@@ -533,18 +582,62 @@
             `;
         }).join('');
 
+        const nextHash = myKey + '|' + uniqueUsers.map(u => `${u.username}:${Math.floor((u.lastOnline || 0) / 60000)}:${(u.dp || '').length}:${u.moodNote || ''}`).join(',');
+        if (nextHash === lastStoriesRenderHash && sBar.children.length > 0) return;
+        lastStoriesRenderHash = nextHash;
         sBar.innerHTML = officialHTML + usersHTML;
     }
+    // FIXED: Removed 450ms setInterval DOM reshuffle loop (Official Story node is always rendered first!)
 
-    setInterval(() => {
-        const sBar = document.getElementById('nx-stories-bar');
-        const offNode = document.getElementById('nx-official-story-node');
-        if (sBar && offNode && sBar.firstElementChild !== offNode) {
-            sBar.insertBefore(offNode, sBar.firstElementChild);
+    function applyActiveTopicAndSearchToCleanFeed() {
+        const cleanFeed = document.getElementById('nx-clean-home-feed-v31');
+        if (!cleanFeed) return;
+        const q = String(activeSearchQuery || '').toLowerCase().trim();
+        const topic = activeTopicFilter || 'all';
+        const cards = Array.from(cleanFeed.querySelectorAll('.nx-v31-post-card'));
+        let shown = 0;
+
+        cards.forEach(card => {
+            const txt = (card.textContent || '').toLowerCase();
+            let matchTopic = true;
+            if (topic === 'jee') matchTopic = /jee|pcm|physics|chem|math|iit|hc verma|formula/.test(txt);
+            else if (topic === 'neet') matchTopic = /neet|bio|mbbs|ncert|aiims/.test(txt);
+            else if (topic === 'coding') matchTopic = /code|coding|html|css|js|python|react|supabase|github|app|dev|ai/.test(txt);
+            else if (topic === 'doubt') matchTopic = /doubt|help|solve|\?|question|formula/.test(txt);
+            else if (topic === 'trending') {
+                const likeNum = parseInt((card.querySelector('.nx-like-num') || {}).textContent || '0', 10);
+                matchTopic = likeNum >= 1;
+            }
+            const matchSearch = !q || txt.includes(q);
+            const visible = matchTopic && matchSearch;
+            card.style.setProperty('display', visible ? 'flex' : 'none', 'important');
+            if (visible) shown++;
+        });
+
+        let emptyNote = document.getElementById('nx-topic-empty-note');
+        if (shown === 0 && cards.length > 0) {
+            if (!emptyNote) {
+                emptyNote = document.createElement('div');
+                emptyNote.id = 'nx-topic-empty-note';
+                emptyNote.style.cssText = 'text-align:center;padding:28px 16px;color:#94a3b8;background:#0f172a;border:1px dashed #334155;border-radius:16px;font-size:13px;';
+                cleanFeed.appendChild(emptyNote);
+            }
+            emptyNote.textContent = `🔍 No posts matching "${q || topic}". Tap "🌟 All Feed" to see all posts!`;
+        } else if (emptyNote) {
+            emptyNote.remove();
         }
-    }, 450);
+    }
 
     function renderHomeFeed() {
+        // FIXED (MASSIVE HANG KILLER): When profile.js's #nx-clean-home-feed-v31 is active, #nx-home-feed-box is hidden by CSS!
+        // Skip building 75 hidden HTML cards & skip 75 Firestore view-writes — just apply our topic/search filter cleanly!
+        if (document.getElementById('nx-clean-home-feed-v31')) {
+            const legacyBox = document.getElementById('nx-home-feed-box');
+            if (legacyBox && legacyBox.innerHTML) legacyBox.innerHTML = '';
+            applyActiveTopicAndSearchToCleanFeed();
+            return;
+        }
+
         const feedBox = document.getElementById('nx-home-feed-box');
         if (!feedBox) return;
 
@@ -553,23 +646,6 @@
         let savedSet = getSavedPostsSet();
 
         let rawPosts = Array.isArray(Nexus.posts) ? [...Nexus.posts] : [];
-
-        let hasOfficialPin = rawPosts.some(p => p && (p.isOfficialPinned || p.username === 'nexus_official'));
-        if (!hasOfficialPin && officialBroadcastData.storyText) {
-            rawPosts.unshift({
-                id: 'official_pinned_default',
-                username: 'nexus_official',
-                author: 'Nexus',
-                bio: 'Official Platform Announcement',
-                isOfficialPinned: true,
-                verified: true,
-                text: officialBroadcastData.storyText || 'All members ek bar website ko refresh kar lain',
-                likedBy: ['Atharv'],
-                viewedBy: ['Atharv', 'Mohit_01'],
-                comments: [],
-                createdAt: Date.now()
-            });
-        }
 
         rawPosts.sort((a, b) => {
             let pinA = a && (a.isOfficialPinned || a.username === 'nexus_official') ? 1 : 0;
@@ -594,7 +670,7 @@
 
         feedBox.innerHTML = rawPosts.map(p => {
             if (!p || !p.id) return '';
-            recordRealUserViewOnPost(p, me);
+            // FIXED: Never fire 75 Firestore writes inside feed render loop!
 
             let isOfficial = p.isOfficialPinned || p.username === 'nexus_official';
             let isStrictlyMine = isStrictlyPostOwner(p, me);
@@ -757,6 +833,11 @@
         let cleanTarget = String(targetUsernameOrName).toLowerCase().trim();
         if (cleanTarget === 'nexus_official' || cleanTarget === 'nexus') {
             NexusHome.openOfficialStoryModal();
+            return;
+        }
+        // FIXED: Delegate to profile.js full-screen Instagram public profile (eliminates popup overlap!)
+        if (typeof window.openPublicUserProfileModal === 'function') {
+            window.openPublicUserProfileModal(targetUsernameOrName);
             return;
         }
 
@@ -986,6 +1067,11 @@
     };
 
     Nexus.openNotifications = function() {
+        // FIXED: Delegate to unified notify.js Activity Center (eliminates duplicate notification modals!)
+        if (typeof window.openNotificationDrawer === 'function') {
+            window.openNotificationDrawer();
+            return;
+        }
         let me = Nexus.getCurrentUser();
         if (!me) { Nexus.switchTab('tab-profile'); return; }
         const modal = document.getElementById('nx-global-modal');
@@ -1015,6 +1101,11 @@
     };
 
     Nexus.openSearch = function() {
+        // FIXED: Delegate to profile.js Global Search modal when loaded
+        if (typeof window.openNexusRealSearchModal === 'function') {
+            window.openNexusRealSearchModal();
+            return;
+        }
         const modal = document.getElementById('nx-global-modal');
         modal.style.alignItems = 'flex-start';
         modal.style.paddingTop = '22px';
@@ -1329,15 +1420,16 @@
 
             let saved = [];
             try { saved = JSON.parse(localStorage.getItem('nx_saved_posts') || '[]'); } catch (err) {}
-            if (saved.includes(postId)) {
-                saved = saved.filter(id => id !== postId);
+            const hasIt = saved.some(x => (typeof x === 'string' ? x === postId : (x && x.id === postId)));
+            if (hasIt) {
+                saved = saved.filter(x => (typeof x === 'string' ? x !== postId : (x && x.id !== postId)));
                 Nexus.toast("Removed from Saved Notes");
             } else {
-                saved.push(postId);
-                Nexus.toast("🔖 Saved to Profile Notes!");
+                const postObj = (Nexus.posts || []).find(x => x && x.id === postId);
+                saved.unshift(postObj || { id: postId, text: 'Saved Post' });
+                Nexus.toast("🔖 Saved to Nexus Vault!");
             }
-            localStorage.setItem('nx_saved_posts', JSON.stringify(saved));
-            localStorage.setItem('nx_saved', JSON.stringify(saved));
+            localStorage.setItem('nx_saved_posts', JSON.stringify(saved.slice(0, 50)));
             renderHomeFeed();
             Nexus.notifyAll();
         },
@@ -1371,7 +1463,33 @@
             }
         },
 
+        setTopicFilter: function(topic, btnEl) {
+            activeTopicFilter = topic || 'all';
+            document.querySelectorAll('#nx-home-topic-bar .nx-topic-chip[data-htopic]').forEach(b => b.classList.remove('active'));
+            if (btnEl) btnEl.classList.add('active');
+            applyActiveTopicAndSearchToCleanFeed();
+            renderHomeFeed();
+        },
+
+        manualRefreshFeed: async function(btnEl) {
+            if (btnEl) btnEl.textContent = '⏳...';
+            try {
+                if (typeof window.__nxSyncSupabaseAll === 'function') await window.__nxSyncSupabaseAll(true);
+                if (window.Nexus && Nexus.notifyAll) Nexus.notifyAll();
+                if (window.__NX_PROF_CORE__ && window.__NX_PROF_CORE__.renderCleanZeroOverlapHomeFeed) {
+                    window.__NX_PROF_CORE__.renderCleanZeroOverlapHomeFeed(true);
+                }
+                applyActiveTopicAndSearchToCleanFeed();
+                if (window.Nexus && Nexus.toast) Nexus.toast('⚡ Feed Synced Live!');
+            } catch (e) {}
+            if (btnEl) btnEl.textContent = '🔄 Refresh';
+        },
+
         openOfficialStoryModal: function() {
+            if (typeof window.openNexusOfficialStory === 'function') {
+                window.openNexusOfficialStory();
+                if (document.getElementById('nx-real-video-story-modal')) return;
+            }
             const modal = document.getElementById('nx-global-modal');
             let d = officialBroadcastData;
             modal.innerHTML = `
