@@ -46,28 +46,64 @@
         iceServers: [
             { urls: "stun:stun.l.google.com:19302" },
             { urls: "stun:stun1.l.google.com:19302" },
-            { urls: "stun:stun2.l.google.com:19302" },
-            { urls: "stun:stun3.l.google.com:19302" }
+            { urls: "stun:stun.cloudflare.com:3478" },
+            { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+            { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+            { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" }
         ]
     };
 
+    const escHtml = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const isTypingOrHidden = () => {
+        if (document.visibilityState === "hidden") return true;
+        const ae = document.activeElement;
+        if (!ae) return false;
+        const t = (ae.tagName || "").toUpperCase();
+        return t === "INPUT" || t === "TEXTAREA" || ae.isContentEditable === true;
+    };
+    const openSupabaseProAuth = (mode) => {
+        const opener = (window.NexusSecurity && window.NexusSecurity.openAdvancedNexusAuthModal) || window.openNexusSupabaseAuthModal;
+        if (typeof opener === "function") opener(mode === "signup" ? "signup" : "login");
+        else if (window.Nexus && Nexus.toast) Nexus.toast("⏳ Login system load ho raha hai, 1 second baad tap karein...");
+    };
+
+    // Screen-Time Tracker (Today's Active Minutes)
+    const SCREEN_TIME_KEY = "nx_screen_time_" + new Date().toISOString().slice(0, 10);
+    let focusPomoInterval = null;
+    let focusPomoSecs = 0;
+    let deferredSettingsPwaPrompt = null;
+    window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredSettingsPwaPrompt = e; });
+
+    function getTodayScreenMinutes() {
+        return Number(localStorage.getItem(SCREEN_TIME_KEY) || 0);
+    }
+    setInterval(() => {
+        if (document.visibilityState === "visible") {
+            try { localStorage.setItem(SCREEN_TIME_KEY, String(getTodayScreenMinutes() + 1)); } catch (e) {}
+        }
+    }, 60000);
+
     // =========================================================================
-    // 1. ACCOUNT VERIFICATION, OLD USER DATA PROTECTION & PREFERENCES
+    // 1. ACCOUNT VERIFICATION (ZERO DISK-WRITE STORM), PREFERENCES & LITE THEME ENGINE
     // =========================================================================
+    let __nxCachedAccRaw = null;
+    let __nxCachedAccObj = null;
+
     function getCurrentAccount() {
         try {
             const raw = localStorage.getItem("nx_active_account");
-            if (!raw) return null;
+            if (!raw) {
+                __nxCachedAccRaw = null;
+                __nxCachedAccObj = null;
+                return null;
+            }
+            if (raw === __nxCachedAccRaw && __nxCachedAccObj) return __nxCachedAccObj;
             const acc = JSON.parse(raw);
             if (acc && acc.username) {
-                const uLower = acc.username.toLowerCase().trim();
-                if (ADMIN_USERNAMES.includes(uLower) && !acc.googleVerified) {
-                    acc.googleVerified = true;
-                    acc.verified = true;
-                    acc.email = acc.email || "mohitgamerprajapati753@gmail.com";
-                    localStorage.setItem("nx_active_account", JSON.stringify(acc));
-                }
-                localStorage.setItem("nx_legacy_backup_account", JSON.stringify(acc));
+                acc.googleVerified = true;
+                acc.verified = true;
+                __nxCachedAccRaw = raw;
+                __nxCachedAccObj = acc;
                 return acc;
             }
         } catch (e) {}
@@ -76,59 +112,74 @@
 
     function isUserVerified() {
         const acc = getCurrentAccount();
-        if (!acc || !acc.username) return false;
-        const u = acc.username.toLowerCase().trim();
-        const em = (acc.email || "").toLowerCase().trim();
-        if (ADMIN_USERNAMES.includes(u) || ADMIN_EMAILS.includes(em)) return true;
-        return Boolean(acc.googleVerified === true && acc.email);
+        return Boolean(acc && acc.username);
     }
 
     window.__nxIsUserVerified = isUserVerified;
 
-    function isValidRealGmail(emailStr) {
-        const em = String(emailStr || "").toLowerCase().trim();
-        if (!em.endsWith("@gmail.com")) return false;
-        const prefix = em.split("@")[0];
-        if (!prefix || prefix.length < 4) return false;
-        if (!/^[a-z0-9._]+$/.test(prefix)) return false;
-        if (/^\d+$/.test(prefix)) return false;
-        if (BANNED_FAKE_PREFIXES.includes(prefix)) return false;
-        if (/^(.)\1{3,}$/.test(prefix)) return false;
-        return true;
-    }
+    const ACCENT_THEMES = {
+        emerald: { name: "Emerald (Default)", primary: "#10b981", secondary: "#06b6d4" },
+        cyan:    { name: "Cyber Cyan", primary: "#38bdf8", secondary: "#3b82f6" },
+        purple:  { name: "Royal Violet", primary: "#a855f7", secondary: "#ec4899" },
+        rose:    { name: "Crimson Rose", primary: "#f43f5e", secondary: "#fb923c" },
+        amber:   { name: "Gold Amber", primary: "#f59e0b", secondary: "#eab308" }
+    };
 
     function getUserPrefs() {
+        const defaults = {
+            privateAccount: false,
+            readReceipts: true,
+            typingIndicator: true,
+            pushNotifications: true,
+            callRingtone: true,
+            highQualityMedia: true,
+            dndMode: false,
+            liteMode: false,
+            accentTheme: "emerald",
+            fontScale: "100",
+            dailyGoalMins: 60,
+            closeFriends: [],
+            blockedUsers: []
+        };
         try {
-            return Object.assign(
-                {
-                    privateAccount: false,
-                    readReceipts: true,
-                    typingIndicator: true,
-                    pushNotifications: true,
-                    callRingtone: true,
-                    highQualityMedia: true,
-                    closeFriends: [],
-                    blockedUsers: []
-                },
-                JSON.parse(localStorage.getItem(PREFS_KEY) || "{}")
-            );
+            return Object.assign(defaults, JSON.parse(localStorage.getItem(PREFS_KEY) || "{}"));
         } catch (e) {
-            return {
-                privateAccount: false,
-                readReceipts: true,
-                typingIndicator: true,
-                pushNotifications: true,
-                callRingtone: true,
-                highQualityMedia: true,
-                closeFriends: [],
-                blockedUsers: []
-            };
+            return defaults;
         }
     }
+
+    function applyAppearanceAndPerformancePrefs() {
+        const prefs = getUserPrefs();
+        const th = ACCENT_THEMES[prefs.accentTheme] || ACCENT_THEMES.emerald;
+        let styleEl = document.getElementById("nx-settings-pro-theme-css");
+        if (!styleEl) {
+            styleEl = document.createElement("style");
+            styleEl.id = "nx-settings-pro-theme-css";
+            document.head.appendChild(styleEl);
+        }
+        const scale = ["92", "100", "108"].includes(String(prefs.fontScale)) ? String(prefs.fontScale) : "100";
+        const liteCss = prefs.liteMode ? `
+            * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+            .nx-v31-post-card, .nx-modal-box { box-shadow: none !important; }
+            .nx-eq-bar { animation: none !important; }
+        ` : "";
+
+        styleEl.textContent = `
+            :root { --nx-accent: ${th.primary}; --nx-accent-2: ${th.secondary}; }
+            html { font-size: ${scale}% !important; }
+            .nx-nav-item.active { color: ${th.primary} !important; border-color: ${th.primary}55 !important; }
+            .nx-fab-post { background: linear-gradient(135deg, ${th.primary}, ${th.secondary}) !important; }
+            .nx-live-dot { background-color: ${th.primary} !important; box-shadow: 0 0 8px ${th.primary} !important; }
+            #nx-ig-submodal { z-index: 268000 !important; }
+            ${liteCss}
+        `;
+    }
+    applyAppearanceAndPerformancePrefs();
 
     function saveUserPrefs(prefs) {
         try {
             localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+            applyAppearanceAndPerformancePrefs();
             pushLocalDataToCloud();
         } catch (e) {}
     }
@@ -141,8 +192,7 @@
     }
 
     // =========================================================================
-    // 2. NEW USER FULL DATABASE HYDRATOR & STUCK POST REMOVER (Fixes 1000076729.jpg!)
-    //    Ensures brand-new users immediately see ALL real posts & Story Bar Last Seen!
+    // 2. SAFE FALLBACK HYDRATOR (ZERO 350ms REFLOW FIGHT WITH PROFILE.JS & ZERO SUPABASE WIPE!)
     // =========================================================================
     function isRefreshAnnouncementText(txt) {
         const norm = String(txt || "").toLowerCase().replace(/\s+/g, " ");
@@ -155,141 +205,63 @@
         );
     }
 
-    function formatTimeAgoBadge(ts) {
-        const num = Number(ts || 0);
-        if (!num || num < 1000000) return "1h ago";
-        const diffSec = Math.max(10, Math.floor((Date.now() - num) / 1000));
-        if (diffSec < 90) return "Live";
-        if (diffSec < 3600) return Math.floor(diffSec / 60) + "m ago";
-        if (diffSec < 86400) return Math.floor(diffSec / 3600) + "h ago";
-        return Math.floor(diffSec / 86400) + "d ago";
-    }
-
-    function cleanAndHydrateHomeFeedAndStories() {
-        // A. Remove the stuck "Website ko ek baar refresh 🔄 kar lena" card from #tab-home
-        const homeTab = document.getElementById("tab-home");
-        if (homeTab) {
-            homeTab.querySelectorAll("div, article, section").forEach((el) => {
-                if (el === homeTab || el.id === "nx-stories-bar" || el.querySelector("#nx-stories-bar")) return;
-                if (el.children.length >= 2 && el.clientHeight > 70 && el.clientHeight < 580) {
-                    const t = el.innerText || "";
-                    if (isRefreshAnnouncementText(t)) {
-                        el.style.display = "none";
-                        el.remove();
-                    }
-                }
-            });
-        }
-
-        // B. Ensure Story Bar items ALWAYS display a Last Seen badge (`Xm ago` / `Live`)
-        const storyBar = document.getElementById("nx-stories-bar") || document.querySelector("#tab-home > div:first-child");
-        if (storyBar && window.Nexus && Array.isArray(Nexus.users)) {
-            storyBar.querySelectorAll("div, button, a").forEach((item) => {
-                const lines = (item.innerText || "").split("\n").map((l) => l.trim()).filter(Boolean);
-                if (lines.length === 1 && lines[0].length >= 2 && lines[0].length <= 20 && lines[0] !== "Nexus ✅") {
-                    const nameLookup = lines[0].toLowerCase().replace(/\.\.\.$/, "").trim();
-                    const matchedUser = Nexus.users.find((u) => {
-                        if (!u) return false;
-                        const uN = (u.username || "").toLowerCase();
-                        const dN = (u.name || "").toLowerCase();
-                        return uN === nameLookup || dN === nameLookup || dN.startsWith(nameLookup);
-                    });
-                    if (matchedUser && !item.querySelector(".nx-auto-seen-pill")) {
-                        const badge = document.createElement("span");
-                        badge.className = "nx-auto-seen-pill";
-                        badge.style.cssText =
-                            "display:inline-block; margin-top:-6px; margin-bottom:2px; padding:1px 6px; border-radius:999px; background:#0f172a; border:1px solid #38bdf8; color:#e0f2fe; font-size:9px; font-weight:800;";
-                        badge.textContent = matchedUser.isOnlineNow ? "🟢 Live" : formatTimeAgoBadge(matchedUser.lastOnline);
-                        item.insertBefore(badge, item.lastElementChild);
-                    }
-                }
-            });
-        }
-
-        // C. Convert any video posts or chunked video streams in #tab-home into playable HD <video> elements!
-        if (homeTab) {
-            homeTab.querySelectorAll("img").forEach((img) => {
-                const src = img.getAttribute("src") || "";
-                if (
-                    src.match(/\.(mp4|webm|mov)(\?|$)/i) ||
-                    src.startsWith("data:video/") ||
-                    src.startsWith("NX_VIDEO_STREAM:")
-                ) {
-                    const v = document.createElement("video");
-                    v.controls = true;
-                    v.playsInline = true;
-                    v.preload = "metadata";
-                    v.style.cssText =
-                        "width:100%; max-height:440px; border-radius:16px; border:1px solid #1e293b; background:#000; margin-top:8px; display:block;";
-                    img.replaceWith(v);
-
-                    if (src.startsWith("NX_VIDEO_STREAM:")) {
-                        const metaParts = src.replace("NX_VIDEO_STREAM:", "").split(":");
-                        const sid = metaParts[0];
-                        const total = parseInt(metaParts[1] || "1", 10);
-                        loadChunkedStreamById(sid, total).then((fullDataUrl) => {
-                            if (fullDataUrl) v.src = fullDataUrl;
-                        });
-                    } else {
-                        v.src = src;
-                    }
-                }
-            });
-        }
-    }
-    setInterval(cleanAndHydrateHomeFeedAndStories, 350);
-
-    async function loadChunkedStreamById(streamId, totalChunks) {
-        if (!streamId || !window.Nexus || !Nexus.db) return "";
-        const parts = [];
-        for (let i = 0; i < totalChunks; i++) {
-            try {
-                const d = await Nexus.db.collection("nexus_media_chunks").doc(`${streamId}_${i}`).get();
-                if (d.exists) parts.push(d.data().data);
-            } catch (e) {}
-        }
-        return parts.join("");
-    }
-
-    // Force-hydrate Firestore posts & users for new visitors so they NEVER get stuck on 1 post!
     async function forceHydrateDatabaseForNewVisitors() {
         if (!window.Nexus || !Nexus.db) return;
+        // FIXED: Only run as safety fallback if posts are empty — NEVER overwrite Supabase data!
+        if (Array.isArray(Nexus.posts) && Nexus.posts.length > 0) return;
         try {
             const [pSnap, uSnap] = await Promise.all([
                 Nexus.db.collection("nexus_real_posts").orderBy("createdAt", "desc").limit(35).get(),
                 Nexus.db.collection("nexus_accounts").limit(65).get()
             ]);
 
-            const loadedUsers = [];
-            uSnap.forEach((d) => loadedUsers.push(d.data()));
-            if (loadedUsers.length > 0) {
-                Nexus.cloudAccounts = loadedUsers;
-            }
+            const uMap = new Map();
+            (Nexus.cloudAccounts || []).forEach((u) => { if (u && u.username) uMap.set(u.username.toLowerCase(), u); });
+            uSnap.forEach((d) => {
+                const u = d.data();
+                if (u && u.username && !uMap.has(u.username.toLowerCase())) uMap.set(u.username.toLowerCase(), u);
+            });
+            if (uMap.size > 0) Nexus.cloudAccounts = Array.from(uMap.values());
 
-            const loadedPosts = [];
+            const pMap = new Map();
+            (Nexus.posts || []).forEach((p) => { if (p && p.id) pMap.set(p.id, p); });
             pSnap.forEach((d) => {
                 const p = d.data();
                 p.id = d.id;
-                if (!isRefreshAnnouncementText(p.content || p.text || "")) {
-                    loadedPosts.push(p);
+                if (!isRefreshAnnouncementText(p.content || p.text || "") && !pMap.has(p.id)) {
+                    pMap.set(p.id, p);
                 }
             });
 
-            if (loadedPosts.length > 0) {
-                Nexus.posts = loadedPosts;
+            if (pMap.size > 0) {
+                Nexus.posts = Array.from(pMap.values()).sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
                 Nexus.rebuildAllUsersMasterList && Nexus.rebuildAllUsersMasterList();
                 Nexus.notifyAll && Nexus.notifyAll();
             }
         } catch (e) {}
     }
-    setTimeout(forceHydrateDatabaseForNewVisitors, 600);
-    setTimeout(forceHydrateDatabaseForNewVisitors, 2200);
+    setTimeout(forceHydrateDatabaseForNewVisitors, 2400);
 
     // =========================================================================
     // 3. 100% WORKING VIDEO UPLOAD FROM POST MODAL ('+' ICON -> PUBLISH NOW)
     // =========================================================================
     function uploadVideoFileForPostModal(file, onProgress) {
-        return new Promise((resolve, reject) => {
+        return new Promise(async (resolve, reject) => {
+            // FIXED: Prefer permanent 50MB Supabase Storage first (zero Firestore chunk lag!)
+            if (window.NexusSecurity && typeof window.NexusSecurity.uploadPublicMedia === "function") {
+                try {
+                    const uid = await window.NexusSecurity.getAuthenticatedUserId();
+                    if (uid && file.size <= 50 * 1024 * 1024) {
+                        onProgress && onProgress(30);
+                        const up = await window.NexusSecurity.uploadPublicMedia(file, "videos");
+                        if (up && up.publicUrl) {
+                            onProgress && onProgress(100);
+                            resolve(up.publicUrl);
+                            return;
+                        }
+                    }
+                } catch (e) {}
+            }
             const reader = new FileReader();
             reader.onload = async (e) => {
                 try {
@@ -507,8 +479,8 @@
         target.googleVerified = true;
         target.verified = true;
 
+        __nxCachedAccRaw = null; __nxCachedAccObj = null;
         localStorage.setItem("nx_active_account", JSON.stringify(target));
-        localStorage.setItem("nx_legacy_backup_account", JSON.stringify(target));
         document.body.classList.remove("nx-auth-locked");
         document.getElementById("nx-google-auth-hub")?.remove();
 
@@ -522,454 +494,17 @@
         pullCloudDataToLocal();
     };
 
-    async function completeDirectFirestoreLogin(accData) {
-        if (!accData || !accData.username) return;
-        const finalUsername = accData.username.toLowerCase().replace(/[^a-z0-9_]/g, "");
-        const existingAcc = getCurrentAccount();
-
-        const mergedAccount = Object.assign({}, existingAcc || {}, accData, {
-            username: finalUsername,
-            googleVerified: true,
-            verified: true,
-            isOnlineNow: true,
-            lastOnline: Date.now(),
-            lastSeenAt: Date.now(),
-            verifiedAt: Date.now()
-        });
-
-        localStorage.setItem("nx_active_account", JSON.stringify(mergedAccount));
-        localStorage.setItem("nx_legacy_backup_account", JSON.stringify(mergedAccount));
-        saveAccountToMultiList(mergedAccount);
-
-        document.body.classList.remove("nx-auth-locked");
-        document.getElementById("nx-google-auth-hub")?.remove();
-        document.getElementById("nx-core-auth-modal")?.remove();
-
-        if (window.Nexus) {
-            Nexus.rebuildAllUsersMasterList && Nexus.rebuildAllUsersMasterList();
-            Nexus.notifyAll && Nexus.notifyAll();
-            Nexus.toast && Nexus.toast("🔓 Welcome @" + finalUsername + " (100% Verified)!");
-            Nexus.switchTab && Nexus.switchTab("tab-home");
-        }
-
-        if (window.Nexus && Nexus.db) {
-            await Promise.allSettled([
-                Nexus.db.collection("nexus_accounts").doc(finalUsername).set(mergedAccount, { merge: true }),
-                Nexus.db.collection("nexus_verified_emails").doc(finalUsername).set({
-                    username: finalUsername,
-                    name: mergedAccount.name || finalUsername,
-                    email: mergedAccount.email || "",
-                    authPin: mergedAccount.authPin || "",
-                    verifiedAt: Date.now(),
-                    humanTime: new Date().toLocaleString()
-                })
-            ]);
-        }
-
-        renderInstagramSettingsTab();
-        startGlobalIncomingCallListener();
-    }
-
-    function overrideBrokenFirebaseAuthButtons() {
-        window.startNexusGoogleSignIn = function () {
-            const existing = getCurrentAccount();
-            window.openAdvancedGoogleAuthModal(existing && existing.username ? "signin" : "signup");
-        };
-
-        const gBtn = document.getElementById("nx-btn-google-redirect");
-        if (gBtn && !gBtn.dataset.v20Bound) {
-            gBtn.dataset.v20Bound = "1";
-            gBtn.onclick = (ev) => {
-                ev.stopPropagation();
-                ev.preventDefault();
-                const existing = getCurrentAccount();
-                window.openAdvancedGoogleAuthModal(existing && existing.username ? "signin" : "signup");
-            };
-        }
-    }
-    setInterval(overrideBrokenFirebaseAuthButtons, 250);
-
     // =========================================================================
-    // 5. OFFICIAL NEXUS ACCOUNTS CENTER: LOG IN | SIGN UP | FIND ACCOUNT
-    //    - Supports Old Name/Username + Old Password Login (1000076713.jpg)
-    //    - Zero 'auth/api-key-not-valid' Error (1000076693.jpg)
-    //    - Blocks Fake Gmails & Preserves 100% of Old User Data
+    // 5. OLD PIN/CAPTCHA LOGIN PERMANENTLY REMOVED -> CLEAN BRIDGE TO SUPABASE PRO OTP AUTH
     // =========================================================================
-    window.openAdvancedGoogleAuthModal = function (initialMode) {
-        document.getElementById("nx-core-auth-modal")?.remove();
-        currentSecurityCaptcha = String(Math.floor(1000 + Math.random() * 9000));
-
-        const mode = initialMode || "signin";
-        const existingLocal = getCurrentAccount();
-        const modal = document.createElement("div");
-        modal.id = "nx-core-auth-modal";
-        modal.style.cssText =
-            "position:fixed; inset:0; background:rgba(2,6,23,0.95); z-index:200085; display:flex; align-items:center; justify-content:center; padding:14px; backdrop-filter:blur(8px);";
-
-        let formBodyHtml = "";
-
-        if (mode === "signin") {
-            formBodyHtml = `
-                <div style="display:flex; flex-direction:column; gap:10px; text-align:left;">
-                    <div>
-                        <label style="font-size:10.5px; font-weight:800; color:#94a3b8; display:block; margin-bottom:4px;">OLD @USERNAME, NAME OR GMAIL ID</label>
-                        <input type="text" id="nx-login-id" value="${
-                            existingLocal && existingLocal.username ? existingLocal.username : ""
-                        }" placeholder="e.g. mohit_01 or yourname@gmail.com" style="width:100%; padding:11px 14px; border-radius:12px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; outline:none;" />
-                    </div>
-                    <div>
-                        <label style="font-size:10.5px; font-weight:800; color:#34d399; display:block; margin-bottom:4px;">YOUR GMAIL ADDRESS (OPTIONAL FOR OLD MEMBERS)</label>
-                        <input type="email" id="nx-login-gmail" value="${
-                            existingLocal && existingLocal.email ? existingLocal.email : ""
-                        }" placeholder="yourrealname@gmail.com" style="width:100%; padding:11px 14px; border-radius:12px; background:#090d16; border:1px solid #10b981; color:#fff; font-size:13px; outline:none;" />
-                    </div>
-                    <div>
-                        <label style="font-size:10.5px; font-weight:800; color:#94a3b8; display:block; margin-bottom:4px;">OLD PASSWORD / 4-DIGIT SECURITY PIN</label>
-                        <input type="password" id="nx-login-pass" placeholder="Enter your old PIN or password..." style="width:100%; padding:11px 14px; border-radius:12px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; outline:none;" />
-                    </div>
-                    <div id="nx-auth-err-msg" style="display:none; padding:8px 10px; border-radius:10px; background:rgba(244,63,94,0.15); border:1px solid #f43f5e; color:#fda4af; font-size:11.5px; font-weight:700;"></div>
-
-                    <button type="button" id="nx-btn-cloud-login" style="width:100%; padding:13px; border-radius:14px; background:linear-gradient(90deg,#10b981,#06b6d4); color:#020617; font-weight:900; font-size:13.5px; border:none; cursor:pointer; margin-top:4px; box-shadow:0 6px 20px rgba(16,185,129,0.35);">
-                        🔓 Verify & Log In Now
-                    </button>
-                </div>
-            `;
-        } else if (mode === "signup") {
-            formBodyHtml = `
-                <div style="display:flex; flex-direction:column; gap:8px; text-align:left;">
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                        <div>
-                            <label style="font-size:10px; font-weight:800; color:#94a3b8; display:block; margin-bottom:3px;">CHOOSE @USERNAME</label>
-                            <input type="text" id="nx-su-uname" placeholder="e.g. aarav_jee" style="width:100%; padding:10px 11px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:12.5px; outline:none;" />
-                        </div>
-                        <div>
-                            <label style="font-size:10px; font-weight:800; color:#94a3b8; display:block; margin-bottom:3px;">FULL NAME</label>
-                            <input type="text" id="nx-su-name" placeholder="Aarav Sharma" style="width:100%; padding:10px 11px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:12.5px; outline:none;" />
-                        </div>
-                    </div>
-
-                    <div>
-                        <label style="font-size:10px; font-weight:800; color:#34d399; display:block; margin-bottom:3px;">REAL GMAIL ID (FAKE / DUMMY GMAIL BLOCKED)</label>
-                        <input type="email" id="nx-su-email" placeholder="yourrealname@gmail.com" style="width:100%; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #10b981; color:#fff; font-size:13px; outline:none;" />
-                    </div>
-
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                        <div>
-                            <label style="font-size:10px; font-weight:800; color:#94a3b8; display:block; margin-bottom:3px;">CREATE PASSWORD/PIN</label>
-                            <input type="password" id="nx-su-pass" placeholder="Min 4 chars" style="width:100%; padding:10px 11px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:12.5px; outline:none;" />
-                        </div>
-                        <div>
-                            <label style="font-size:10px; font-weight:800; color:#94a3b8; display:block; margin-bottom:3px;">STREAM</label>
-                            <select id="nx-su-bio" style="width:100%; padding:10px 8px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:12px; outline:none;">
-                                <option value="IIT-JEE Aspirant 🚀">IIT-JEE 🚀</option>
-                                <option value="NEET Aspirant 🩺">NEET 🩺</option>
-                                <option value="Developer 💻">Coding 💻</option>
-                                <option value="PCM Student ⚡">PCM ⚡</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div style="background:#090d16; border:1px solid #1e293b; border-radius:12px; padding:9px 12px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
-                        <div>
-                            <div style="font-size:10px; color:#94a3b8; font-weight:800;">SECURITY CODE</div>
-                            <div style="font-size:16px; font-weight:900; color:#fbbf24; letter-spacing:3px; font-family:monospace;">${currentSecurityCaptcha}</div>
-                        </div>
-                        <input type="text" id="nx-su-captcha" maxlength="4" placeholder="Enter ${currentSecurityCaptcha}" style="width:130px; padding:8px 10px; border-radius:9px; background:#0f172a; border:1px solid #334155; color:#fff; font-size:13px; font-weight:800; text-align:center; outline:none;" />
-                    </div>
-
-                    <div id="nx-auth-err-msg" style="display:none; padding:8px 10px; border-radius:10px; background:rgba(244,63,94,0.15); border:1px solid #f43f5e; color:#fda4af; font-size:11.5px; font-weight:700;"></div>
-
-                    <button type="button" id="nx-btn-cloud-signup" style="width:100%; padding:12px; border-radius:13px; background:linear-gradient(90deg,#10b981,#06b6d4); color:#020617; font-weight:900; font-size:13.5px; border:none; cursor:pointer; margin-top:2px; box-shadow:0 6px 20px rgba(16,185,129,0.35);">
-                        ✨ Verify & Create Official Account
-                    </button>
-                </div>
-            `;
-        } else {
-            formBodyHtml = `
-                <div style="text-align:left; margin-bottom:12px;">
-                    <label style="font-size:11px; font-weight:800; color:#94a3b8; display:block; margin-bottom:4px;">SEARCH YOUR OLD @USERNAME OR NAME</label>
-                    <div style="display:flex; gap:6px;">
-                        <input type="text" id="nx-find-query" placeholder="Type your old username or name..." style="flex:1; padding:10px 12px; border-radius:11px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13px; outline:none;" />
-                        <button type="button" id="nx-find-btn" style="padding:10px 14px; border-radius:11px; background:#38bdf8; color:#020617; font-weight:900; font-size:12px; border:none; cursor:pointer;">Search 🔍</button>
-                    </div>
-                </div>
-                <div id="nx-find-results" style="max-height:220px; overflow-y:auto; text-align:left;">
-                    <div style="color:#64748b; font-size:12px; text-align:center; padding:14px;">Search your old account above to recover all your followers, DP & chats!</div>
-                </div>
-            `;
-        }
-
-        modal.innerHTML = `
-            <div style="background:linear-gradient(160deg,#0f172a,#090d16); border:1.5px solid #10b981; border-radius:26px; width:100%; max-width:395px; padding:20px 18px; color:#fff; box-shadow:0 24px 60px rgba(0,0,0,0.95); position:relative;">
-                <button type="button" id="nx-close-auth-modal" style="position:absolute; top:14px; right:14px; width:30px; height:30px; border-radius:50%; background:#1e293b; border:none; color:#cbd5e1; font-weight:900; cursor:pointer;">✕</button>
-
-                <div style="text-align:center; margin-bottom:12px;">
-                    <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(16,185,129,0.14); border:1px solid rgba(16,185,129,0.4); color:#34d399; font-size:10.5px; font-weight:800; padding:3px 11px; border-radius:999px; margin-bottom:6px;">
-                        🛡️ Nexus Official Cloud Verification
-                    </div>
-                    <h2 style="font-size:18px; font-weight:900; color:#f8fafc;">
-                        ${
-                            mode === "signup"
-                                ? "Create Verified Account"
-                                : mode === "find"
-                                ? "Find & Recover Account"
-                                : "Sign In to Nexus"
-                        }
-                    </h2>
-                </div>
-
-                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; background:#090d16; padding:4px; border-radius:13px; border:1px solid #1e293b; margin-bottom:14px;">
-                    <button type="button" id="nx-tab-signin" style="padding:8px 4px; border-radius:9px; border:none; font-weight:800; font-size:11.5px; cursor:pointer; background:${
-                        mode === "signin" ? "#1e293b" : "transparent"
-                    }; color:${mode === "signin" ? "#38bdf8" : "#64748b"};">
-                        Log In
-                    </button>
-                    <button type="button" id="nx-tab-signup" style="padding:8px 4px; border-radius:9px; border:none; font-weight:800; font-size:11.5px; cursor:pointer; background:${
-                        mode === "signup" ? "#1e293b" : "transparent"
-                    }; color:${mode === "signup" ? "#34d399" : "#64748b"};">
-                        Sign Up
-                    </button>
-                    <button type="button" id="nx-tab-find" style="padding:8px 4px; border-radius:9px; border:none; font-weight:800; font-size:11.5px; cursor:pointer; background:${
-                        mode === "find" ? "#1e293b" : "transparent"
-                    }; color:${mode === "find" ? "#fbbf24" : "#64748b"};">
-                        Find Account
-                    </button>
-                </div>
-
-                ${formBodyHtml}
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-
-        const showErr = (msg) => {
-            const box = modal.querySelector("#nx-auth-err-msg");
-            if (box) {
-                box.textContent = msg;
-                box.style.display = "block";
-            } else {
-                alert(msg);
-            }
-        };
-
-        modal.querySelector("#nx-close-auth-modal").onclick = () => modal.remove();
-        modal.querySelector("#nx-tab-signin").onclick = () => window.openAdvancedGoogleAuthModal("signin");
-        modal.querySelector("#nx-tab-signup").onclick = () => window.openAdvancedGoogleAuthModal("signup");
-        modal.querySelector("#nx-tab-find").onclick = () => window.openAdvancedGoogleAuthModal("find");
-
-        // HANDLER 1: CLOUD LOG IN (Supports Old Name/Username + Old Password OR Verified Gmail!)
-        const loginBtn = modal.querySelector("#nx-btn-cloud-login");
-        if (loginBtn) {
-            loginBtn.onclick = async () => {
-                const rawId = (modal.querySelector("#nx-login-id").value || "").toLowerCase().replace(/^@/, "").trim();
-                const rawGmail = (modal.querySelector("#nx-login-gmail").value || "").toLowerCase().trim();
-                const rawPass = (modal.querySelector("#nx-login-pass").value || "").trim();
-
-                if (!rawId) {
-                    showErr("⚠️ Apna Old @username, Name ya Gmail ID likhein!");
-                    return;
-                }
-                if (rawGmail && !isValidRealGmail(rawGmail)) {
-                    showErr("⚠️ Kripya apni asli @gmail.com ID likhein (Fake Gmail allowed nahi hai)!");
-                    return;
-                }
-                if (rawPass.length < 4) {
-                    showErr("⚠️ Apna Old Password ya 4-digit Security PIN likhein!");
-                    return;
-                }
-
-                loginBtn.disabled = true;
-                loginBtn.innerText = "⏳ Verifying with Nexus Cloud...";
-
-                const unameLookup = rawId.includes("@")
-                    ? rawId.split("@")[0].replace(/[^a-z0-9_]/g, "")
-                    : rawId.replace(/[^a-z0-9_]/g, "");
-
-                let foundAcc = null;
-
-                if (window.Nexus && Array.isArray(Nexus.users)) {
-                    foundAcc = Nexus.users.find((u) => {
-                        if (!u) return false;
-                        const uName = (u.username || "").toLowerCase().trim();
-                        const dName = (u.name || "").toLowerCase().trim();
-                        const uMail = (u.email || "").toLowerCase().trim();
-                        return (
-                            uName === rawId ||
-                            uName === unameLookup ||
-                            dName === rawId ||
-                            (rawGmail && uMail === rawGmail)
-                        );
-                    });
-                }
-
-                if (!foundAcc && window.Nexus && Nexus.db && unameLookup) {
-                    try {
-                        const doc = await Nexus.db.collection("nexus_accounts").doc(unameLookup).get();
-                        if (doc.exists) foundAcc = doc.data();
-                    } catch (e) {}
-                }
-
-                if (foundAcc) {
-                    const savedPin = foundAcc.authPin || foundAcc.pin || "";
-                    if (savedPin && savedPin !== rawPass) {
-                        loginBtn.disabled = false;
-                        loginBtn.innerText = "🔓 Verify & Log In Now";
-                        showErr("⚠️ Incorrect Password/PIN for @" + foundAcc.username + "!");
-                        return;
-                    }
-                    if (foundAcc.email && rawGmail && foundAcc.email.toLowerCase() !== rawGmail) {
-                        loginBtn.disabled = false;
-                        loginBtn.innerText = "🔓 Verify & Log In Now";
-                        showErr("⚠️ Yeh account kisi dusri Gmail se linked hai!");
-                        return;
-                    }
-
-                    await completeDirectFirestoreLogin(
-                        Object.assign({}, foundAcc, {
-                            username: foundAcc.username,
-                            email: rawGmail || foundAcc.email || foundAcc.username + "@gmail.com",
-                            authPin: rawPass
-                        })
-                    );
-                } else {
-                    if (!rawGmail || !isValidRealGmail(rawGmail)) {
-                        loginBtn.disabled = false;
-                        loginBtn.innerText = "🔓 Verify & Log In Now";
-                        showErr("⚠️ Naye account ke liye apni asli @gmail.com ID upar Gmail box mein zaroor likhein!");
-                        return;
-                    }
-                    await completeDirectFirestoreLogin({
-                        username: unameLookup || "user_" + Math.floor(1000 + Math.random() * 9000),
-                        name: (existingLocal && existingLocal.name) || rawId,
-                        dp: (existingLocal && existingLocal.dp) || "",
-                        bio: (existingLocal && existingLocal.bio) || "Google Verified Nexus Member ✨",
-                        email: rawGmail,
-                        authPin: rawPass
-                    });
-                }
-            };
-        }
-
-        // HANDLER 2: CLOUD SIGN-UP (With Anti-Fake Gmail Guard & Security Code)
-        const signupBtn = modal.querySelector("#nx-btn-cloud-signup");
-        if (signupBtn) {
-            signupBtn.onclick = async () => {
-                const uname = (modal.querySelector("#nx-su-uname").value || "")
-                    .toLowerCase()
-                    .replace(/[^a-z0-9_]/g, "");
-                const fullName = (modal.querySelector("#nx-su-name").value || "").trim();
-                const email = (modal.querySelector("#nx-su-email").value || "").toLowerCase().trim();
-                const pass = (modal.querySelector("#nx-su-pass").value || "").trim();
-                const bio = modal.querySelector("#nx-su-bio").value || "IIT-JEE Aspirant 🚀";
-                const enteredCaptcha = (modal.querySelector("#nx-su-captcha").value || "").trim();
-
-                if (uname.length < 3) {
-                    showErr("⚠️ Username kam se kam 3 letters ka hona chahiye!");
-                    return;
-                }
-                if (BANNED_FAKE_PREFIXES.includes(uname)) {
-                    showErr("⚠️ Yeh dummy username allowed nahi hai! Apna asli username chunein.");
-                    return;
-                }
-                if (!fullName || fullName.length < 2) {
-                    showErr("⚠️ Apna Full Name likhein!");
-                    return;
-                }
-                if (!isValidRealGmail(email)) {
-                    showErr("⚠️ Fake Gmail Blocked! Sirf apni asli @gmail.com ID daalein.");
-                    return;
-                }
-                if (pass.length < 4) {
-                    showErr("⚠️ Security ke liye kam se kam 4 characters ka Password/PIN banayein!");
-                    return;
-                }
-                if (enteredCaptcha !== currentSecurityCaptcha) {
-                    showErr("⚠️ Security Code galat hai! Box mein " + currentSecurityCaptcha + " likhein.");
-                    return;
-                }
-
-                signupBtn.disabled = true;
-                signupBtn.innerText = "⏳ Checking Duplicate & Verifying...";
-
-                if (window.Nexus && Nexus.db) {
-                    try {
-                        const existingDoc = await Nexus.db.collection("nexus_accounts").doc(uname).get();
-                        if (existingDoc.exists) {
-                            const ex = existingDoc.data();
-                            if (ex && ex.email && ex.email.toLowerCase() !== email) {
-                                signupBtn.disabled = false;
-                                signupBtn.innerText = "✨ Verify & Create Official Account";
-                                showErr("⚠️ @" + uname + " pehle se kisi aur member ka hai! Dusra username chunein.");
-                                return;
-                            }
-                        }
-                    } catch (e) {}
-                }
-
-                await completeDirectFirestoreLogin({
-                    username: uname,
-                    name: fullName,
-                    email: email,
-                    authPin: pass,
-                    bio: bio,
-                    dp: "",
-                    followersList: [],
-                    followingList: []
-                });
-            };
-        }
-
-        // HANDLER 3: FIND & RECOVER OLD ACCOUNT
-        const findBtn = modal.querySelector("#nx-find-btn");
-        if (findBtn) {
-            findBtn.onclick = () => {
-                const q = (modal.querySelector("#nx-find-query").value || "").toLowerCase().replace(/^@/, "").trim();
-                const resBox = modal.querySelector("#nx-find-results");
-                if (!q) return;
-
-                const allUsers = (window.Nexus && Array.isArray(Nexus.users)) ? Nexus.users : [];
-                const matches = allUsers.filter((u) => {
-                    if (!u || !u.username) return false;
-                    return (
-                        u.username.toLowerCase().includes(q) ||
-                        (u.name && u.name.toLowerCase().includes(q))
-                    );
-                });
-
-                if (!matches.length) {
-                    resBox.innerHTML = `<div style="color:#f43f5e; font-size:12px; text-align:center; padding:12px;">No account found matching "${q}".</div>`;
-                    return;
-                }
-
-                resBox.innerHTML = matches
-                    .slice(0, 8)
-                    .map(
-                        (u) => `
-                        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px; background:#090d16; border:1px solid #1e293b; border-radius:12px; margin-bottom:7px;">
-                            <div>
-                                <div style="font-size:13px; font-weight:800; color:#f8fafc;">${u.name || u.username}</div>
-                                <div style="font-size:11px; color:#34d399;">@${u.username} • ${(u.followersList || []).length} Followers</div>
-                            </div>
-                            <button type="button" data-recover-uname="${u.username}" style="padding:7px 11px; border-radius:9px; background:#10b981; color:#020617; font-weight:900; font-size:11px; border:none; cursor:pointer;">
-                                Recover 🔓
-                            </button>
-                        </div>
-                    `
-                    )
-                    .join("");
-
-                resBox.querySelectorAll("[data-recover-uname]").forEach((btn) => {
-                    btn.onclick = () => {
-                        const targetU = btn.getAttribute("data-recover-uname");
-                        const targetObj = matches.find((m) => m.username === targetU);
-                        if (!targetObj) return;
-                        localStorage.setItem("nx_active_account", JSON.stringify(targetObj));
-                        window.openAdvancedGoogleAuthModal("signin");
-                    };
-                });
-            };
-        }
+    window.startNexusGoogleSignIn = function () {
+        openSupabaseProAuth("login");
     };
+    if (!window.openAdvancedGoogleAuthModal) {
+        window.openAdvancedGoogleAuthModal = function (initialMode) {
+            openSupabaseProAuth(initialMode === "signup" ? "signup" : "login");
+        };
+    }
 
     // =========================================================================
     // 6. GLOBAL CAPTURE-PHASE NATIVE WEBRTC VIDEO & VOICE CALL ENGINE
@@ -1067,7 +602,7 @@
 
     function playIncomingRingtoneBeep() {
         const prefs = getUserPrefs();
-        if (!prefs.callRingtone) return;
+        if (!prefs.callRingtone || prefs.dndMode) return;
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             const osc = ctx.createOscillator();
@@ -1097,8 +632,11 @@
             activeIceUnsub = null;
         }
         if (localMediaStream) {
-            localMediaStream.getTracks().forEach((t) => t.stop());
+            localMediaStream.getTracks().forEach((t) => { try { t.enabled = false; t.stop(); } catch (e) {} });
             localMediaStream = null;
+        }
+        if (typeof window.forceReleaseAllMicAndCamera === "function") {
+            window.forceReleaseAllMicAndCamera();
         }
         if (peerConn) {
             try {
@@ -1158,7 +696,7 @@
         callWin.id = "nx-pro-call-window";
         callWin.dataset.minimized = "0";
         callWin.style.cssText =
-            "position:fixed; inset:0; background:radial-gradient(circle at top,#0f172a,#020617); z-index:200090; display:flex; flex-direction:column; justify-content:space-between; overflow:hidden; color:#fff; user-select:none;";
+            "position:fixed; inset:0; background:radial-gradient(circle at top,#0f172a,#020617); z-index:285000; display:flex; flex-direction:column; justify-content:space-between; overflow:hidden; color:#fff; user-select:none;";
 
         callWin.innerHTML = `
             <div style="z-index:10; background:linear-gradient(180deg,rgba(2,6,23,0.92),transparent); padding:12px 16px;">
@@ -1540,6 +1078,8 @@
     }
 
     function showIncomingCallBanner(callData) {
+        const prefs = getUserPrefs();
+        if (prefs.dndMode) return;
         if (document.getElementById("nx-pro-call-window")) return;
         let banner = document.getElementById("nx-incoming-call-banner");
         if (banner) return;
@@ -1551,7 +1091,7 @@
         banner = document.createElement("div");
         banner.id = "nx-incoming-call-banner";
         banner.style.cssText =
-            "position:fixed; top:12px; left:50%; transform:translateX(-50%); width:94%; max-width:410px; background:linear-gradient(135deg,#0f172a,#064e3b); border:2px solid #10b981; border-radius:22px; padding:14px 16px; z-index:200095; box-shadow:0 18px 45px rgba(0,0,0,0.92); color:#fff; display:flex; align-items:center; justify-content:space-between; gap:10px;";
+            "position:fixed; top:12px; left:50%; transform:translateX(-50%); width:94%; max-width:410px; background:linear-gradient(135deg,#0f172a,#064e3b); border:2px solid #10b981; border-radius:22px; padding:14px 16px; z-index:290000; box-shadow:0 18px 45px rgba(0,0,0,0.92); color:#fff; display:flex; align-items:center; justify-content:space-between; gap:10px;";
 
         banner.innerHTML = `
             <div style="display:flex; align-items:center; gap:10px;">
@@ -1639,10 +1179,10 @@
         const modal = document.createElement("div");
         modal.id = "nx-ig-submodal";
         modal.style.cssText =
-            "position:fixed; inset:0; background:rgba(2,6,23,0.88); z-index:200070; display:flex; align-items:flex-end; justify-content:center; backdrop-filter:blur(5px);";
+            "position:fixed; left:0; right:0; top:0; height:100dvh; background:rgba(2,6,23,0.9); z-index:268000; display:flex; align-items:flex-end; justify-content:center; backdrop-filter:blur(5px); box-sizing:border-box;";
 
         modal.innerHTML = `
-            <div style="background:#0f172a; border-top:1.5px solid #334155; border-radius:24px 24px 0 0; width:100%; max-width:600px; max-height:86dvh; overflow-y:auto; padding:18px 16px 28px; color:#fff; box-shadow:0 -12px 40px rgba(0,0,0,0.85);">
+            <div style="background:#0f172a; border-top:1.5px solid #10b981; border-radius:24px 24px 0 0; width:100%; max-width:600px; max-height:85dvh; overflow-y:auto; padding:18px 16px 32px; color:#fff; box-shadow:0 -12px 40px rgba(0,0,0,0.88); box-sizing:border-box;">
                 <div style="width:42px; height:4px; background:#334155; border-radius:999px; margin:0 auto 14px;"></div>
                 <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid #1e293b;">
                     <h3 style="font-size:16px; font-weight:900; color:#f8fafc;">${title}</h3>
@@ -1653,11 +1193,26 @@
         `;
 
         document.body.appendChild(modal);
-        modal.querySelector("#nx-close-submodal").onclick = () => modal.remove();
-        modal.onclick = (e) => {
-            if (e.target === modal) modal.remove();
+        const syncSubVp = () => {
+            if (!modal.isConnected || !window.visualViewport) return;
+            modal.style.height = Math.max(240, Math.round(window.visualViewport.height)) + "px";
+            modal.style.top = Math.max(0, Math.round(window.visualViewport.offsetTop)) + "px";
         };
-        if (onMount) onMount(modal);
+        const closeSub = () => {
+            if (window.visualViewport) {
+                window.visualViewport.removeEventListener("resize", syncSubVp);
+                window.visualViewport.removeEventListener("scroll", syncSubVp);
+            }
+            modal.remove();
+        };
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener("resize", syncSubVp);
+            window.visualViewport.addEventListener("scroll", syncSubVp);
+            syncSubVp();
+        }
+        modal.querySelector("#nx-close-submodal").onclick = closeSub;
+        modal.onclick = (e) => { if (e.target === modal) closeSub(); };
+        if (onMount) onMount(modal, closeSub);
     }
 
     function openAccountSwitcherModal() {
@@ -1719,11 +1274,11 @@
             });
             modal.querySelector("#nx-add-existing-acc").onclick = () => {
                 modal.remove();
-                window.openAdvancedGoogleAuthModal("signin");
+                openSupabaseProAuth("login");
             };
             modal.querySelector("#nx-add-new-acc").onclick = () => {
                 modal.remove();
-                window.openAdvancedGoogleAuthModal("signup");
+                openSupabaseProAuth("signup");
             };
         });
     }
@@ -1913,27 +1468,99 @@
                     </div>
                 </div>
 
-                <!-- 5. YOUR APP AND MEDIA -->
+                <!-- 5. PRO SECURITY, APPEARANCE, STUDY FOCUS & PERFORMANCE STUDIO -->
                 <div class="nx-settings-group">
-                    <div style="${secTitleStyle}">Your app and media</div>
+                    <div style="${secTitleStyle}">Pro Security, Appearance &amp; Study Focus</div>
                     <div style="border-top:1px solid #1e293b; border-bottom:1px solid #1e293b;">
+                        <div class="nx-ig-row" data-ig-row="security_devices" style="${rowStyle}">
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <span style="font-size:17px;">🛡️</span>
+                                <div>
+                                    <div style="font-size:13.5px; font-weight:700; color:#f8fafc;">Active Devices, Password &amp; Old Account Link</div>
+                                    <div style="font-size:11px; color:#64748b;">2-Device Lock, OTP password reset &amp; link old @username</div>
+                                </div>
+                            </div>
+                            <span style="color:#34d399; font-size:11.5px; font-weight:800;">Manage ›</span>
+                        </div>
+
+                        <div class="nx-ig-row" data-ig-row="appearance_studio" style="${rowStyle}">
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <span style="font-size:17px;">🎨</span>
+                                <div>
+                                    <div style="font-size:13.5px; font-weight:700; color:#f8fafc;">Appearance, Font Size &amp; Low-RAM Lite Mode</div>
+                                    <div style="font-size:11px; color:#64748b;">5 Neon Themes + Anti-Hang Lite Mode for mobile</div>
+                                </div>
+                            </div>
+                            <span style="color:#38bdf8; font-size:11.5px; font-weight:800;">${prefs.liteMode ? "⚡ Lite ON" : (ACCENT_THEMES[prefs.accentTheme]?.name.split(" ")[0] || "Theme")} ›</span>
+                        </div>
+
+                        <div class="nx-ig-row" data-ig-row="study_wellbeing" style="${rowStyle}">
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <span style="font-size:17px;">🎓</span>
+                                <div>
+                                    <div style="font-size:13.5px; font-weight:700; color:#f8fafc;">Study Focus, DND &amp; Screen Time</div>
+                                    <div style="font-size:11px; color:#64748b;">Today: ${getTodayScreenMinutes()}m active • Pomodoro &amp; Silent Study DND</div>
+                                </div>
+                            </div>
+                            <span style="color:${prefs.dndMode ? "#fbbf24" : "#34d399"}; font-size:11.5px; font-weight:800;">${prefs.dndMode ? "🔕 DND ON" : "Focus ›"}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. YOUR APP, STORAGE DIAGNOSTICS & BACKUP -->
+                <div class="nx-settings-group">
+                    <div style="${secTitleStyle}">Your app, storage &amp; backup</div>
+                    <div style="border-top:1px solid #1e293b; border-bottom:1px solid #1e293b;">
+                        <div class="nx-ig-row" data-ig-row="storage_diagnostics" style="${rowStyle}">
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <span style="font-size:17px;">📊</span>
+                                <div>
+                                    <div style="font-size:13.5px; font-weight:700; color:#f8fafc;">Storage Analyzer, Cache Cleaner &amp; Server Ping</div>
+                                    <div style="font-size:11px; color:#64748b;">Live Supabase/Firebase ping test &amp; 1-tap RAM speed boost</div>
+                                </div>
+                            </div>
+                            <span style="color:#38bdf8; font-size:11.5px; font-weight:800;">Check ›</span>
+                        </div>
+
                         <div class="nx-ig-row" data-ig-row="media_storage" style="${rowStyle}">
                             <div style="display:flex; align-items:center; gap:12px;">
                                 <span style="font-size:17px;">⚡</span>
                                 <div>
                                     <div style="font-size:13.5px; font-weight:700; color:#f8fafc;">Data usage and media quality</div>
-                                    <div style="font-size:11px; color:#64748b;">HD uploads, 50MB video streaming & speed optimizer</div>
+                                    <div style="font-size:11px; color:#64748b;">HD uploads, 50MB Supabase video storage &amp; optimizer</div>
                                 </div>
                             </div>
                             <span style="color:#64748b; font-size:16px;">›</span>
+                        </div>
+
+                        <div class="nx-ig-row" data-ig-row="data_backup" style="${rowStyle}">
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <span style="font-size:17px;">📥</span>
+                                <div>
+                                    <div style="font-size:13.5px; font-weight:700; color:#f8fafc;">Backup &amp; Restore My Nexus Data (JSON)</div>
+                                    <div style="font-size:11px; color:#64748b;">Export Saved Notes, AI History &amp; Preferences safely</div>
+                                </div>
+                            </div>
+                            <span style="color:#34d399; font-size:11.5px; font-weight:800;">Export ›</span>
+                        </div>
+
+                        <div class="nx-ig-row" data-ig-row="install_pwa" style="${rowStyle}">
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <span style="font-size:17px;">📲</span>
+                                <div>
+                                    <div style="font-size:13.5px; font-weight:700; color:#f8fafc;">Install Official Nexus App (PWA)</div>
+                                    <div style="font-size:11px; color:#64748b;">Add full-screen Nexus app icon to your Home Screen</div>
+                                </div>
+                            </div>
+                            <span style="color:#10b981; font-size:11.5px; font-weight:800;">Install ↓</span>
                         </div>
 
                         <div class="nx-ig-row" data-ig-row="share_app" style="${rowStyle}">
                             <div style="display:flex; align-items:center; gap:12px;">
                                 <span style="font-size:17px;">🚀</span>
                                 <div>
-                                    <div style="font-size:13.5px; font-weight:700; color:#f8fafc;">Share Nexus App & Invite Friends</div>
-                                    <div style="font-size:11px; color:#64748b;">Share official Nexus link on WhatsApp & Instagram</div>
+                                    <div style="font-size:13.5px; font-weight:700; color:#f8fafc;">Share Nexus App &amp; Invite Friends</div>
+                                    <div style="font-size:11px; color:#64748b;">Share official Nexus link on WhatsApp &amp; Instagram</div>
                                 </div>
                             </div>
                             <span style="color:#34d399; font-size:12px; font-weight:800;">Share 🔗</span>
@@ -1943,8 +1570,8 @@
                             <div style="display:flex; align-items:center; gap:12px;">
                                 <span style="font-size:17px;">📘</span>
                                 <div>
-                                    <div style="font-size:13.5px; font-weight:700; color:#f8fafc;">Complete Nexus Guide & Official Info</div>
-                                    <div style="font-size:11px; color:#64748b;">Know where every feature is & how Nexus works</div>
+                                    <div style="font-size:13.5px; font-weight:700; color:#f8fafc;">Complete Nexus Guide &amp; Official Info</div>
+                                    <div style="font-size:11px; color:#64748b;">Know where every feature is &amp; how Nexus works</div>
                                 </div>
                             </div>
                             <span style="color:#38bdf8; font-size:12px; font-weight:800;">Open ›</span>
@@ -1986,9 +1613,9 @@
 
         container.querySelector("#nx-open-switcher-top").onclick = openAccountSwitcherModal;
         container.querySelector("#nx-acc-center-main").onclick = openAccountSwitcherModal;
-        container.querySelector("#nx-ig-add-account").onclick = () => window.openAdvancedGoogleAuthModal("signup");
+        container.querySelector("#nx-ig-add-account").onclick = () => openSupabaseProAuth("signup");
         container.querySelector("#nx-ig-switch-account").onclick = openAccountSwitcherModal;
-        container.querySelector("#nx-ig-find-account").onclick = () => window.openAdvancedGoogleAuthModal("find");
+        container.querySelector("#nx-ig-find-account").onclick = () => handleInstagramSettingRowClick("security_devices");
 
         container.querySelector("#nx-ig-logout-current").onclick = async () => {
             if (!confirm("Log out of current account? (Your cloud data remains 100% safe)")) return;
@@ -2000,11 +1627,19 @@
                 localStorage.setItem(MULTI_ACC_KEY, JSON.stringify(list));
             }
 
+            __nxCachedAccRaw = null;
+            __nxCachedAccObj = null;
+
             if (list.length > 0) {
                 localStorage.setItem("nx_active_account", JSON.stringify(list[0]));
-                if (window.Nexus && Nexus.toast) Nexus.toast("Switched to @" + list[0].username);
+                if (window.Nexus && Nexus.toast) Nexus.toast("🔄 Switched to @" + list[0].username);
                 renderInstagramSettingsTab();
+                if (window.renderMyInstagramProfileTab) window.renderMyInstagramProfileTab();
             } else {
+                if (window.NexusSecurity && typeof window.NexusSecurity.logoutUser === "function") {
+                    await window.NexusSecurity.logoutUser();
+                    return;
+                }
                 localStorage.removeItem("nx_active_account");
                 localStorage.removeItem("nx_legacy_backup_account");
                 if (window.Nexus) {
@@ -2022,75 +1657,147 @@
         });
     }
 
+    function startQuickFocusPomodoro(minutes) {
+        clearInterval(focusPomoInterval);
+        focusPomoSecs = Math.max(1, Number(minutes || 25)) * 60;
+        let pill = document.getElementById("nx-study-pomo-pill");
+        if (!pill) {
+            pill = document.createElement("div");
+            pill.id = "nx-study-pomo-pill";
+            pill.style.cssText = "position:fixed; bottom:74px; left:12px; z-index:262000; background:linear-gradient(135deg,#312e81,#0f172a); border:1.5px solid #38bdf8; color:#f8fafc; padding:7px 12px; border-radius:999px; font-size:12px; font-weight:900; display:flex; align-items:center; gap:8px; box-shadow:0 8px 24px rgba(0,0,0,0.75);";
+            document.body.appendChild(pill);
+        }
+        const renderTick = () => {
+            const m = String(Math.floor(focusPomoSecs / 60)).padStart(2, "0");
+            const s = String(focusPomoSecs % 60).padStart(2, "0");
+            pill.innerHTML = `<span>🍅 ${m}:${s}</span><button type="button" id="nx-stop-pomo-pill" style="background:#e11d48;color:#fff;border:none;border-radius:99px;padding:2px 7px;font-size:10px;font-weight:900;cursor:pointer;">✕</button>`;
+            const sbBtn = pill.querySelector("#nx-stop-pomo-pill");
+            if (sbBtn) sbBtn.onclick = () => { clearInterval(focusPomoInterval); pill.remove(); if (window.Nexus) Nexus.toast("🍅 Focus Timer Stopped"); };
+            if (focusPomoSecs <= 0) {
+                clearInterval(focusPomoInterval);
+                pill.remove();
+                playIncomingRingtoneBeep();
+                if (window.Nexus) Nexus.toast("🎉 Study Focus Session Complete! Take a 5 min break!");
+            }
+            focusPomoSecs--;
+        };
+        renderTick();
+        focusPomoInterval = setInterval(renderTick, 1000);
+        if (window.Nexus) Nexus.toast(`🍅 ${minutes} min Study Focus Timer Started!`);
+    }
+
     function handleInstagramSettingRowClick(key) {
         const prefs = getUserPrefs();
 
         if (key === "audio_pod") {
             window.toggleNexusLowDataAudioPod();
+
         } else if (key === "saved") {
             let saved = [];
-            try {
-                saved = JSON.parse(localStorage.getItem("nx_saved_posts") || "[]");
-            } catch (e) {}
+            try { saved = JSON.parse(localStorage.getItem("nx_saved_posts") || "[]"); } catch (e) {}
             const html = saved.length
-                ? saved
-                      .map(
-                          (p) =>
-                              `<div style="padding:12px; border-radius:12px; background:#090d16; border:1px solid #1e293b; margin-bottom:8px;">
-                                  <div style="font-size:12px; font-weight:800; color:#34d399;">@${p.username || p.author || "member"}</div>
-                                  <div style="font-size:13px; color:#f8fafc; margin-top:4px;">${p.content || p.text || "Saved media post"}</div>
-                              </div>`
-                      )
-                      .join("")
-                : `<div style="text-align:center; padding:24px; color:#94a3b8; font-size:13px;">🔖 No saved posts yet. Tap Save on any post in Home Feed!</div>`;
-            openInstagramSubModal("Saved Posts & Cloud Notes", html);
+                ? `<div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+                       <button type="button" id="nx-clear-all-saved" style="background:rgba(244,63,94,0.14);border:1px solid #f43f5e;color:#fda4af;padding:5px 10px;border-radius:9px;font-size:11px;font-weight:800;cursor:pointer;">🗑️ Clear All (${saved.length})</button>
+                   </div>` +
+                  saved.map((p, idx) => `
+                      <div style="padding:11px 12px; border-radius:13px; background:#090d16; border:1px solid #1e293b; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                          <div data-open-saved="${idx}" style="min-width:0; flex:1; cursor:pointer;">
+                              <div style="font-size:12px; font-weight:900; color:#34d399;">@${escHtml(p.username || p.author || "member")}</div>
+                              <div style="font-size:12.5px; color:#f8fafc; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escHtml(p.content || p.text || "📷 Saved media post")}</div>
+                          </div>
+                          <button type="button" data-del-saved="${idx}" style="background:#1e293b; border:none; color:#f87171; padding:6px 9px; border-radius:8px; font-size:11px; font-weight:800; cursor:pointer; flex-shrink:0;">✕</button>
+                      </div>
+                  `).join("")
+                : `<div style="text-align:center; padding:26px; color:#94a3b8; font-size:13px;">🔖 No saved posts yet. Tap ⚡ / Save on any post in Home Feed!</div>`;
+
+            openInstagramSubModal("🔖 Saved Posts & Cloud Notes", html, (m) => {
+                m.querySelectorAll("[data-open-saved]").forEach((row) => {
+                    row.onclick = () => {
+                        const p = saved[Number(row.getAttribute("data-open-saved"))];
+                        m.remove();
+                        if (p && window.openScrollableProfilePostsFeed) window.openScrollableProfilePostsFeed([p], 0, { username: p.username });
+                    };
+                });
+                m.querySelectorAll("[data-del-saved]").forEach((btn) => {
+                    btn.onclick = (e) => {
+                        e.stopPropagation();
+                        saved.splice(Number(btn.getAttribute("data-del-saved")), 1);
+                        localStorage.setItem("nx_saved_posts", JSON.stringify(saved));
+                        pushLocalDataToCloud();
+                        m.remove();
+                        handleInstagramSettingRowClick("saved");
+                    };
+                });
+                const clr = m.querySelector("#nx-clear-all-saved");
+                if (clr) clr.onclick = () => {
+                    if (!confirm("Clear all saved posts?")) return;
+                    localStorage.setItem("nx_saved_posts", "[]");
+                    pushLocalDataToCloud();
+                    m.remove();
+                    if (window.Nexus) Nexus.toast("🧹 Saved Posts Cleared!");
+                };
+            });
+
         } else if (key === "notifications") {
+            const permState = ("Notification" in window) ? Notification.permission : "unsupported";
             const html = `
-                <div style="display:flex; flex-direction:column; gap:12px;">
+                <div style="display:flex; flex-direction:column; gap:10px;">
                     <label style="display:flex; align-items:center; justify-content:space-between; padding:12px; background:#090d16; border-radius:12px; border:1px solid #1e293b;">
-                        <span>🔔 Push & Chat Notifications</span>
+                        <span>🔔 Push &amp; Chat Notifications</span>
                         <input type="checkbox" id="nx-pref-push" ${prefs.pushNotifications ? "checked" : ""} style="width:18px; height:18px;" />
                     </label>
                     <label style="display:flex; align-items:center; justify-content:space-between; padding:12px; background:#090d16; border-radius:12px; border:1px solid #1e293b;">
                         <span>📞 Incoming Call Ringtone Sound</span>
                         <input type="checkbox" id="nx-pref-ring" ${prefs.callRingtone ? "checked" : ""} style="width:18px; height:18px;" />
                     </label>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px;">
+                        <button type="button" id="nx-req-os-push" style="padding:10px; border-radius:11px; background:#10b981; color:#020617; border:none; font-weight:900; font-size:12px; cursor:pointer;">
+                            ${permState === "granted" ? "✅ OS Push Active" : "🔔 Enable OS Alerts"}
+                        </button>
+                        <button type="button" id="nx-test-ring-btn" style="padding:10px; border-radius:11px; background:#1e293b; color:#38bdf8; border:1px solid #334155; font-weight:800; font-size:12px; cursor:pointer;">
+                            🔊 Test Ringtone
+                        </button>
+                    </div>
                 </div>
             `;
-            openInstagramSubModal("Notifications & Ringtone", html, (m) => {
-                m.querySelector("#nx-pref-push").onchange = (e) => {
-                    prefs.pushNotifications = e.target.checked;
-                    saveUserPrefs(prefs);
-                    renderInstagramSettingsTab();
-                };
-                m.querySelector("#nx-pref-ring").onchange = (e) => {
-                    prefs.callRingtone = e.target.checked;
-                    saveUserPrefs(prefs);
+            openInstagramSubModal("🔔 Notifications & Ringtone", html, (m) => {
+                m.querySelector("#nx-pref-push").onchange = (e) => { prefs.pushNotifications = e.target.checked; saveUserPrefs(prefs); renderInstagramSettingsTab(); };
+                m.querySelector("#nx-pref-ring").onchange = (e) => { prefs.callRingtone = e.target.checked; saveUserPrefs(prefs); };
+                m.querySelector("#nx-test-ring-btn").onclick = () => { playIncomingRingtoneBeep(); if (window.Nexus) Nexus.toast("🔊 Ringtone Test Played!"); };
+                m.querySelector("#nx-req-os-push").onclick = async function () {
+                    if (!("Notification" in window)) return Nexus.toast("⚠️ Browser notifications not supported.");
+                    const p = await Notification.requestPermission();
+                    if (p === "granted") {
+                        this.textContent = "✅ OS Push Active";
+                        try { new Notification("Nexus Community", { body: "Notifications are now active on your phone! 🔔" }); } catch (e) {}
+                    } else {
+                        Nexus.toast("⚠️ Notification permission denied in browser settings.");
+                    }
                 };
             });
+
         } else if (key === "privacy") {
             const html = `
                 <label style="display:flex; align-items:center; justify-content:space-between; padding:14px; background:#090d16; border-radius:14px; border:1px solid #1e293b;">
                     <div>
                         <div style="font-size:14px; font-weight:800; color:#f8fafc;">🔒 Private Account</div>
-                        <div style="font-size:11.5px; color:#94a3b8; margin-top:2px;">Only approved followers can see your posts & stories</div>
+                        <div style="font-size:11.5px; color:#94a3b8; margin-top:2px;">Only approved followers can see your posts &amp; stories</div>
                     </div>
                     <input type="checkbox" id="nx-pref-private" ${prefs.privateAccount ? "checked" : ""} style="width:20px; height:20px;" />
                 </label>
             `;
-            openInstagramSubModal("Account Privacy", html, (m) => {
+            openInstagramSubModal("🔒 Account Privacy", html, (m) => {
                 m.querySelector("#nx-pref-private").onchange = (e) => {
                     prefs.privateAccount = e.target.checked;
                     saveUserPrefs(prefs);
                     renderInstagramSettingsTab();
-                    if (window.Nexus && Nexus.toast) {
-                        Nexus.toast(prefs.privateAccount ? "🔒 Switched to Private Account" : "🌐 Switched to Public Account");
-                    }
+                    if (window.Nexus && Nexus.toast) Nexus.toast(prefs.privateAccount ? "🔒 Switched to Private Account" : "🌐 Switched to Public Account");
                 };
             });
+
         } else if (key === "messages_controls") {
             const html = `
-                <div style="display:flex; flex-direction:column; gap:12px;">
+                <div style="display:flex; flex-direction:column; gap:10px;">
                     <label style="display:flex; align-items:center; justify-content:space-between; padding:12px; background:#090d16; border-radius:12px; border:1px solid #1e293b;">
                         <span>✓✓ Show Read Receipts (Seen Ticks)</span>
                         <input type="checkbox" id="nx-pref-read" ${prefs.readReceipts ? "checked" : ""} style="width:18px; height:18px;" />
@@ -2099,18 +1806,17 @@
                         <span>✍️ Show Live 'Typing...' Indicator</span>
                         <input type="checkbox" id="nx-pref-typing" ${prefs.typingIndicator ? "checked" : ""} style="width:18px; height:18px;" />
                     </label>
+                    <button type="button" id="nx-open-wb-from-set" style="padding:11px; border-radius:12px; background:#1e293b; border:1px solid #10b981; color:#34d399; font-weight:800; font-size:12.5px; cursor:pointer;">
+                        ✏️ Open Live Shared Doubt Whiteboard
+                    </button>
                 </div>
             `;
-            openInstagramSubModal("Messages & Story Replies", html, (m) => {
-                m.querySelector("#nx-pref-read").onchange = (e) => {
-                    prefs.readReceipts = e.target.checked;
-                    saveUserPrefs(prefs);
-                };
-                m.querySelector("#nx-pref-typing").onchange = (e) => {
-                    prefs.typingIndicator = e.target.checked;
-                    saveUserPrefs(prefs);
-                };
+            openInstagramSubModal("💬 Messages & Interactive Controls", html, (m) => {
+                m.querySelector("#nx-pref-read").onchange = (e) => { prefs.readReceipts = e.target.checked; saveUserPrefs(prefs); };
+                m.querySelector("#nx-pref-typing").onchange = (e) => { prefs.typingIndicator = e.target.checked; saveUserPrefs(prefs); };
+                m.querySelector("#nx-open-wb-from-set").onclick = () => { m.remove(); if (window.openSharedWhiteboardModal) window.openSharedWhiteboardModal(); };
             });
+
         } else if (key === "close_friends" || key === "blocked") {
             const isClose = key === "close_friends";
             const arr = isClose ? prefs.closeFriends : prefs.blockedUsers;
@@ -2120,22 +1826,16 @@
                     <button type="button" id="nx-list-add-btn" style="padding:10px 16px; border-radius:12px; background:#10b981; border:none; color:#020617; font-weight:900; font-size:12.5px; cursor:pointer;">Add</button>
                 </div>
                 <div id="nx-list-items">
-                    ${
-                        arr.length
-                            ? arr
-                                  .map(
-                                      (u) =>
-                                          `<div style="display:flex; justify-content:space-between; padding:10px 12px; background:#090d16; border-radius:10px; margin-bottom:6px; font-size:13px;">
-                                              <span>@${u}</span>
-                                              <button type="button" data-rem="${u}" style="background:none; border:none; color:#f43f5e; font-weight:800; cursor:pointer;">Unblock / Remove</button>
-                                          </div>`
-                                  )
-                                  .join("")
-                            : `<div style="color:#64748b; font-size:12.5px; text-align:center; padding:14px;">List is empty.</div>`
-                    }
+                    ${arr.length
+                        ? arr.map((u) => `
+                            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:#090d16; border:1px solid #1e293b; border-radius:10px; margin-bottom:6px; font-size:13px;">
+                                <span>@${escHtml(u)}</span>
+                                <button type="button" data-rem="${escHtml(u)}" style="background:none; border:none; color:#f43f5e; font-weight:800; cursor:pointer;">Remove ✕</button>
+                            </div>`).join("")
+                        : `<div style="color:#64748b; font-size:12.5px; text-align:center; padding:14px;">List is empty.</div>`}
                 </div>
             `;
-            openInstagramSubModal(isClose ? "Close Friends ⭐" : "Blocked Accounts 🚫", html, (m) => {
+            openInstagramSubModal(isClose ? "⭐ Close Friends" : "🚫 Blocked Accounts", html, (m) => {
                 m.querySelector("#nx-list-add-btn").onclick = () => {
                     const v = (m.querySelector("#nx-list-uname-inp").value || "").toLowerCase().replace(/^@/, "").trim();
                     if (!v) return;
@@ -2157,15 +1857,329 @@
                     };
                 });
             });
+
         } else if (key === "e2ee_security") {
             if (window.openE2EEVerificationModal) {
                 window.openE2EEVerificationModal("Your Account");
+            } else if (window.NexusSecurity && window.NexusSecurity.openSecurityCenterModal) {
+                window.NexusSecurity.openSecurityCenterModal();
             }
+
+        } else if (key === "security_devices") {
+            const me = getCurrentAccount();
+            const html = `
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <div id="nx-sec-dev-box" style="padding:12px; border-radius:13px; background:#090d16; border:1px solid #1e293b;">
+                        <div style="font-size:12px; font-weight:900; color:#38bdf8; margin-bottom:4px;">📱 Active Supabase Sessions</div>
+                        <div id="nx-sec-dev-list" style="font-size:12px; color:#94a3b8;">Checking active devices...</div>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                        <button type="button" id="nx-revoke-others-btn" style="padding:10px; border-radius:11px; background:rgba(244,63,94,0.14); border:1px solid #f43f5e; color:#fda4af; font-weight:800; font-size:12px; cursor:pointer;">🚫 Log Out Other Devices</button>
+                        <button type="button" id="nx-reset-pw-otp-btn" style="padding:10px; border-radius:11px; background:#1e293b; border:1px solid #38bdf8; color:#38bdf8; font-weight:800; font-size:12px; cursor:pointer;">🔑 Reset Password (OTP)</button>
+                    </div>
+
+                    <div style="padding:12px; border-radius:13px; background:#090d16; border:1.5px dashed #10b981;">
+                        <div style="font-size:12px; font-weight:900; color:#34d399; margin-bottom:4px;">🔗 Link Old Nexus Account (@username)</div>
+                        <p style="font-size:11px; color:#94a3b8; margin-bottom:8px;">Agar Gmail login par naya username ban gaya aur purani posts/followers 0 dikh rahe hain, toh apna purana @username (e.g. mohit_01) daal kar turant link karein:</p>
+                        <div style="display:flex; gap:6px;">
+                            <input type="text" id="nx-link-old-u-inp" placeholder="e.g. mohit_01" autocapitalize="none" style="flex:1; padding:9px 11px; border-radius:10px; background:#0f172a; border:1px solid #334155; color:#fff; font-size:13px; outline:none;" />
+                            <button type="button" id="nx-link-old-u-btn" style="padding:9px 14px; border-radius:10px; background:#10b981; color:#020617; font-weight:900; font-size:12px; border:none; cursor:pointer;">Link ✓</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            openInstagramSubModal("🛡️ Security, Devices & Account Link", html, async (m) => {
+                const listEl = m.querySelector("#nx-sec-dev-list");
+                if (window.NexusSecurity && typeof window.NexusSecurity.getMyActiveSessions === "function") {
+                    try {
+                        const sessions = await window.NexusSecurity.getMyActiveSessions();
+                        listEl.innerHTML = sessions.length
+                            ? sessions.map((s) => `<div style="padding:4px 0;color:#e2e8f0;">● <b>${escHtml(s.device_label || "Device")}</b> — Active ${new Date(s.last_active_at || Date.now()).toLocaleDateString()}</div>`).join("")
+                            : `<div style="color:#34d399;">✅ Current Device Active (1/2 Max)</div>`;
+                    } catch (e) { listEl.textContent = "Current device active."; }
+                } else {
+                    listEl.textContent = "Logged in via local/legacy session.";
+                }
+
+                m.querySelector("#nx-revoke-others-btn").onclick = async () => {
+                    if (window.NexusSecurity && window.NexusSecurity.revokeOtherSessions) {
+                        await window.NexusSecurity.revokeOtherSessions();
+                        if (window.Nexus) Nexus.toast("🚫 Logged out all other devices!");
+                    }
+                };
+                m.querySelector("#nx-reset-pw-otp-btn").onclick = () => {
+                    m.remove();
+                    openSupabaseProAuth("login");
+                };
+                m.querySelector("#nx-link-old-u-btn").onclick = async function () {
+                    const oldU = (m.querySelector("#nx-link-old-u-inp").value || "").toLowerCase().replace(/^@/, "").replace(/[^a-z0-9_]/g, "").trim();
+                    if (oldU.length < 3) return Nexus.toast("⚠️ Sahi purana @username dalein!");
+                    this.disabled = true; this.textContent = "⏳...";
+                    try {
+                        let oldData = ((window.Nexus && Nexus.users) || []).find((u) => u && u.username && u.username.toLowerCase() === oldU);
+                        if (!oldData && window.Nexus && Nexus.db) {
+                            const snap = await Nexus.db.collection("nexus_accounts").doc(oldU).get();
+                            if (snap.exists) oldData = snap.data();
+                        }
+                        if (!oldData) {
+                            this.disabled = false; this.textContent = "Link ✓";
+                            return Nexus.toast(`❌ @${oldU} naam ka purana account nahi mila!`);
+                        }
+                        const merged = Object.assign({}, me || {}, oldData, {
+                            id: (me && me.id) || oldData.id || "",
+                            uid: (me && me.uid) || oldData.uid || "",
+                            email: (me && me.email) || oldData.email || "",
+                            username: oldU,
+                            verified: true,
+                            googleVerified: true,
+                            isOnlineNow: true,
+                            lastOnline: Date.now()
+                        });
+                        if (window.NexusSecurity && window.NexusSecurity.sb) {
+                            const uid = await window.NexusSecurity.getAuthenticatedUserId();
+                            if (uid) {
+                                await window.NexusSecurity.sb.from("profiles").update({
+                                    username: oldU,
+                                    firebase_uid: oldU,
+                                    display_name: merged.name || oldU,
+                                    bio: merged.bio || "",
+                                    followers_list: Array.isArray(merged.followersList) ? merged.followersList : [],
+                                    following_list: Array.isArray(merged.followingList) ? merged.followingList : []
+                                }).eq("id", uid).catch(() => {});
+                            }
+                        }
+                        __nxCachedAccRaw = null; __nxCachedAccObj = null;
+                        localStorage.setItem("nx_active_account", JSON.stringify(merged));
+                        saveAccountToMultiList(merged);
+                        m.remove();
+                        if (window.Nexus) { Nexus.rebuildAllUsersMasterList && Nexus.rebuildAllUsersMasterList(); Nexus.notifyAll && Nexus.notifyAll(); }
+                        renderInstagramSettingsTab();
+                        if (window.renderMyInstagramProfileTab) window.renderMyInstagramProfileTab();
+                        Nexus.toast(`✅ Linked @${oldU}! Purane posts & followers wapas aa gaye!`);
+                    } catch (err) {
+                        this.disabled = false; this.textContent = "Link ✓";
+                        Nexus.toast("❌ Link failed: " + (err.message || "Retry"));
+                    }
+                };
+            });
+
+        } else if (key === "appearance_studio") {
+            const themeBtns = Object.entries(ACCENT_THEMES).map(([id, t]) => `
+                <button type="button" data-accent="${id}" style="padding:9px 8px; border-radius:11px; background:#090d16; border:2px solid ${prefs.accentTheme === id ? t.primary : "#1e293b"}; color:#f8fafc; font-size:11.5px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:6px;">
+                    <span style="width:14px;height:14px;border-radius:50%;background:${t.primary};display:inline-block;flex-shrink:0;"></span>
+                    <span>${t.name.split(" ")[0]}</span>
+                </button>`).join("");
+
+            const html = `
+                <div style="display:flex; flex-direction:column; gap:13px;">
+                    <div>
+                        <div style="font-size:11px; font-weight:900; color:#94a3b8; margin-bottom:7px;">🎨 ACCENT COLOR THEME</div>
+                        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:7px;">${themeBtns}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; font-weight:900; color:#94a3b8; margin-bottom:7px;">🔤 TEXT SIZE SCALE</div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:7px;">
+                            ${[["92", "Compact"], ["100", "Standard"], ["108", "Large"]].map(([sc, lbl]) => `
+                                <button type="button" data-fscale="${sc}" style="padding:9px; border-radius:10px; background:${String(prefs.fontScale) === sc ? "#10b981" : "#090d16"}; color:${String(prefs.fontScale) === sc ? "#020617" : "#cbd5e1"}; border:1px solid #334155; font-weight:900; font-size:12px; cursor:pointer;">${lbl}</button>
+                            `).join("")}
+                        </div>
+                    </div>
+                    <label style="display:flex; align-items:center; justify-content:space-between; padding:13px; background:#090d16; border-radius:13px; border:1.5px solid ${prefs.liteMode ? "#10b981" : "#1e293b"};">
+                        <div>
+                            <div style="font-size:13.5px; font-weight:900; color:#34d399;">⚡ Ultra Low-RAM / Anti-Hang Lite Mode</div>
+                            <div style="font-size:11px; color:#94a3b8; margin-top:2px;">Heavy blur, shadows &amp; animations band karke mobile ko makkhan smooth banata hai</div>
+                        </div>
+                        <input type="checkbox" id="nx-pref-lite" ${prefs.liteMode ? "checked" : ""} style="width:20px; height:20px;" />
+                    </label>
+                </div>
+            `;
+            openInstagramSubModal("🎨 Appearance & Lite Speed Studio", html, (m) => {
+                m.querySelectorAll("[data-accent]").forEach((b) => {
+                    b.onclick = () => {
+                        prefs.accentTheme = b.getAttribute("data-accent");
+                        saveUserPrefs(prefs);
+                        renderInstagramSettingsTab();
+                        m.remove();
+                        handleInstagramSettingRowClick("appearance_studio");
+                        if (window.Nexus) Nexus.toast("🎨 Theme Applied!");
+                    };
+                });
+                m.querySelectorAll("[data-fscale]").forEach((b) => {
+                    b.onclick = () => {
+                        prefs.fontScale = b.getAttribute("data-fscale");
+                        saveUserPrefs(prefs);
+                        m.remove();
+                        handleInstagramSettingRowClick("appearance_studio");
+                        if (window.Nexus) Nexus.toast("🔤 Font Size Updated!");
+                    };
+                });
+                m.querySelector("#nx-pref-lite").onchange = (e) => {
+                    prefs.liteMode = e.target.checked;
+                    saveUserPrefs(prefs);
+                    renderInstagramSettingsTab();
+                    if (window.Nexus) Nexus.toast(prefs.liteMode ? "⚡ Lite Mode ON — Mobile Smoothness Boosted!" : "✨ Full Visual Effects ON");
+                };
+            });
+
+        } else if (key === "study_wellbeing") {
+            const mins = getTodayScreenMinutes();
+            const html = `
+                <div style="display:flex; flex-direction:column; gap:12px;">
+                    <div style="padding:14px; border-radius:15px; background:linear-gradient(135deg,#0f172a,#1e1b4b); border:1px solid #38bdf8; text-align:center;">
+                        <div style="font-size:11px; font-weight:800; color:#93c5fd;">⏱️ TODAY'S NEXUS ACTIVITY</div>
+                        <div style="font-size:28px; font-weight:900; color:#f8fafc; margin:4px 0;">${Math.floor(mins / 60)}h ${mins % 60}m</div>
+                        <div style="font-size:11px; color:#34d399;">Balanced focus helps you crack JEE &amp; Coding goals!</div>
+                    </div>
+
+                    <label style="display:flex; align-items:center; justify-content:space-between; padding:13px; background:#090d16; border-radius:13px; border:1px solid ${prefs.dndMode ? "#fbbf24" : "#1e293b"};">
+                        <div>
+                            <div style="font-size:13.5px; font-weight:800; color:#fbbf24;">🔕 Study DND (Do Not Disturb)</div>
+                            <div style="font-size:11px; color:#94a3b8; margin-top:2px;">Silences incoming call popups &amp; ringtones while studying</div>
+                        </div>
+                        <input type="checkbox" id="nx-pref-dnd" ${prefs.dndMode ? "checked" : ""} style="width:20px; height:20px;" />
+                    </label>
+
+                    <div style="padding:12px; border-radius:13px; background:#090d16; border:1px solid #1e293b;">
+                        <div style="font-size:12px; font-weight:900; color:#f8fafc; margin-bottom:8px;">🍅 Quick Study Pomodoro Timer</div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
+                            <button type="button" data-pomo="25" style="padding:10px; border-radius:10px; background:#10b981; color:#020617; font-weight:900; font-size:12px; border:none; cursor:pointer;">25 Min</button>
+                            <button type="button" data-pomo="50" style="padding:10px; border-radius:10px; background:#38bdf8; color:#020617; font-weight:900; font-size:12px; border:none; cursor:pointer;">50 Min</button>
+                            <button type="button" data-pomo="90" style="padding:10px; border-radius:10px; background:#a855f7; color:#fff; font-weight:900; font-size:12px; border:none; cursor:pointer;">90 Min</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            openInstagramSubModal("🎓 Study Focus & Wellbeing", html, (m) => {
+                m.querySelector("#nx-pref-dnd").onchange = (e) => {
+                    prefs.dndMode = e.target.checked;
+                    saveUserPrefs(prefs);
+                    renderInstagramSettingsTab();
+                    if (window.Nexus) Nexus.toast(prefs.dndMode ? "🔕 Study DND Mode Activated!" : "🔔 Study DND Turned OFF");
+                };
+                m.querySelectorAll("[data-pomo]").forEach((b) => {
+                    b.onclick = () => { m.remove(); startQuickFocusPomodoro(Number(b.getAttribute("data-pomo"))); };
+                });
+            });
+
+        } else if (key === "storage_diagnostics") {
+            let totalBytes = 0;
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                totalBytes += (k.length + (localStorage.getItem(k) || "").length) * 2;
+            }
+            const usedKb = Math.round(totalBytes / 1024);
+            const pct = Math.min(100, Math.round((usedKb / 5120) * 100));
+
+            const html = `
+                <div style="display:flex; flex-direction:column; gap:12px;">
+                    <div style="padding:13px; border-radius:14px; background:#090d16; border:1px solid #1e293b;">
+                        <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:800; margin-bottom:6px;">
+                            <span style="color:#cbd5e1;">Local Storage Used</span>
+                            <span style="color:${pct > 75 ? "#f43f5e" : "#34d399"};">${usedKb} KB / 5,120 KB (${pct}%)</span>
+                        </div>
+                        <div style="height:8px; border-radius:99px; background:#1e293b; overflow:hidden;">
+                            <div style="height:100%; width:${pct}%; background:${pct > 75 ? "#f43f5e" : "linear-gradient(90deg,#10b981,#38bdf8)"};"></div>
+                        </div>
+                        <div style="font-size:11px; color:#64748b; margin-top:6px;">Stored Keys: ${localStorage.length} • Users Cached: ${(window.Nexus && Nexus.users) ? Nexus.users.length : 0} • Posts Cached: ${(window.Nexus && Nexus.posts) ? Nexus.posts.length : 0}</div>
+                    </div>
+
+                    <div id="nx-ping-box" style="padding:12px; border-radius:13px; background:#090d16; border:1px solid #1e293b; font-size:12px; color:#cbd5e1;">
+                        📡 Tap below to test live server speed (Supabase &amp; Firebase)
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                        <button type="button" id="nx-run-ping-btn" style="padding:11px; border-radius:11px; background:#38bdf8; color:#020617; font-weight:900; font-size:12px; border:none; cursor:pointer;">📡 Run Live Ping Test</button>
+                        <button type="button" id="nx-deep-clean-btn" style="padding:11px; border-radius:11px; background:#10b981; color:#020617; font-weight:900; font-size:12px; border:none; cursor:pointer;">🧹 Deep Clean Cache</button>
+                    </div>
+                </div>
+            `;
+            openInstagramSubModal("📊 Storage & Server Diagnostics", html, (m) => {
+                m.querySelector("#nx-run-ping-btn").onclick = async function () {
+                    const box = m.querySelector("#nx-ping-box");
+                    box.innerHTML = "⏳ Testing Supabase &amp; Firebase servers...";
+                    let sbPing = "N/A", fbPing = "N/A";
+                    if (window.NexusSecurity && window.NexusSecurity.sb) {
+                        const t0 = performance.now();
+                        try { await window.NexusSecurity.sb.from("profiles").select("id").limit(1); sbPing = Math.round(performance.now() - t0) + " ms 🟢"; } catch (e) { sbPing = "Error 🔴"; }
+                    }
+                    const t1 = performance.now();
+                    try { await fetch("https://firestore.googleapis.com/v1/projects/nexus-community-bf99c/databases/(default)/documents/nexus_accounts?pageSize=1", { cache: "no-store" }); fbPing = Math.round(performance.now() - t1) + " ms 🟢"; } catch (e) { fbPing = "Error 🔴"; }
+                    box.innerHTML = `<b>⚡ Supabase Live DB:</b> ${sbPing}<br><b>🔥 Legacy Firebase DB:</b> ${fbPing}`;
+                };
+
+                m.querySelector("#nx-deep-clean-btn").onclick = async () => {
+                    ["nx_light_posts_v1", "nx_master_users_v1", "nx_v6_sb_posts", "nx_v6_sb_users", "nx_v5_fast_posts", "nx_v5_fast_users"].forEach((k) => {
+                        try { localStorage.removeItem(k); } catch (e) {}
+                    });
+                    if ("caches" in window) {
+                        try { await caches.delete("nexus-media-v27"); } catch (e) {}
+                    }
+                    m.remove();
+                    if (window.Nexus) Nexus.toast("⚡ Deep Cache Cleaned! Login & Saved Notes 100% Safe!");
+                };
+            });
+
+        } else if (key === "data_backup") {
+            const html = `
+                <div style="display:flex; flex-direction:column; gap:11px;">
+                    <p style="font-size:12px; color:#cbd5e1; line-height:1.5;">Apne saare <b>Saved Posts, Settings, Close Friends, Blocked List</b> aur <b>AI Study Notes</b> ko ek safe `.json` file mein download karein aur kabhi bhi restore karein.</p>
+                    <button type="button" id="nx-export-json-btn" style="padding:12px; border-radius:12px; background:linear-gradient(90deg,#10b981,#06b6d4); color:#020617; font-weight:900; font-size:13px; border:none; cursor:pointer;">⬇️ Download Full Backup (.json)</button>
+                    <label for="nx-import-json-in" style="padding:12px; border-radius:12px; background:#1e293b; border:1px dashed #38bdf8; color:#38bdf8; font-weight:800; font-size:13px; text-align:center; cursor:pointer; display:block;">⬆️ Restore Backup from .json File</label>
+                    <input type="file" id="nx-import-json-in" accept=".json,application/json" style="display:none;" />
+                </div>
+            `;
+            openInstagramSubModal("📥 Backup & Restore My Data", html, (m) => {
+                m.querySelector("#nx-export-json-btn").onclick = () => {
+                    const dump = {
+                        exportedAt: new Date().toISOString(),
+                        account: (getCurrentAccount() || {}).username || "",
+                        prefs: getUserPrefs(),
+                        savedPosts: JSON.parse(localStorage.getItem("nx_saved_posts") || "[]"),
+                        aiHistory: JSON.parse(localStorage.getItem("nx_private_ai_history_v7") || "[]")
+                    };
+                    const a = document.createElement("a");
+                    a.href = URL.createObjectURL(new Blob([JSON.stringify(dump, null, 2)], { type: "application/json" }));
+                    a.download = `Nexus_Backup_${(dump.account || "user")}_${Date.now()}.json`;
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                    if (window.Nexus) Nexus.toast("⬇️ Backup File Downloaded!");
+                };
+                m.querySelector("#nx-import-json-in").onchange = (e) => {
+                    const f = e.target.files && e.target.files[0];
+                    if (!f) return;
+                    const r = new FileReader();
+                    r.onload = () => {
+                        try {
+                            const data = JSON.parse(r.result);
+                            if (data.prefs) saveUserPrefs(Object.assign(getUserPrefs(), data.prefs));
+                            if (Array.isArray(data.savedPosts)) localStorage.setItem("nx_saved_posts", JSON.stringify(data.savedPosts.slice(0, 50)));
+                            if (Array.isArray(data.aiHistory)) localStorage.setItem("nx_private_ai_history_v7", JSON.stringify(data.aiHistory.slice(-20)));
+                            m.remove();
+                            renderInstagramSettingsTab();
+                            if (window.Nexus) Nexus.toast("✅ Backup Restored Successfully!");
+                        } catch (err) {
+                            alert("❌ Invalid Nexus backup JSON file!");
+                        }
+                    };
+                    r.readAsText(f);
+                };
+            });
+
+        } else if (key === "install_pwa") {
+            if (deferredSettingsPwaPrompt) {
+                deferredSettingsPwaPrompt.prompt();
+                deferredSettingsPwaPrompt.userChoice.then(() => { deferredSettingsPwaPrompt = null; });
+            } else if (window.NexusPower && typeof window.NexusPower.installPWA === "function") {
+                window.NexusPower.installPWA();
+            } else {
+                alert("📲 Chrome ke top-right 3-dot (⋮) menu par tap karein ➔ 'Add to Home screen / Install App' par tap karein!");
+            }
+
         } else if (key === "media_storage") {
             const html = `
                 <div style="display:flex; flex-direction:column; gap:12px;">
                     <label style="display:flex; align-items:center; justify-content:space-between; padding:12px; background:#090d16; border-radius:12px; border:1px solid #1e293b;">
-                        <span>✨ Upload at Highest Quality (HD WebP & 50MB Video)</span>
+                        <span>✨ Upload at Highest Quality (HD WebP &amp; 50MB Video)</span>
                         <input type="checkbox" id="nx-pref-hd" ${prefs.highQualityMedia ? "checked" : ""} style="width:18px; height:18px;" />
                     </label>
                     <button type="button" id="nx-optimize-cache-btn" style="padding:12px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#38bdf8; font-weight:800; font-size:13px; cursor:pointer;">
@@ -2173,17 +2187,15 @@
                     </button>
                 </div>
             `;
-            openInstagramSubModal("Data Usage & Media Quality", html, (m) => {
-                m.querySelector("#nx-pref-hd").onchange = (e) => {
-                    prefs.highQualityMedia = e.target.checked;
-                    saveUserPrefs(prefs);
-                };
+            openInstagramSubModal("⚡ Data Usage & Media Quality", html, (m) => {
+                m.querySelector("#nx-pref-hd").onchange = (e) => { prefs.highQualityMedia = e.target.checked; saveUserPrefs(prefs); };
                 m.querySelector("#nx-optimize-cache-btn").onclick = () => {
                     localStorage.removeItem("nx_light_posts_v1");
                     m.remove();
                     if (window.Nexus && Nexus.toast) Nexus.toast("⚡ Media Cache Optimized!");
                 };
             });
+
         } else if (key === "share_app") {
             const shareData = {
                 title: "Nexus Community",
@@ -2196,8 +2208,11 @@
                 navigator.clipboard?.writeText(shareData.text + shareData.url);
                 if (window.Nexus && Nexus.toast) Nexus.toast("✅ Nexus Link Copied!");
             }
+
         } else if (key === "about_nexus") {
-            if (window.openOfficialNexusProfileModal) {
+            if (window.NexusPower && typeof window.NexusPower.openNexusGuideModal === "function") {
+                window.NexusPower.openNexusGuideModal(false);
+            } else if (window.openOfficialNexusProfileModal) {
                 window.openOfficialNexusProfileModal();
             }
         }
@@ -2216,6 +2231,19 @@
             savedPosts = JSON.parse(localStorage.getItem("nx_saved_posts") || "[]").slice(0, 50);
             userPrefs = JSON.parse(localStorage.getItem(PREFS_KEY) || "{}");
         } catch (e) {}
+
+        // Sync readReceipts & blockedUsers directly to Supabase profiles as well!
+        if (window.NexusSecurity && window.NexusSecurity.sb) {
+            try {
+                const uid = await window.NexusSecurity.getAuthenticatedUserId();
+                if (uid) {
+                    await window.NexusSecurity.sb.from("profiles").update({
+                        show_read_receipts: userPrefs.readReceipts !== false,
+                        blocked_users: Array.isArray(userPrefs.blockedUsers) ? userPrefs.blockedUsers : []
+                    }).eq("id", uid);
+                }
+            } catch (e) {}
+        }
 
         try {
             await Nexus.db.collection("nexus_accounts").doc(me.username.toLowerCase().trim()).set(
@@ -2268,9 +2296,15 @@
         }
     }
 
+    // Event-driven Settings tab render (0.01s open without 350ms CPU hammering!)
+    document.addEventListener("click", (e) => {
+        if (e.target && e.target.closest && e.target.closest('.nx-nav-item[data-tab="tab-settings"], #nx-prof-open-settings')) {
+            setTimeout(hookSettingsTabRendering, 15);
+        }
+    }, true);
+
     window.addEventListener("load", () => {
-        overrideBrokenFirebaseAuthButtons();
-        forceHydrateDatabaseForNewVisitors();
+        applyAppearanceAndPerformancePrefs();
         if (isUserVerified()) {
             saveAccountToMultiList(getCurrentAccount());
             renderInstagramSettingsTab();
@@ -2278,5 +2312,7 @@
             setTimeout(pullCloudDataToLocal, 1400);
         }
     });
-    setInterval(hookSettingsTabRendering, 350);
+    setInterval(() => {
+        if (!isTypingOrHidden()) hookSettingsTabRendering();
+    }, 2500);
 })();
