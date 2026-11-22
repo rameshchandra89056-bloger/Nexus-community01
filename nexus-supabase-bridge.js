@@ -1,15 +1,14 @@
 /* ============================================================================
-   NEXUS-SUPABASE-BRIDGE.JS (v6.0 MASTER — ZERO UI OVERWRITE, ZERO FEATURE LOSS)
-   Drop-In Adapter for Main Branch index.html:
-   1. 0.01s Instant Cache + Parallel Supabase Live Realtime Sync (Merges Old + New Data)
-   2. Pro Auth Modal (Brevo 6-Digit OTP + Gmail/Password + Google 1-Click + Forgot Password)
-   3. Anti-Freeze 12s Timeout on Every Auth Call (Never Stucks on "Verifying...")
-   4. Automatic Supabase Mirror for New Posts, Profiles, Likes & 50MB Permanent Media Storage
-   5. 25-Second Live Presence Heartbeat (Zero Overwrite of Original Story Bar HTML!)
+   NEXUS-SUPABASE-BRIDGE.JS (v6.1 ANTI-TIMEOUT MASTER — ZERO UI OVERWRITE)
+   Fixes:
+   - Fixes Android Chrome Multi-Tab navigator.locks Deadlock in Supabase v2
+   - Increases SMTP OTP Timeout (12s -> 35s) & Auth Timeout (25s)
+   - Preserves 100% of v6.0: 0.01s Instant Cache, Dual-Sync Merge,
+     50MB Permanent Storage, Silent Write Mirror & 25s Live Heartbeat
    ============================================================================ */
 (function () {
-    if (window.__NEXUS_SUPABASE_BRIDGE_V60__) return;
-    window.__NEXUS_SUPABASE_BRIDGE_V60__ = true;
+    if (window.__NEXUS_SUPABASE_BRIDGE_V61__) return;
+    window.__NEXUS_SUPABASE_BRIDGE_V61__ = true;
 
     const SUPABASE_URL = ("https" + "://" + "fegmtyoxijvktoxtealo" + ".supabase.co").trim();
     const SUPABASE_ANON_KEY = ("sb_publishable_" + "jpH6tVu1sCNSwLmgvRTxrw_w8xq5thV").trim();
@@ -19,8 +18,14 @@
         return;
     }
 
+    // FIXED: Bypass Android Chrome multi-tab navigator.locks deadlock!
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+        auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+            lock: async (_name, _acquireTimeout, fn) => await fn()
+        }
     });
 
     const CACHE_USERS_KEY = "nx_v6_sb_users";
@@ -30,16 +35,10 @@
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
     }[c]));
     const normU = (u) => String(u || "").toLowerCase().replace(/^@/, "").trim();
-    const withTimeout = (p, ms = 12000) => Promise.race([
+    const withTimeout = (p, ms = 25000) => Promise.race([
         p,
-        new Promise((_, rej) => setTimeout(() => rej(new Error("Network slow (timeout). Dobara tap karein.")), ms))
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Server response slow hai. Ek baar Gmail check karein (OTP aa chuka ho sakta hai) ya dobara tap karein.")), ms))
     ]);
-    const b64Enc = (buf) => {
-        const b = new Uint8Array(buf); let s = "";
-        for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
-        return btoa(s);
-    };
-    const b64Dec = (str) => Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
 
     function getSid() {
         let sid = localStorage.getItem("nexus_device_sid");
@@ -57,7 +56,7 @@
         } catch (e) { return null; }
     }
 
-    // -------------------- 1. CLEAN PRO MODAL CSS (TOUCHES ONLY AUTH MODAL) --------------------
+    // -------------------- 1. CLEAN PRO MODAL CSS --------------------
     if (!document.getElementById("nx-bridge-v60-css")) {
         const st = document.createElement("style");
         st.id = "nx-bridge-v60-css";
@@ -144,7 +143,6 @@
     function mergeSupabaseIntoNexus(triggerUi) {
         if (!window.Nexus) return;
 
-        // Merge Users: Old Firebase + Supabase combined without losing anyone's data!
         if (sbUsersCache.length) {
             const byU = new Map();
             (Nexus.cloudAccounts || []).forEach((u) => {
@@ -169,7 +167,6 @@
             Nexus.cloudAccounts = Array.from(byU.values());
         }
 
-        // Merge Posts: Keep old Firebase posts + add new Supabase posts without duplicates!
         if (sbPostsCache.length) {
             const bySig = new Map();
             const addP = (p) => {
@@ -190,7 +187,6 @@
         }
     }
 
-    // Immediate 0.01s hydration from cached Supabase data
     mergeSupabaseIntoNexus(true);
 
     async function fetchLiveSupabaseData(triggerUi) {
@@ -212,7 +208,6 @@
     }
     window.__nxSyncSupabaseAll = fetchLiveSupabaseData;
 
-    // Keep Supabase data merged even after Firebase onSnapshot fires
     function hookNexusNotifyAll() {
         if (!window.Nexus || Nexus.__nxBridgeNotifyHooked) return;
         Nexus.__nxBridgeNotifyHooked = true;
@@ -224,7 +219,7 @@
     }
     hookNexusNotifyAll();
 
-    // -------------------- 3. 50MB SUPABASE STORAGE UPGRADE (KILLS BASE64 HANG!) --------------------
+    // -------------------- 3. 50MB SUPABASE STORAGE UPGRADE --------------------
     const getExt = (f) => {
         const n = String((f && f.name) || ""), d = n.lastIndexOf(".");
         return (d !== -1 ? n.slice(d + 1).toLowerCase().replace(/[^a-z0-9]/g, "") : "") || "bin";
@@ -285,7 +280,7 @@
     }
     hookMediaStorageToSupabase();
 
-    // -------------------- 4. SILENT WRITE-MIRROR: EVERY NEW POST / PROFILE GOES TO SUPABASE --------------------
+    // -------------------- 4. SILENT WRITE-MIRROR TO SUPABASE --------------------
     function hookFirestoreWritesToSupabase() {
         if (!window.Nexus || !Nexus.db || Nexus.db.__nxSupabaseMirrorHooked) return;
         Nexus.db.__nxSupabaseMirrorHooked = true;
@@ -365,7 +360,7 @@
         };
     }
 
-    // -------------------- 5. 2-DEVICE SESSION LOCK + E2EE VAULT --------------------
+    // -------------------- 5. 2-DEVICE SESSION LOCK --------------------
     async function registerActiveSession(uid) {
         if (!uid) return null;
         const sid = getSid();
@@ -395,10 +390,10 @@
         if (id) await sb.from("active_sessions").update({ is_revoked: true }).eq("user_id", id).neq("session_id", getSid());
     }
 
-    // -------------------- 6. PRO AUTH ENGINE (ANTI-FREEZE 12s TIMEOUT + OLD DATA CONTINUITY) --------------------
+    // -------------------- 6. PRO AUTH ENGINE (35s SMTP TIMEOUT + ZERO LOCK DEADLOCK) --------------------
     const loginWithGoogle = () => sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin + window.location.pathname } });
-    const sendEmailOtp = (email, create = true) => withTimeout(sb.auth.signInWithOtp({ email: String(email || "").trim().toLowerCase(), options: { shouldCreateUser: Boolean(create) } }), 12000);
-    const updateUserPassword = (pw) => withTimeout(sb.auth.updateUser({ password: String(pw || "").trim() }), 12000);
+    const sendEmailOtp = (email, create = true) => withTimeout(sb.auth.signInWithOtp({ email: String(email || "").trim().toLowerCase(), options: { shouldCreateUser: Boolean(create) } }), 35000);
+    const updateUserPassword = (pw) => withTimeout(sb.auth.updateUser({ password: String(pw || "").trim() }), 25000);
 
     async function checkUsernameAvailable(raw, ignoreId) {
         const clean = String(raw || "").toLowerCase().replace(/^@/, "").replace(/[^a-z0-9_]/g, "").slice(0, 24);
@@ -412,7 +407,7 @@
     async function syncCurrentUserProfile(directUser) {
         let user = directUser || null;
         if (!user) {
-            const { data: sd } = await withTimeout(sb.auth.getSession(), 8000);
+            const { data: sd } = await withTimeout(sb.auth.getSession(), 12000);
             user = sd && sd.session ? sd.session.user : null;
         }
         if (!user) return null;
@@ -421,13 +416,11 @@
         const metaU = normU(meta.preferred_username || "");
         const fallbackBase = (metaU || (user.email || "user").split("@")[0]).replace(/[^a-z0-9_]/g, "").slice(0, 14) || "user";
         const fallbackU = metaU.length >= 3 ? metaU : (fallbackBase + "_" + user.id.replace(/-/g, "").slice(0, 4));
-
-        // Carry over old Firebase DP / Bio / Followers if username existed before!
         const legacyMatch = ((window.Nexus && Nexus.users) || []).find((u) => u && normU(u.username) === fallbackU);
 
         let prof = null;
         try {
-            const { data: found } = await withTimeout(sb.from("profiles").select("*").eq("id", user.id).maybeSingle(), 7000);
+            const { data: found } = await withTimeout(sb.from("profiles").select("*").eq("id", user.id).maybeSingle(), 12000);
             if (found) {
                 prof = found;
                 sb.from("profiles").update({ last_online: new Date().toISOString() }).eq("id", user.id).then(() => {});
@@ -446,7 +439,7 @@
                     role: "user",
                     last_online: new Date().toISOString()
                 };
-                const { data: ins } = await withTimeout(sb.from("profiles").upsert(row, { onConflict: "id" }).select("*").single(), 7000);
+                const { data: ins } = await withTimeout(sb.from("profiles").upsert(row, { onConflict: "id" }).select("*").single(), 12000);
                 prof = ins || row;
             }
         } catch (e) {
@@ -505,7 +498,7 @@
         const { data, error } = await withTimeout(sb.auth.signUp({
             email: cleanEmail, password: pw,
             options: { data: { full_name: nm, preferred_username: chk.clean, bio: cleanBio } }
-        }), 12000);
+        }), 35000);
         if (error) return { data, error };
 
         if (data && data.user && data.session) {
@@ -519,7 +512,7 @@
         const { data, error } = await withTimeout(sb.auth.signInWithPassword({
             email: String(email || "").trim().toLowerCase(),
             password: String(password || "")
-        }), 12000);
+        }), 25000);
         if (!error && data && data.user) await syncCurrentUserProfile(data.user);
         return { data, error };
     }
@@ -529,9 +522,9 @@
         const cleanToken = String(code || "").replace(/\D/g, "").trim();
         if (cleanToken.length < 6 || cleanToken.length > 8) return { error: { message: "Poora 6-digit OTP code dalein." } };
 
-        let res = await withTimeout(sb.auth.verifyOtp({ email: cleanEmail, token: cleanToken, type: "email" }), 12000);
+        let res = await withTimeout(sb.auth.verifyOtp({ email: cleanEmail, token: cleanToken, type: "email" }), 25000);
         if (res.error) {
-            const res2 = await withTimeout(sb.auth.verifyOtp({ email: cleanEmail, token: cleanToken, type: "signup" }), 10000).catch(() => null);
+            const res2 = await withTimeout(sb.auth.verifyOtp({ email: cleanEmail, token: cleanToken, type: "signup" }), 20000).catch(() => null);
             if (res2 && !res2.error) res = res2;
         }
         if (!res.error && res.data && res.data.user) await syncCurrentUserProfile(res.data.user);
@@ -546,7 +539,7 @@
         window.location.reload();
     }
 
-    // -------------------- 7. PROFESSIONAL META/IG-LEVEL AUTH MODAL --------------------
+    // -------------------- 7. PROFESSIONAL AUTH MODAL --------------------
     const LOGO = `<div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#10b981,#06b6d4);color:#020617;font-size:24px;font-weight:900;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;box-shadow:0 6px 20px rgba(16,185,129,.4);">N</div>`;
 
     function openProNexusAuthModal(initialMode) {
@@ -603,7 +596,7 @@
                 </div>`;
             } else if (view === "forgot") {
                 body = `<div style="display:flex;flex-direction:column;gap:10px;">
-                    <p style="font-size:12px;color:#cbd5e1;">Apni Gmail dalein — <b>Nexus Community</b> se <b>6-Digit OTP</b> aayega:</p>
+                    <p style="font-size:12px;color:#cbd5e1;">Apni Gmail dalein — <b>Nexus Community</b> se <b>6-Digit OTP</b> aayega (10–20 sec wait karein):</p>
                     <input type="email" id="nx-fg-em" class="nx-b-in" value="${esc(pendingEmail)}" placeholder="yourname@gmail.com" autocapitalize="none">
                     <button type="button" id="nx-fg-go" class="nx-b-btn">📧 Send 6-Digit OTP</button>
                     <button type="button" id="nx-fg-have" style="background:none;border:none;color:#34d399;font-size:12px;font-weight:800;cursor:pointer;">🔑 Already have OTP code?</button>
@@ -611,7 +604,7 @@
                 </div>`;
             } else if (view === "otp_verify") {
                 body = `<div style="display:flex;flex-direction:column;gap:10px;">
-                    <p style="font-size:12px;color:#cbd5e1;text-align:center;">Gmail par aaya <b>6-Digit OTP</b> code dalein:</p>
+                    <p style="font-size:12px;color:#cbd5e1;text-align:center;">Gmail (Inbox/Spam) par aaya <b>6-Digit OTP</b> code dalein:</p>
                     <input type="email" id="nx-ov-em" class="nx-b-in" value="${esc(pendingEmail)}" placeholder="Gmail address" autocapitalize="none" style="color:#38bdf8;">
                     <input type="tel" id="nx-code-in" class="nx-b-in" maxlength="8" placeholder="• • • • • •" style="text-align:center;font-size:22px;font-weight:900;letter-spacing:6px;color:#34d399;border-color:#10b981;">
                     <button type="button" id="nx-code-go" class="nx-b-btn">✅ Verify OTP &amp; Continue</button>
@@ -650,7 +643,7 @@
                     this.disabled = true; this.textContent = "⏳ Logging In...";
                     try {
                         const { error } = await loginWithEmail(em, pw);
-                        if (error) { this.disabled = false; this.textContent = "🔓 Log In to Nexus"; return err("❌ Email ya Password galat hai! Bhool gaye toh 'Forgot Password?' dabaiye."); }
+                        if (error) { this.disabled = false; this.textContent = "🔓 Log In to Nexus"; return err("❌ " + (error.message || "Email ya Password galat hai!")); }
                         finishInstant("✅ Welcome Back to Nexus!");
                     } catch (e) { this.disabled = false; this.textContent = "🔓 Log In to Nexus"; err("❌ " + (e.message || "Retry")); }
                 };
@@ -673,7 +666,7 @@
                 m.querySelector("#nx-fg-go").onclick = async function () {
                     const em = m.querySelector("#nx-fg-em").value.trim().toLowerCase();
                     if (!em.includes("@")) return err("⚠️ Sahi Gmail dalein.");
-                    this.disabled = true; this.textContent = "⏳ Sending 6-Digit OTP...";
+                    this.disabled = true; this.textContent = "⏳ Sending OTP (Wait 5–15s)...";
                     try {
                         const { error } = await sendEmailOtp(em, intent !== "recovery");
                         if (error) { this.disabled = false; this.textContent = "📧 Send 6-Digit OTP"; return err("❌ " + error.message); }
@@ -750,7 +743,7 @@
             sendHeartbeat(user.id);
         }
 
-        sb.channel("nx_main_bridge_live_v60")
+        sb.channel("nx_main_bridge_live_v61")
             .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => fetchLiveSupabaseData(true))
             .on("postgres_changes", { event: "*", schema: "public", table: "posts" }, () => fetchLiveSupabaseData(true))
             .subscribe();
@@ -761,7 +754,7 @@
     setInterval(() => sendHeartbeat(), 25000);
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") sendHeartbeat(); });
 
-    // -------------------- 9. EXPORTS (COMPATIBLE WITH ALL OLD & NEW MODULES) --------------------
+    // -------------------- 9. EXPORTS --------------------
     window.NexusSecurity = {
         sb, SUPABASE_URL, getAuthenticatedUserId: getAuthUid, loginWithGoogle, sendEmailOtp, verifyEmailOtp,
         signUpWithEmail, loginWithEmail, updateUserPassword, checkUsernameAvailable, syncCurrentUserProfile,
