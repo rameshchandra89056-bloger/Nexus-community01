@@ -1,10 +1,10 @@
 /* ============================================================================
-   NEXUS-SECURITY.JS (v5.1 FINAL CLEAN MASTER — SINGLE UNCUT BLOCK)
+   NEXUS-SECURITY.JS (v5.2 ANTI-FREEZE MASTER — SINGLE UNCUT BLOCK)
+   - Zero Infinite "Verifying..." Freeze (Strict try/catch + 12s Timeout)
+   - Non-Blocking Login & OTP Verification (Closes Modal Instantly on Verify)
    - Kills Duplicate #nx-google-auth-hub & Broken Logo Icon
-   - Restores Google 1-Click + Email/Password + 6/8-Digit OTP + Forgot Password
-   - 0.01s Instant Cache Boot + Live Supabase Realtime + 25s Presence Heartbeat
-   - Preserves Original "N Official Nexus ✓" Story Bar Style
-   - Full E2EE, 2-Device Lock, 50MB Storage, View-Once Burn & Reactions
+   - Google 1-Click + Email/Password + 6/8-Digit OTP + Forgot Password
+   - 0.01s Instant Cache Boot + Live Supabase Realtime + Original Story Bar
    ============================================================================ */
 (function () {
     const SUPABASE_URL = ("https" + "://" + "fegmtyoxijvktoxtealo" + ".supabase.co").trim();
@@ -18,9 +18,14 @@
     const FAST_USERS_KEY = "nx_v5_fast_users";
     const FAST_POSTS_KEY = "nx_v5_fast_posts";
 
-    if (!document.getElementById("nx-sec-v51-css")) {
+    const withTimeout = (promise, ms = 12000) => Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Network slow hai (timeout). Dobara tap karein.")), ms))
+    ]);
+
+    if (!document.getElementById("nx-sec-v52-css")) {
         const st = document.createElement("style");
-        st.id = "nx-sec-v51-css";
+        st.id = "nx-sec-v52-css";
         st.textContent = `
             #nx-google-auth-hub,.nx-legacy-auth-card{display:none!important;visibility:hidden!important;height:0!important;overflow:hidden!important}
             .nx-pro-iw{position:relative;display:flex;align-items:center}
@@ -55,8 +60,10 @@
     }
 
     async function getAuthUid() {
-        const { data } = await sb.auth.getSession();
-        return (data && data.session && data.session.user && data.session.user.id) || null;
+        try {
+            const { data } = await sb.auth.getSession();
+            return (data && data.session && data.session.user && data.session.user.id) || null;
+        } catch (e) { return null; }
     }
 
     // 1. 0.01s INSTANT BOOT CACHE
@@ -135,7 +142,7 @@
     }
     window.__nxSyncSupabaseAll = fastLiveSupabaseFetch;
 
-    // 2. 2-DEVICE SESSION LOCK
+    // 2. 2-DEVICE SESSION LOCK (NON-BLOCKING)
     async function registerActiveSession(uid) {
         if (!uid) return null;
         const sid = getSid();
@@ -196,7 +203,7 @@
                 priv = await crypto.subtle.exportKey("jwk", pair.privateKey);
                 pub = await crypto.subtle.exportKey("jwk", pair.publicKey);
                 await saveKey("priv_" + uid, priv); await saveKey("pub_" + uid, pub);
-                await sb.from("profiles").update({ e2ee_public_key: JSON.stringify(pub) }).eq("id", uid);
+                sb.from("profiles").update({ e2ee_public_key: JSON.stringify(pub) }).eq("id", uid).then(() => {});
             }
             return priv;
         } catch (e) { return null; }
@@ -238,10 +245,10 @@
         return true;
     }
 
-    // 4. AUTH FUNCTIONS (GOOGLE + EMAIL/PASS + 6/8-DIGIT OTP)
+    // 4. AUTH FUNCTIONS (ANTI-FREEZE WITH TIMEOUT & FALLBACK PROFILE)
     const loginWithGoogle = () => sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin + window.location.pathname } });
-    const sendEmailOtp = (email, create = true) => sb.auth.signInWithOtp({ email: String(email || "").trim().toLowerCase(), options: { shouldCreateUser: Boolean(create) } });
-    const updateUserPassword = (pw) => sb.auth.updateUser({ password: String(pw || "").trim() });
+    const sendEmailOtp = (email, create = true) => withTimeout(sb.auth.signInWithOtp({ email: String(email || "").trim().toLowerCase(), options: { shouldCreateUser: Boolean(create) } }), 12000);
+    const updateUserPassword = (pw) => withTimeout(sb.auth.updateUser({ password: String(pw || "").trim() }), 12000);
 
     async function checkUsernameAvailable(raw, ignoreId) {
         const clean = String(raw || "").toLowerCase().replace(/^@/, "").replace(/[^a-z0-9_]/g, "").slice(0, 24);
@@ -261,10 +268,10 @@
 
         const nm = String(displayName || chk.clean).trim().slice(0, 60);
         const cleanBio = String(bio || "Nexus Community Member ✨").trim().slice(0, 220);
-        const { data, error } = await sb.auth.signUp({
+        const { data, error } = await withTimeout(sb.auth.signUp({
             email: cleanEmail, password: pw,
             options: { data: { full_name: nm, preferred_username: chk.clean, bio: cleanBio } }
-        });
+        }), 12000);
         if (error) return { data, error };
 
         if (data && data.user && data.session) {
@@ -272,16 +279,19 @@
                 id: data.user.id, firebase_uid: chk.clean, username: chk.clean,
                 display_name: nm, bio: cleanBio, is_verified: true, is_onboarded: true,
                 role: "user", last_online: new Date().toISOString()
-            }, { onConflict: "id" });
-            await syncCurrentUserProfile();
+            }, { onConflict: "id" }).catch(() => {});
+            await syncCurrentUserProfile(data.user);
             return { data, error: null, needsOtp: false };
         }
         return { data, error: null, needsOtp: true };
     }
 
     async function loginWithEmail(email, password) {
-        const { data, error } = await sb.auth.signInWithPassword({ email: String(email || "").trim().toLowerCase(), password: String(password || "") });
-        if (!error && data && data.user) await syncCurrentUserProfile();
+        const { data, error } = await withTimeout(sb.auth.signInWithPassword({
+            email: String(email || "").trim().toLowerCase(),
+            password: String(password || "")
+        }), 12000);
+        if (!error && data && data.user) await syncCurrentUserProfile(data.user);
         return { data, error };
     }
 
@@ -289,42 +299,64 @@
         const cleanEmail = String(email || "").trim().toLowerCase();
         const cleanToken = String(code || "").replace(/\D/g, "").trim();
         if (cleanToken.length < 6 || cleanToken.length > 8) return { error: { message: "Poora 6 ya 8 digit OTP code dalein." } };
-        let res = await sb.auth.verifyOtp({ email: cleanEmail, token: cleanToken, type: "email" });
-        if (res.error) res = await sb.auth.verifyOtp({ email: cleanEmail, token: cleanToken, type: "signup" });
-        if (!res.error && res.data && res.data.user) await syncCurrentUserProfile();
+
+        let res = await withTimeout(sb.auth.verifyOtp({ email: cleanEmail, token: cleanToken, type: "email" }), 12000);
+        if (res.error) {
+            const res2 = await withTimeout(sb.auth.verifyOtp({ email: cleanEmail, token: cleanToken, type: "signup" }), 10000).catch(() => null);
+            if (res2 && !res2.error) res = res2;
+        }
+        if (!res.error && res.data && res.data.user) {
+            await syncCurrentUserProfile(res.data.user);
+        }
         return res;
     }
 
-    async function syncCurrentUserProfile() {
-        const { data: sd } = await sb.auth.getSession();
-        const user = sd && sd.session ? sd.session.user : null;
-        if (!user) return null;
-        let { data: prof } = await sb.from("profiles").select("*").eq("id", user.id).maybeSingle();
-        if (!prof) {
-            const meta = user.user_metadata || {};
-            const rawBase = String(meta.preferred_username || (user.email || "user").split("@")[0]).toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 14) || "user";
-            const tmpU = rawBase + "_" + user.id.replace(/-/g, "").slice(0, 4);
-            const row = {
-                id: user.id, firebase_uid: tmpU, username: tmpU,
-                display_name: String(meta.full_name || meta.name || rawBase).trim(),
-                avatar_url: String(meta.avatar_url || meta.picture || ""),
-                bio: String(meta.bio || "Nexus Community Member ✨"),
-                is_verified: true, is_onboarded: true, role: "user", last_online: new Date().toISOString()
-            };
-            const { data: ins } = await sb.from("profiles").upsert(row, { onConflict: "id" }).select("*").single();
-            prof = ins || row;
-        } else {
-            sb.from("profiles").update({ last_online: new Date().toISOString() }).eq("id", user.id).then(() => {});
+    async function syncCurrentUserProfile(directUser) {
+        let user = directUser || null;
+        if (!user) {
+            const { data: sd } = await withTimeout(sb.auth.getSession(), 8000);
+            user = sd && sd.session ? sd.session.user : null;
         }
+        if (!user) return null;
+
+        const meta = user.user_metadata || {};
+        const fallbackBase = String(meta.preferred_username || (user.email || "user").split("@")[0]).toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 14) || "user";
+        const fallbackU = fallbackBase + "_" + user.id.replace(/-/g, "").slice(0, 4);
+
+        let prof = null;
+        try {
+            const { data: found } = await withTimeout(sb.from("profiles").select("*").eq("id", user.id).maybeSingle(), 7000);
+            if (found) {
+                prof = found;
+                sb.from("profiles").update({ last_online: new Date().toISOString() }).eq("id", user.id).then(() => {});
+            } else {
+                const row = {
+                    id: user.id, firebase_uid: fallbackU, username: fallbackU,
+                    display_name: String(meta.full_name || meta.name || fallbackBase).trim(),
+                    avatar_url: String(meta.avatar_url || meta.picture || ""),
+                    bio: String(meta.bio || "Nexus Community Member ✨"),
+                    is_verified: true, is_onboarded: true, role: "user", last_online: new Date().toISOString()
+                };
+                const { data: ins } = await withTimeout(sb.from("profiles").upsert(row, { onConflict: "id" }).select("*").single(), 7000);
+                prof = ins || row;
+            }
+        } catch (e) {
+            // Never freeze login if DB is slow — build immediate fallback profile
+            prof = { id: user.id, username: fallbackU, display_name: String(meta.full_name || fallbackBase), bio: "Nexus Community Member ✨", is_verified: true, role: "user" };
+        }
+
         if (prof.is_banned) { await sb.auth.signOut(); localStorage.removeItem("nx_active_account"); alert("🚫 Account suspended."); return null; }
-        registerActiveSession(user.id);
-        initUserE2EEKeys(user.id);
+
+        // Background non-blocking tasks
+        registerActiveSession(user.id).catch(() => {});
+        initUserE2EEKeys(user.id).catch(() => {});
+
         const bridged = {
-            id: prof.id, uid: prof.id, username: prof.username, name: prof.display_name || prof.username,
+            id: prof.id, uid: prof.id, username: prof.username || fallbackU, name: prof.display_name || prof.username || fallbackBase,
             email: user.email || "", dp: prof.avatar_url || "", coverUrl: prof.cover_url || "",
             themeColor: prof.theme_color || "emerald", skillTags: Array.isArray(prof.skill_tags) ? prof.skill_tags : [],
             bio: prof.bio || "", moodNote: prof.mood_note || "", profileSong: prof.profile_song || null, website: prof.website || "",
-            verified: Boolean(prof.is_verified), googleVerified: true, isOnboarded: true, role: prof.role || "user",
+            verified: Boolean(prof.is_verified !== false), googleVerified: true, isOnboarded: true, role: prof.role || "user",
             blockedUsers: Array.isArray(prof.blocked_users) ? prof.blocked_users : [], showReadReceipts: prof.show_read_receipts !== false,
             followersList: Array.isArray(prof.followers_list) ? prof.followers_list : [], followingList: Array.isArray(prof.following_list) ? prof.following_list : [],
             isOnlineNow: true, lastOnline: Date.now()
@@ -451,7 +483,7 @@
         return () => { try { sb.removeChannel(ch); } catch (e) {} };
     }
 
-    // 6. CLEAN PRO AUTH MODAL (GOOGLE + EMAIL/PASS + 6/8-DIGIT OTP + FORGOT PASS)
+    // 6. ANTI-FREEZE PRO AUTH MODAL
     const LOGO = `<div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#10b981,#06b6d4);color:#020617;font-size:24px;font-weight:900;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;box-shadow:0 6px 20px rgba(16,185,129,.4);">N</div>`;
 
     function openAdvancedNexusAuthModal(initialMode) {
@@ -462,11 +494,13 @@
         const m = document.createElement("div"); m.id = "nx-sb-auth-modal";
         m.style.cssText = "position:fixed;inset:0;background:rgba(2,6,23,.94);z-index:299000;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(8px);";
 
-        const done = async (msg) => {
-            await fastLiveSupabaseFetch(true);
-            m.remove(); document.getElementById("nx-google-auth-hub")?.remove(); document.body.classList.remove("nx-auth-locked");
+        const finishInstant = (msg) => {
+            m.remove();
+            document.getElementById("nx-google-auth-hub")?.remove();
+            document.body.classList.remove("nx-auth-locked");
             if (window.renderMyInstagramProfileTab) window.renderMyInstagramProfileTab();
             if (window.Nexus && Nexus.toast) Nexus.toast(msg);
+            fastLiveSupabaseFetch(true);
         };
 
         const bindEye = (inpId, btnId) => {
@@ -480,7 +514,6 @@
                 <button type="button" id="nx-t-li" style="padding:8px;border-radius:9px;border:none;background:${view === "login" ? "#10b981" : "transparent"};color:${view === "login" ? "#020617" : "#94a3b8"};font-weight:900;font-size:13px;cursor:pointer;">Log In</button>
                 <button type="button" id="nx-t-su" style="padding:8px;border-radius:9px;border:none;background:${view === "signup" ? "#10b981" : "transparent"};color:${view === "signup" ? "#020617" : "#94a3b8"};font-weight:900;font-size:13px;cursor:pointer;">Create Account</button>
             </div>` : "";
-
             const googleBtn = isTab ? `<button type="button" id="nx-g-oauth" style="width:100%;padding:11px;border-radius:12px;background:#fff;color:#0f172a;font-weight:900;font-size:13px;border:none;cursor:pointer;margin-bottom:10px;">G Continue with Google (1-Click)</button><div style="text-align:center;font-size:10.5px;color:#64748b;margin-bottom:10px;">— OR EMAIL &amp; PASSWORD —</div>` : "";
 
             let body = "";
@@ -514,7 +547,7 @@
             } else if (view === "otp_verify") {
                 body = `<div style="display:flex;flex-direction:column;gap:10px;">
                     <input type="email" id="nx-ov-em" class="nx-pro-in" value="${esc(pendingEmail)}" placeholder="Gmail address" autocapitalize="none" style="color:#38bdf8;">
-                    <input type="tel" id="nx-code-in" class="nx-pro-in" maxlength="8" placeholder="6 or 8-Digit OTP" style="text-align:center;font-size:21px;font-weight:900;letter-spacing:5px;color:#34d399;border-color:#10b981;">
+                    <input type="tel" id="nx-code-in" class="nx-pro-in" maxlength="8" placeholder="6-Digit OTP" style="text-align:center;font-size:21px;font-weight:900;letter-spacing:5px;color:#34d399;border-color:#10b981;">
                     <button type="button" id="nx-code-go" class="nx-pro-btn">✅ Verify OTP</button>
                     <button type="button" id="nx-bk" style="background:none;border:none;color:#94a3b8;font-size:12px;font-weight:800;cursor:pointer;">← Back to Log In</button>
                 </div>`;
@@ -549,9 +582,11 @@
                     const em = m.querySelector("#nx-li-em").value.trim(), pw = m.querySelector("#nx-li-pw").value.trim();
                     if (!em.includes("@") || pw.length < 6) return err("⚠️ Sahi Gmail aur 6+ char Password dalein.");
                     this.disabled = true; this.textContent = "⏳ Logging In...";
-                    const { error } = await loginWithEmail(em, pw);
-                    if (error) { this.disabled = false; this.textContent = "🔓 Log In"; return err("❌ Galat Email ya Password!"); }
-                    await done("✅ Welcome Back!");
+                    try {
+                        const { error } = await loginWithEmail(em, pw);
+                        if (error) { this.disabled = false; this.textContent = "🔓 Log In"; return err("❌ Galat Email ya Password!"); }
+                        finishInstant("✅ Welcome Back!");
+                    } catch (e) { this.disabled = false; this.textContent = "🔓 Log In"; err("❌ " + (e.message || "Retry")); }
                 };
             } else if (view === "signup") {
                 bindEye("#nx-su-pw", "#nx-su-eye");
@@ -560,10 +595,12 @@
                 unIn.oninput = () => { clearTimeout(tm); tm = setTimeout(async () => { const r = await checkUsernameAvailable(unIn.value, null); ust.style.color = r.ok ? "#34d399" : "#f43f5e"; ust.textContent = r.ok ? `✅ @${r.clean} available!` : `❌ ${r.reason}`; }, 300); };
                 m.querySelector("#nx-su-go").onclick = async function () {
                     this.disabled = true; this.textContent = "⏳ Creating...";
-                    const res = await signUpWithEmail(m.querySelector("#nx-su-em").value, m.querySelector("#nx-su-pw").value, m.querySelector("#nx-su-nm").value, unIn.value, "");
-                    if (res.error) { this.disabled = false; this.textContent = "✨ Create Verified Account"; return err("❌ " + res.error.message); }
-                    if (res.needsOtp) { pendingEmail = m.querySelector("#nx-su-em").value.trim().toLowerCase(); intent = "signup"; view = "otp_verify"; render(); }
-                    else await done("🎉 Account Created!");
+                    try {
+                        const res = await signUpWithEmail(m.querySelector("#nx-su-em").value, m.querySelector("#nx-su-pw").value, m.querySelector("#nx-su-nm").value, unIn.value, "");
+                        if (res.error) { this.disabled = false; this.textContent = "✨ Create Verified Account"; return err("❌ " + res.error.message); }
+                        if (res.needsOtp) { pendingEmail = m.querySelector("#nx-su-em").value.trim().toLowerCase(); intent = "signup"; view = "otp_verify"; render(); }
+                        else finishInstant("🎉 Account Created!");
+                    } catch (e) { this.disabled = false; this.textContent = "✨ Create Verified Account"; err("❌ " + (e.message || "Retry")); }
                 };
             } else if (view === "forgot") {
                 m.querySelector("#nx-fg-have").onclick = () => { pendingEmail = m.querySelector("#nx-fg-em").value.trim(); view = "otp_verify"; render(); };
@@ -571,28 +608,34 @@
                     const em = m.querySelector("#nx-fg-em").value.trim().toLowerCase();
                     if (!em.includes("@")) return err("⚠️ Sahi Gmail dalein.");
                     this.disabled = true; this.textContent = "⏳ Sending OTP...";
-                    const { error } = await sendEmailOtp(em, intent !== "recovery");
-                    if (error) { this.disabled = false; this.textContent = "📧 Send 6-Digit OTP"; return err("❌ " + error.message); }
-                    pendingEmail = em; view = "otp_verify"; render();
+                    try {
+                        const { error } = await sendEmailOtp(em, intent !== "recovery");
+                        if (error) { this.disabled = false; this.textContent = "📧 Send 6-Digit OTP"; return err("❌ " + error.message); }
+                        pendingEmail = em; view = "otp_verify"; render();
+                    } catch (e) { this.disabled = false; this.textContent = "📧 Send 6-Digit OTP"; err("❌ " + (e.message || "Retry")); }
                 };
             } else if (view === "otp_verify") {
                 m.querySelector("#nx-code-go").onclick = async function () {
                     const em = m.querySelector("#nx-ov-em").value.trim().toLowerCase(), code = m.querySelector("#nx-code-in").value.trim();
-                    if (!em.includes("@") || code.length < 6) return err("⚠️ Gmail aur poora OTP code dalein.");
+                    if (!em.includes("@") || code.length < 6) return err("⚠️ Gmail aur poora 6-digit OTP dalein.");
                     this.disabled = true; this.textContent = "⏳ Verifying...";
-                    const { error } = await verifyEmailOtp(em, code);
-                    if (error) { this.disabled = false; this.textContent = "✅ Verify OTP"; return err("❌ Galat ya expired OTP!"); }
-                    if (intent === "recovery") { view = "reset"; render(); } else await done("✅ Gmail Verified!");
+                    try {
+                        const { error } = await verifyEmailOtp(em, code);
+                        if (error) { this.disabled = false; this.textContent = "✅ Verify OTP"; return err("❌ " + (error.message || "Galat ya expired OTP!")); }
+                        if (intent === "recovery") { view = "reset"; render(); } else finishInstant("✅ Gmail Verified!");
+                    } catch (e) { this.disabled = false; this.textContent = "✅ Verify OTP"; err("❌ " + (e.message || "Retry")); }
                 };
             } else if (view === "reset") {
                 bindEye("#nx-rs-pw", "#nx-rs-eye");
                 m.querySelector("#nx-rs-go").onclick = async function () {
                     const p = m.querySelector("#nx-rs-pw").value.trim();
                     if (p.length < 6) return err("⚠️ Min 6 characters password dalein.");
-                    this.disabled = true;
-                    const { error } = await updateUserPassword(p);
-                    if (error) { this.disabled = false; return err("❌ " + error.message); }
-                    await done("🔐 Password Updated!");
+                    this.disabled = true; this.textContent = "⏳ Saving...";
+                    try {
+                        const { error } = await updateUserPassword(p);
+                        if (error) { this.disabled = false; this.textContent = "🔐 Save Password & Login"; return err("❌ " + error.message); }
+                        finishInstant("🔐 Password Updated!");
+                    } catch (e) { this.disabled = false; this.textContent = "🔐 Save Password & Login"; err("❌ " + (e.message || "Retry")); }
                 };
             }
         };
@@ -626,7 +669,7 @@
         m.querySelector("#nx-scs").onclick = async () => { try { await restorePrivateKeyWithPin(uid, m.querySelector("#nx-scp").value); if (window.Nexus && Nexus.toast) Nexus.toast("🔓 Chats Unlocked!"); } catch (e) { alert("❌ Wrong PIN"); } };
     }
 
-    // 7. ORIGINAL-STYLE STORY BAR + 25s LIVE HEARTBEAT
+    // 7. ORIGINAL-STYLE STORY BAR + 25s HEARTBEAT
     function fmtShort(ms) {
         if (!ms || ms < 1000000000000) return "";
         const s = Math.max(1, Math.floor((Date.now() - ms) / 1000));
@@ -683,7 +726,7 @@
     async function sendHeartbeat(uid) {
         if (document.visibilityState === "hidden") return;
         const id = uid || await getAuthUid();
-        if (id) await sb.from("profiles").update({ last_online: new Date().toISOString() }).eq("id", id).catch(() => {});
+        if (id) sb.from("profiles").update({ last_online: new Date().toISOString() }).eq("id", id).then(() => {});
     }
 
     async function boot() {
@@ -692,13 +735,13 @@
         const [sessionRes] = await Promise.all([sb.auth.getSession(), fastLiveSupabaseFetch(true)]);
         const user = sessionRes && sessionRes.data && sessionRes.data.session ? sessionRes.data.session.user : null;
         if (user && user.id) {
-            await syncCurrentUserProfile();
+            await syncCurrentUserProfile(user);
             sendHeartbeat(user.id);
         } else if (localStorage.getItem("nx_active_account")) {
             localStorage.removeItem("nx_active_account");
             localStorage.removeItem("nx_legacy_backup_account");
         }
-        sb.channel("nx_live_v51")
+        sb.channel("nx_live_v52")
             .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => fastLiveSupabaseFetch(false))
             .on("postgres_changes", { event: "*", schema: "public", table: "posts" }, () => fastLiveSupabaseFetch(true))
             .subscribe();
