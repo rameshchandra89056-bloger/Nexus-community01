@@ -7,7 +7,8 @@
      50MB Permanent Storage, Silent Write Mirror & 25s Live Heartbeat
    ============================================================================ */
 (function () {
-    if (window.__NEXUS_SUPABASE_BRIDGE_V61__) return;
+    if (window.__NEXUS_SUPABASE_BRIDGE_V62__) return;
+    window.__NEXUS_SUPABASE_BRIDGE_V62__ = true;
     window.__NEXUS_SUPABASE_BRIDGE_V61__ = true;
 
     const SUPABASE_URL = ("https" + "://" + "fegmtyoxijvktoxtealo" + ".supabase.co").trim();
@@ -189,19 +190,28 @@
 
     mergeSupabaseIntoNexus(true);
 
-    async function fetchLiveSupabaseData(triggerUi) {
+    let _lastBridgeFetchAt = 0;
+    async function fetchLiveSupabaseData(triggerUi, force) {
+        const now = Date.now();
+        // ZERO EGRESS WASTE: skip if index.html <head> preloaded or we already fetched in last 45s!
+        const headPreAt = Number(window.__NX_SB_PRELOADED_AT__ || 0);
+        if (!force && ((headPreAt && now - headPreAt < 30000) || (_lastBridgeFetchAt && now - _lastBridgeFetchAt < 45000))) {
+            mergeSupabaseIntoNexus(triggerUi);
+            return;
+        }
+        _lastBridgeFetchAt = now;
         try {
             const [uRes, pRes] = await Promise.all([
-                sb.from("profiles").select("*").order("last_online", { ascending: false }).limit(160),
-                sb.from("posts").select("*").order("created_at", { ascending: false }).limit(90)
+                sb.from("profiles").select("id,username,firebase_uid,display_name,avatar_url,bio,mood_note,website,is_verified,role,followers_list,following_list,last_online").order("last_online", { ascending: false }).limit(80),
+                sb.from("posts").select("id,author_id,author_username,author_name,author_dp,bio,content,image_url,media_type,likes_list,comments_list,views_count,is_pinned,created_at").order("created_at", { ascending: false }).limit(40)
             ]);
             if (Array.isArray(uRes.data) && uRes.data.length) {
                 sbUsersCache = uRes.data.map(mapSbProfileToLegacy).filter(Boolean);
-                try { localStorage.setItem(CACHE_USERS_KEY, JSON.stringify(sbUsersCache.slice(0, 70))); } catch (e) {}
+                try { localStorage.setItem(CACHE_USERS_KEY, JSON.stringify(sbUsersCache.slice(0, 60))); } catch (e) {}
             }
             if (Array.isArray(pRes.data)) {
                 sbPostsCache = pRes.data.map(mapSbPostToLegacy).filter(Boolean);
-                try { localStorage.setItem(CACHE_POSTS_KEY, JSON.stringify(sbPostsCache.slice(0, 35))); } catch (e) {}
+                try { localStorage.setItem(CACHE_POSTS_KEY, JSON.stringify(sbPostsCache.slice(0, 25))); } catch (e) {}
             }
             mergeSupabaseIntoNexus(triggerUi);
         } catch (e) {}
@@ -228,7 +238,11 @@
     async function uploadPublicMedia(file, folder) {
         if (!file || file.size > 50 * 1024 * 1024) throw new Error("Max 50MB allowed");
         const path = `${folder || "posts"}/${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${getExt(file)}`;
-        const { error } = await sb.storage.from("public-media").upload(path, file, { contentType: file.type || "application/octet-stream" });
+        const { error } = await sb.storage.from("public-media").upload(path, file, {
+            cacheControl: "31536000",
+            upsert: false,
+            contentType: file.type || "application/octet-stream"
+        });
         if (error) throw error;
         return { publicUrl: sb.storage.from("public-media").getPublicUrl(path).data.publicUrl, path };
     }
@@ -236,7 +250,11 @@
     async function uploadPrivateChatMedia(file, convId) {
         if (!file || file.size > 50 * 1024 * 1024) throw new Error("Max 50MB allowed");
         const path = `${String(convId || "gen").replace(/[^a-zA-Z0-9_-]/g, "")}/${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${getExt(file)}`;
-        const { error } = await sb.storage.from("private-chat-media").upload(path, file, { contentType: file.type || "application/octet-stream" });
+        const { error } = await sb.storage.from("private-chat-media").upload(path, file, {
+            cacheControl: "31536000",
+            upsert: false,
+            contentType: file.type || "application/octet-stream"
+        });
         if (error) throw error;
         return { path, fileName: file.name || "file", mimeType: file.type || "application/octet-stream", size: file.size };
     }
@@ -314,10 +332,23 @@
                 } catch (e) {}
             };
 
-            const mirrorProfile = async (data) => {
+            const mirrorProfile = async (targetDocId, data) => {
                 try {
                     const uid = await getAuthUid();
                     if (!uid || !data) return;
+                    let myU = "";
+                    try {
+                        const rawMe = localStorage.getItem("nx_active_account");
+                        if (rawMe) myU = normU(JSON.parse(rawMe).username);
+                    } catch (e) {}
+                    const cleanDoc = normU(targetDocId);
+                    // CRITICAL FIX: NEVER overwrite YOUR OWN Supabase profile when writing another user's followersList!
+                    if (cleanDoc && myU && cleanDoc !== myU) {
+                        if (Array.isArray(data.followersList)) {
+                            sb.from("profiles").update({ followers_list: data.followersList }).eq("username", cleanDoc).then(() => {}, () => {});
+                        }
+                        return;
+                    }
                     const patch = { last_online: new Date().toISOString() };
                     if (data.name) patch.display_name = String(data.name).slice(0, 60);
                     if (data.bio !== undefined) patch.bio = String(data.bio).slice(0, 220);
@@ -345,12 +376,12 @@
                     const origSet = dRef.set.bind(dRef);
                     dRef.set = function (data, opts) {
                         if (colName === "nexus_real_posts" && !opts) mirrorPost(data);
-                        if (colName === "nexus_accounts") mirrorProfile(data);
+                        if (colName === "nexus_accounts") mirrorProfile(docId, data);
                         return origSet(data, opts);
                     };
                     const origUpdate = dRef.update.bind(dRef);
                     dRef.update = function (data) {
-                        if (colName === "nexus_accounts") mirrorProfile(data);
+                        if (colName === "nexus_accounts") mirrorProfile(docId, data);
                         return origUpdate(data);
                     };
                     return dRef;
@@ -404,7 +435,7 @@
         return { ok: true, clean };
     }
 
-    async function syncCurrentUserProfile(directUser) {
+    async function syncCurrentUserProfile(directUser, isExplicitLogin) {
         let user = directUser || null;
         if (!user) {
             const { data: sd } = await withTimeout(sb.auth.getSession(), 12000);
@@ -412,11 +443,17 @@
         }
         if (!user) return null;
 
+        let existingLocal = null;
+        try {
+            const rawLoc = localStorage.getItem("nx_active_account");
+            if (rawLoc) existingLocal = JSON.parse(rawLoc);
+        } catch (e) {}
+
         const meta = user.user_metadata || {};
         const metaU = normU(meta.preferred_username || "");
         const fallbackBase = (metaU || (user.email || "user").split("@")[0]).replace(/[^a-z0-9_]/g, "").slice(0, 14) || "user";
         const fallbackU = metaU.length >= 3 ? metaU : (fallbackBase + "_" + user.id.replace(/-/g, "").slice(0, 4));
-        const legacyMatch = ((window.Nexus && Nexus.users) || []).find((u) => u && normU(u.username) === fallbackU);
+        const initLegacy = ((window.Nexus && (Nexus.users || Nexus.cloudAccounts)) || []).find((u) => u && normU(u.username) === fallbackU);
 
         let prof = null;
         try {
@@ -429,11 +466,11 @@
                     id: user.id,
                     firebase_uid: fallbackU,
                     username: fallbackU,
-                    display_name: String(meta.full_name || meta.name || (legacyMatch && legacyMatch.name) || fallbackBase).trim(),
-                    avatar_url: String(meta.avatar_url || meta.picture || (legacyMatch && /^https?:\/\//i.test(legacyMatch.dp || "") ? legacyMatch.dp : "") || ""),
-                    bio: String(meta.bio || (legacyMatch && legacyMatch.bio) || "Nexus Community Member ✨"),
-                    followers_list: Array.isArray(legacyMatch && legacyMatch.followersList) ? legacyMatch.followersList : [],
-                    following_list: Array.isArray(legacyMatch && legacyMatch.followingList) ? legacyMatch.followingList : [],
+                    display_name: String(meta.full_name || meta.name || (initLegacy && initLegacy.name) || fallbackBase).trim(),
+                    avatar_url: String(meta.avatar_url || meta.picture || (initLegacy && /^https?:\/\//i.test(initLegacy.dp || "") ? initLegacy.dp : "") || ""),
+                    bio: String(meta.bio || (initLegacy && initLegacy.bio) || "Nexus Community Member ✨"),
+                    followers_list: Array.isArray(initLegacy && initLegacy.followersList) ? initLegacy.followersList : [],
+                    following_list: Array.isArray(initLegacy && initLegacy.followingList) ? initLegacy.followingList : [],
                     is_verified: true,
                     is_onboarded: true,
                     role: "user",
@@ -453,24 +490,50 @@
             return null;
         }
 
+        const resolvedU = normU(prof.username || fallbackU);
+
+        // CRITICAL FIX (NO AUTO PROFILE SWITCH!):
+        // On background boot (when user did NOT click Login/Signup), NEVER silently switch away from the user's currently open profile!
+        if (!isExplicitLogin && existingLocal && existingLocal.username) {
+            const openU = normU(existingLocal.username);
+            const sameId = existingLocal.id && String(existingLocal.id) === String(prof.id);
+            const sameEmail = existingLocal.email && user.email && existingLocal.email.toLowerCase() === user.email.toLowerCase();
+            if (openU && openU !== resolvedU && !sameId && !sameEmail) {
+                return existingLocal;
+            }
+        }
+
+        // Preserve & UNION all followers/following across Firebase + Supabase + Local (ZERO follower loss!)
+        const legacyMatch = ((window.Nexus && (Nexus.users || Nexus.cloudAccounts)) || []).find((u) => u && normU(u.username) === resolvedU);
+        const sameLocal = existingLocal && normU(existingLocal.username) === resolvedU ? existingLocal : null;
+        const unionList = (...arrs) => {
+            const s = new Set();
+            arrs.forEach((a) => {
+                if (Array.isArray(a)) a.forEach((x) => { const k = normU(x); if (k && k !== "member") s.add(k); });
+            });
+            return Array.from(s);
+        };
+        const mergedFollowers = unionList(prof.followers_list, legacyMatch && legacyMatch.followersList, sameLocal && sameLocal.followersList);
+        const mergedFollowing = unionList(prof.following_list, legacyMatch && legacyMatch.followingList, sameLocal && sameLocal.followingList);
+
         registerActiveSession(user.id).catch(() => {});
 
         const bridged = {
             id: prof.id,
             uid: prof.id,
-            username: prof.username || fallbackU,
-            name: prof.display_name || prof.username || fallbackBase,
-            email: user.email || "",
-            dp: prof.avatar_url || (legacyMatch && legacyMatch.dp) || "",
-            bio: prof.bio || "",
-            moodNote: prof.mood_note || "",
-            website: prof.website || "",
+            username: resolvedU,
+            name: prof.display_name || (sameLocal && sameLocal.name) || (legacyMatch && legacyMatch.name) || resolvedU,
+            email: user.email || (sameLocal && sameLocal.email) || "",
+            dp: prof.avatar_url || (sameLocal && sameLocal.dp) || (legacyMatch && legacyMatch.dp) || "",
+            bio: prof.bio || (sameLocal && sameLocal.bio) || (legacyMatch && legacyMatch.bio) || "",
+            moodNote: prof.mood_note || (sameLocal && sameLocal.moodNote) || "",
+            website: prof.website || (sameLocal && sameLocal.website) || "",
             verified: true,
             googleVerified: true,
             isOnboarded: true,
             role: prof.role || "user",
-            followersList: Array.isArray(prof.followers_list) ? prof.followers_list : [],
-            followingList: Array.isArray(prof.following_list) ? prof.following_list : [],
+            followersList: mergedFollowers,
+            followingList: mergedFollowing,
             isOnlineNow: true,
             lastOnline: Date.now(),
             lastSeenAt: Date.now()
@@ -502,7 +565,7 @@
         if (error) return { data, error };
 
         if (data && data.user && data.session) {
-            await syncCurrentUserProfile(data.user);
+            await syncCurrentUserProfile(data.user, true);
             return { data, error: null, needsOtp: false };
         }
         return { data, error: null, needsOtp: true };
@@ -513,7 +576,7 @@
             email: String(email || "").trim().toLowerCase(),
             password: String(password || "")
         }), 25000);
-        if (!error && data && data.user) await syncCurrentUserProfile(data.user);
+        if (!error && data && data.user) await syncCurrentUserProfile(data.user, true);
         return { data, error };
     }
 
@@ -527,7 +590,7 @@
             const res2 = await withTimeout(sb.auth.verifyOtp({ email: cleanEmail, token: cleanToken, type: "signup" }), 20000).catch(() => null);
             if (res2 && !res2.error) res = res2;
         }
-        if (!res.error && res.data && res.data.user) await syncCurrentUserProfile(res.data.user);
+        if (!res.error && res.data && res.data.user) await syncCurrentUserProfile(res.data.user, true);
         return res;
     }
 
@@ -721,11 +784,15 @@
         m.querySelector("#nx-scr").onclick = async () => { await revokeOtherSessions(uid); m.remove(); if (window.Nexus && Nexus.toast) Nexus.toast("🚫 Other devices logged out!"); };
     }
 
-    // -------------------- 8. 0ms BOOT + 25s HEARTBEAT + LIVE SUPABASE REALTIME --------------------
+    // -------------------- 8. 0ms BOOT + LOW-EGRESS 2-MIN HEARTBEAT + ZERO-FETCH REALTIME PATCH --------------------
+    let _lastHbAt = 0;
     async function sendHeartbeat(uid) {
         if (document.visibilityState === "hidden") return;
+        const now = Date.now();
+        if (_lastHbAt && (now - _lastHbAt) < 110000) return;
+        _lastHbAt = now;
         const id = uid || await getAuthUid();
-        if (id) sb.from("profiles").update({ last_online: new Date().toISOString() }).eq("id", id).then(() => {});
+        if (id) sb.from("profiles").update({ last_online: new Date().toISOString() }).eq("id", id).then(() => {}, () => {});
     }
 
     async function bootBridge() {
@@ -733,25 +800,56 @@
         hookMediaStorageToSupabase();
         hookFirestoreWritesToSupabase();
 
+        const isOAuthCallback = /access_token=|code=|type=recovery|type=signup/i.test(window.location.hash + window.location.search);
         const [sessionRes] = await Promise.all([
             sb.auth.getSession().catch(() => null),
-            fetchLiveSupabaseData(true)
+            fetchLiveSupabaseData(true, false)
         ]);
         const user = sessionRes && sessionRes.data && sessionRes.data.session ? sessionRes.data.session.user : null;
         if (user && user.id) {
-            await syncCurrentUserProfile(user);
+            await syncCurrentUserProfile(user, isOAuthCallback);
             sendHeartbeat(user.id);
         }
 
-        sb.channel("nx_main_bridge_live_v61")
-            .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => fetchLiveSupabaseData(true))
-            .on("postgres_changes", { event: "*", schema: "public", table: "posts" }, () => fetchLiveSupabaseData(true))
+        // ZERO-EGRESS REALTIME: Patch directly from payload.new/old — NEVER re-download 250 rows on every heartbeat!
+        sb.channel("nx_main_bridge_live_v62")
+            .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, (payload) => {
+                try {
+                    if (payload.eventType === "DELETE" && payload.old && payload.old.id) {
+                        sbUsersCache = sbUsersCache.filter((u) => u && String(u.id) !== String(payload.old.id));
+                    } else if (payload.new) {
+                        const mapped = mapSbProfileToLegacy(payload.new);
+                        if (mapped) {
+                            const idx = sbUsersCache.findIndex((u) => u && (String(u.id) === String(mapped.id) || normU(u.username) === normU(mapped.username)));
+                            if (idx >= 0) sbUsersCache[idx] = mapped;
+                            else sbUsersCache.push(mapped);
+                        }
+                    }
+                    mergeSupabaseIntoNexus(true);
+                } catch (e) {}
+            })
+            .on("postgres_changes", { event: "*", schema: "public", table: "posts" }, (payload) => {
+                try {
+                    if (payload.eventType === "DELETE" && payload.old && payload.old.id) {
+                        const delId = "sb_" + String(payload.old.id);
+                        sbPostsCache = sbPostsCache.filter((p) => p && p.id !== delId);
+                    } else if (payload.new) {
+                        const mapped = mapSbPostToLegacy(payload.new);
+                        if (mapped) {
+                            const idx = sbPostsCache.findIndex((p) => p && p.id === mapped.id);
+                            if (idx >= 0) sbPostsCache[idx] = mapped;
+                            else sbPostsCache.unshift(mapped);
+                        }
+                    }
+                    mergeSupabaseIntoNexus(true);
+                } catch (e) {}
+            })
             .subscribe();
     }
 
     setTimeout(bootBridge, 10);
     setTimeout(hookFirestoreWritesToSupabase, 800);
-    setInterval(() => sendHeartbeat(), 25000);
+    setInterval(() => sendHeartbeat(), 120000);
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") sendHeartbeat(); });
 
     // -------------------- 9. EXPORTS --------------------
