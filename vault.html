@@ -773,8 +773,8 @@
             if (!sb) return { error: "Not initialized" };
             try {
                 const [uRes, pRes] = await Promise.all([
-                    safeSbSelect("profiles", 250),
-                    safeSbSelect("posts", 120)
+                    safeSbSelect("profiles", 120),
+                    safeSbSelect("posts", 60)
                 ]);
                 if (uRes && uRes.error && pRes && pRes.error) {
                     return { error: uRes.error.message || pRes.error.message };
@@ -830,12 +830,21 @@
             }
         }
 
+        let _sbVaultPullTimer = null;
+        function scheduleDebouncedSbVaultPull() {
+            if (_sbVaultPullTimer) return;
+            _sbVaultPullTimer = setTimeout(() => {
+                _sbVaultPullTimer = null;
+                pullSupabaseAllLive();
+            }, 8000);
+        }
+
         function attachSupabaseRealtimeSubscriptions() {
             if (!sb || sbRealtimeChan) return;
             try {
                 sbRealtimeChan = sb.channel("nx_vault_live_master")
-                    .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => pullSupabaseAllLive())
-                    .on("postgres_changes", { event: "*", schema: "public", table: "posts" }, () => pullSupabaseAllLive())
+                    .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => scheduleDebouncedSbVaultPull())
+                    .on("postgres_changes", { event: "*", schema: "public", table: "posts" }, () => scheduleDebouncedSbVaultPull())
                     .subscribe();
             } catch (e) {}
         }
