@@ -596,10 +596,28 @@
         if (me && me.username) {
             const myK = me.username.toLowerCase().trim();
             if (userMap[myK]) {
-                me.followersList = cleanUniqueList([...(me.followersList || []), ...(userMap[myK].followersList || [])]);
-                me.followingList = cleanUniqueList([...(me.followingList || []), ...(userMap[myK].followingList || [])]);
+                const prevFolLen = Array.isArray(me.followersList) ? me.followersList.length : 0;
+                const restoredFollowers = cleanUniqueList([...(me.followersList || []), ...(userMap[myK].followersList || [])]);
+                const restoredFollowing = cleanUniqueList([...(me.followingList || []), ...(userMap[myK].followingList || [])]);
+                me.followersList = restoredFollowers;
+                me.followingList = restoredFollowing;
+                userMap[myK].followersList = restoredFollowers;
+                userMap[myK].followingList = restoredFollowing;
                 if (!me.profileSong && userMap[myK].profileSong) {
                     me.profileSong = userMap[myK].profileSong;
+                }
+                if (restoredFollowers.length > prevFolLen) {
+                    try { localStorage.setItem("nx_active_account", JSON.stringify(me)); } catch (e) {}
+                    if (!window.__nxFollowersHealedOnce) {
+                        window.__nxFollowersHealedOnce = true;
+                        const sbC = getDualSbClient();
+                        if (sbC) {
+                            (async () => { try { await sbC.from("profiles").update({ followers_list: restoredFollowers }).eq("username", myK); } catch (e) {} })();
+                        }
+                        if (window.Nexus && Nexus.db) {
+                            Nexus.db.collection("nexus_accounts").doc(myK).set({ followersList: restoredFollowers }, { merge: true }).catch(() => {});
+                        }
+                    }
                 }
             }
         }
@@ -1874,15 +1892,17 @@
                 if (img) {
                     if (isVid) {
                         const cachedBlob = videoBlobCache[img] || "";
+                        const rawVidUrl = cachedBlob || (String(img).startsWith("NX_VIDEO_STREAM:") ? "" : img);
+                        const previewSrc = rawVidUrl && /^https?:/i.test(rawVidUrl) && !rawVidUrl.includes("#") ? (rawVidUrl + "#t=0.1") : rawVidUrl;
+                        const posterAttr = p.posterUrl ? `poster="${escAttr(p.posterUrl)}"` : "";
                         mediaHtml = `
-                            <div class="nx-official-video-player" style="position:relative;width:100%;background:#000;border-top:1px solid #1e293b;border-bottom:1px solid #1e293b;overflow:hidden;">
+                            <div class="nx-official-video-player" style="position:relative;width:100%;background:linear-gradient(145deg,#0f172a,#020617);border-top:1px solid #1e293b;border-bottom:1px solid #1e293b;overflow:hidden;">
                                 <video class="nx-official-video" data-stream-ref="${
                                     String(img).startsWith("NX_VIDEO_STREAM:") ? img : ""
-                                }" src="${
-                                    cachedBlob || (String(img).startsWith("NX_VIDEO_STREAM:") ? "" : img)
-                                }" playsinline webkit-playsinline muted autoplay preload="auto" disablepictureinpicture controlslist="nodownload noplaybackrate" style="width:100%;max-height:460px;min-height:220px;display:block;object-fit:contain;background:#000;"></video>
-                                <button type="button" data-nx-video-center-play aria-label="Play video" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:62px;height:62px;border:1px solid rgba(255,255,255,.35);border-radius:50%;background:rgba(15,23,42,.84);color:#fff;font-size:25px;font-weight:900;display:flex;align-items:center;justify-content:center;z-index:3;">▶</button>
-                                <div style="position:absolute;left:0;right:0;bottom:0;padding:34px 12px 10px;background:linear-gradient(transparent,rgba(0,0,0,.9));display:flex;align-items:center;gap:8px;z-index:4;">
+                                }" ${posterAttr} src="${previewSrc}" playsinline webkit-playsinline muted preload="metadata" disablepictureinpicture controlslist="nodownload noplaybackrate" style="width:100%;max-height:460px;min-height:240px;display:block;object-fit:contain;background:#090d16;"></video>
+                                <span data-nx-video-badge style="position:absolute;top:10px;left:10px;background:rgba(9,13,22,0.78);border:1px solid rgba(56,189,248,0.45);color:#e0f2fe;font-size:10px;font-weight:900;padding:3px 9px;border-radius:99px;z-index:4;pointer-events:none;backdrop-filter:blur(6px);">🎬 Reel Preview</span>
+                                <button type="button" data-nx-video-center-play aria-label="Play video" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:12px 20px;border:1.5px solid rgba(255,255,255,.38);border-radius:999px;background:rgba(9,13,22,.82);color:#fff;font-size:14px;font-weight:900;display:flex;align-items:center;gap:7px;z-index:3;backdrop-filter:blur(6px);cursor:pointer;box-shadow:0 8px 25px rgba(0,0,0,0.65);">▶ <span>Watch</span></button>
+                                <div style="position:absolute;left:0;right:0;bottom:0;padding:34px 12px 10px;background:linear-gradient(transparent,rgba(0,0,0,.92));display:flex;align-items:center;gap:8px;z-index:4;">
                                     <button type="button" data-nx-video-play aria-label="Play or pause" style="border:0;background:transparent;color:#fff;font-size:18px;font-weight:900;padding:5px;">▶</button>
                                     <span data-nx-video-time style="color:#fff;font-size:11px;font-weight:700;min-width:68px;">0:00 / 0:00</span>
                                     <input data-nx-video-seek aria-label="Seek video" type="range" min="0" max="1000" value="0" style="flex:1;min-width:24px;accent-color:#10b981;height:4px;">
@@ -2013,14 +2033,32 @@
             .join("");
     }
 
+    // INSTAGRAM-STYLE SMART 2.5s VIEWPORT PREVIEW (ZERO BLACK BOX + 85% LESS EGRESS!)
     const feedVideoViewportObserver = new IntersectionObserver((entries) => {
         entries.forEach((entry) => {
             const v = entry.target;
-            if (!entry.isIntersecting && !v.paused) {
-                v.pause();
+            if (entry.isIntersecting && entry.intersectionRatio >= 0.65) {
+                if (!v.dataset.nxUserControlled && !v.dataset.nxPreviewDone && v.getAttribute("src")) {
+                    document.querySelectorAll("video.nx-official-video").forEach((other) => {
+                        if (other !== v && !other.paused) other.pause();
+                    });
+                    v.muted = true;
+                    v.play().then(() => {
+                        clearTimeout(v.__nxPreviewTimer);
+                        v.__nxPreviewTimer = setTimeout(() => {
+                            if (!v.dataset.nxUserControlled && !v.paused) {
+                                v.dataset.nxPreviewDone = "1";
+                                v.pause();
+                            }
+                        }, 2500);
+                    }).catch(() => {});
+                }
+            } else {
+                clearTimeout(v.__nxPreviewTimer);
+                if (!v.paused) v.pause();
             }
         });
-    }, { threshold: 0.35 });
+    }, { threshold: [0.25, 0.65] });
 
     function bindNexusOfficialVideoControls(containerEl) {
         if (!containerEl) return;
@@ -2061,13 +2099,21 @@
                     event.preventDefault();
                     event.stopPropagation();
                 }
+                clearTimeout(video.__nxPreviewTimer);
+                video.dataset.nxUserControlled = "1";
+                const badgeEl = player.querySelector("[data-nx-video-badge]");
                 if (video.paused) {
                     document.querySelectorAll("video.nx-official-video").forEach((other) => {
                         if (other !== video) other.pause();
                     });
+                    video.muted = false;
+                    if (badgeEl) badgeEl.style.display = "none";
                     try {
                         await video.play();
-                    } catch (error) {}
+                    } catch (error) {
+                        video.muted = true;
+                        try { await video.play(); } catch (e2) {}
+                    }
                 } else {
                     video.pause();
                 }
