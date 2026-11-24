@@ -1014,7 +1014,7 @@
         const modal = document.createElement("div");
         modal.id = "nx-follow-list-modal";
         modal.style.cssText =
-            "position:fixed; inset:0; background:#090d16; z-index:200125; display:flex; flex-direction:column; color:#fff; max-width:600px; margin:0 auto; box-shadow:0 0 60px rgba(0,0,0,0.95);";
+            "position:fixed; inset:0; background:#090d16; z-index:258000; display:flex; flex-direction:column; color:#fff; max-width:600px; margin:0 auto; box-shadow:0 0 60px rgba(0,0,0,0.95);";
 
         const renderConnectionsUI = (searchQuery = "") => {
             const me = getActiveUser();
@@ -1168,7 +1168,15 @@
 
             const sInp = modal.querySelector("#nx-conn-search-inp");
             if (sInp) {
-                sInp.oninput = () => renderConnectionsUI(sInp.value);
+                sInp.oninput = () => {
+                    const curVal = sInp.value;
+                    renderConnectionsUI(curVal);
+                    const nextInp = modal.querySelector("#nx-conn-search-inp");
+                    if (nextInp) {
+                        nextInp.focus();
+                        nextInp.setSelectionRange(curVal.length, curVal.length);
+                    }
+                };
             }
 
             modal.querySelectorAll("[data-view-u]").forEach((row) => {
@@ -2618,10 +2626,12 @@
                 currentPublicTabMode = "feed";
                 renderPublicProfileContent();
             };
-            modal.querySelector("#nx-pub-followers-btn").onclick = () => {
+            modal.querySelector("#nx-pub-followers-btn").onclick = (e) => {
+                e.stopPropagation();
                 window.openFullScreenConnectionsModal(userObj, "followers");
             };
-            modal.querySelector("#nx-pub-following-btn").onclick = () => {
+            modal.querySelector("#nx-pub-following-btn").onclick = (e) => {
+                e.stopPropagation();
                 window.openFullScreenConnectionsModal(userObj, "following");
             };
 
@@ -3246,10 +3256,12 @@
         container.querySelector("#nx-my-posts-scroll-trigger").onclick = () => {
             if (allMyPosts.length) window.openScrollableProfilePostsFeed(allMyPosts, 0, me);
         };
-        container.querySelector("#nx-my-followers-trigger").onclick = () => {
+        container.querySelector("#nx-my-followers-trigger").onclick = (e) => {
+            e.stopPropagation();
             window.openFullScreenConnectionsModal(me, "followers");
         };
-        container.querySelector("#nx-my-following-trigger").onclick = () => {
+        container.querySelector("#nx-my-following-trigger").onclick = (e) => {
+            e.stopPropagation();
             window.openFullScreenConnectionsModal(me, "following");
         };
 
@@ -3941,7 +3953,12 @@
         zStyle.textContent = `
             #nx-global-modal { z-index: 250000 !important; }
             #nx-public-profile-modal { z-index: 255000 !important; }
-            #nx-sys-post-3dot-sheet, #nx-home-post-admin-sheet { z-index: 256000 !important; }
+            #nx-scrollable-profile-feed-modal { z-index: 257000 !important; }
+            #nx-follow-list-modal { z-index: 258000 !important; }
+            #nx-qr-share-modal, #nx-avatar-zoom-overlay, #nx-song-picker-modal { z-index: 258500 !important; }
+            #nx-hd-media-lightbox { z-index: 259000 !important; }
+            #nx-post-comments-drawer { z-index: 259500 !important; }
+            #nx-sys-post-3dot-sheet, #nx-home-post-admin-sheet { z-index: 260000 !important; }
         `;
         document.head.appendChild(zStyle);
     }
