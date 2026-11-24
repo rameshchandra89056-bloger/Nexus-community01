@@ -18,6 +18,79 @@
     let lastRenderedHomeHash = "";
     const realLastSeenCache = {};
     const videoBlobCache = {};
+    const videoPosterCache = {};
+    let __nxHlsLoadPromise = null;
+
+    function deriveCloudinaryVideoAssets(rawUrl) {
+        if (!rawUrl || !/res\.cloudinary\.com\/[^/]+\/video\/upload\//i.test(rawUrl)) {
+            return { hlsUrl: "", posterUrl: "" };
+        }
+        const clean = rawUrl.split("#")[0].split("?")[0];
+        const parts = clean.split("/video/upload/");
+        if (parts.length !== 2) return { hlsUrl: "", posterUrl: "" };
+        const base = parts[0] + "/video/upload/";
+        const tail = parts[1].replace(/\.(mp4|webm|mov|m3u8|mkv)$/i, "");
+        return {
+            posterUrl: base + "so_0.2,w_720,q_auto,f_jpg/" + tail + ".jpg",
+            hlsUrl: base + "sp_auto/" + tail + ".m3u8"
+        };
+    }
+
+    function ensureHlsJsLoaded() {
+        if (window.Hls) return Promise.resolve(window.Hls);
+        if (__nxHlsLoadPromise) return __nxHlsLoadPromise;
+        __nxHlsLoadPromise = new Promise((resolve) => {
+            const sc = document.createElement("script");
+            sc.src = "https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js";
+            sc.onload = () => resolve(window.Hls || null);
+            sc.onerror = () => resolve(null);
+            document.head.appendChild(sc);
+        });
+        return __nxHlsLoadPromise;
+    }
+
+    async function attachVideoSourceSmart(video) {
+        if (!video || video.dataset.nxSrcAttached === "1") return;
+        const hlsUrl = video.getAttribute("data-hls-url") || "";
+        const rawSrc = video.getAttribute("data-raw-src") || "";
+
+        if (hlsUrl) {
+            video.dataset.nxSrcAttached = "1";
+            if (video.canPlayType && video.canPlayType("application/vnd.apple.mpegurl")) {
+                video.src = hlsUrl;
+                return;
+            }
+            const HlsLib = await ensureHlsJsLoaded();
+            if (HlsLib && HlsLib.isSupported()) {
+                try {
+                    const hls = new HlsLib({
+                        maxBufferLength: 3,
+                        maxMaxBufferLength: 5,
+                        startLevel: -1,
+                        capLevelToPlayerSize: true
+                    });
+                    hls.loadSource(hlsUrl);
+                    hls.attachMedia(video);
+                    video.__nxHls = hls;
+                    hls.on(HlsLib.Events.ERROR, (_e, data) => {
+                        if (data && data.fatal) {
+                            try { hls.destroy(); } catch (err) {}
+                            if (rawSrc) video.src = rawSrc;
+                        }
+                    });
+                    return;
+                } catch (e) {}
+            }
+            if (rawSrc) video.src = rawSrc;
+            return;
+        }
+        if (rawSrc && !video.getAttribute("src")) {
+            video.dataset.nxSrcAttached = "1";
+            video.src = rawSrc;
+        } else {
+            video.dataset.nxSrcAttached = "1";
+        }
+    }
     const backStackLayers = [];
     const escAttr = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const isTypingOrHidden = () => {
@@ -1893,21 +1966,25 @@
                     if (isVid) {
                         const cachedBlob = videoBlobCache[img] || "";
                         const rawVidUrl = cachedBlob || (String(img).startsWith("NX_VIDEO_STREAM:") ? "" : img);
-                        const previewSrc = rawVidUrl && /^https?:/i.test(rawVidUrl) && !rawVidUrl.includes("#") ? (rawVidUrl + "#t=0.1") : rawVidUrl;
-                        const posterAttr = p.posterUrl ? `poster="${escAttr(p.posterUrl)}"` : "";
+                        const cldMeta = deriveCloudinaryVideoAssets(rawVidUrl);
+                        const finalPoster = p.posterUrl || cldMeta.posterUrl || videoPosterCache[img] || "";
+                        const previewSrc = rawVidUrl && /^https?:/i.test(rawVidUrl) && !rawVidUrl.includes("#") ? (rawVidUrl + "#t=0.15") : rawVidUrl;
+                        const posterAttr = finalPoster ? `poster="${escAttr(finalPoster)}"` : "";
                         mediaHtml = `
-                            <div class="nx-official-video-player" style="position:relative;width:100%;background:linear-gradient(145deg,#0f172a,#020617);border-top:1px solid #1e293b;border-bottom:1px solid #1e293b;overflow:hidden;">
+                            <div class="nx-official-video-player" style="position:relative;width:100%;background:radial-gradient(circle at 50% 45%,#13203b 0%,#070c18 100%);border-top:1px solid #1e293b;border-bottom:1px solid #1e293b;overflow:hidden;">
                                 <video class="nx-official-video" data-stream-ref="${
-                                    String(img).startsWith("NX_VIDEO_STREAM:") ? img : ""
-                                }" ${posterAttr} src="${previewSrc}" playsinline webkit-playsinline muted preload="metadata" disablepictureinpicture controlslist="nodownload noplaybackrate" style="width:100%;max-height:460px;min-height:240px;display:block;object-fit:contain;background:#090d16;"></video>
-                                <span data-nx-video-badge style="position:absolute;top:10px;left:10px;background:rgba(9,13,22,0.78);border:1px solid rgba(56,189,248,0.45);color:#e0f2fe;font-size:10px;font-weight:900;padding:3px 9px;border-radius:99px;z-index:4;pointer-events:none;backdrop-filter:blur(6px);">🎬 Reel Preview</span>
-                                <button type="button" data-nx-video-center-play aria-label="Play video" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:12px 20px;border:1.5px solid rgba(255,255,255,.38);border-radius:999px;background:rgba(9,13,22,.82);color:#fff;font-size:14px;font-weight:900;display:flex;align-items:center;gap:7px;z-index:3;backdrop-filter:blur(6px);cursor:pointer;box-shadow:0 8px 25px rgba(0,0,0,0.65);">▶ <span>Watch</span></button>
-                                <div style="position:absolute;left:0;right:0;bottom:0;padding:34px 12px 10px;background:linear-gradient(transparent,rgba(0,0,0,.92));display:flex;align-items:center;gap:8px;z-index:4;">
-                                    <button type="button" data-nx-video-play aria-label="Play or pause" style="border:0;background:transparent;color:#fff;font-size:18px;font-weight:900;padding:5px;">▶</button>
-                                    <span data-nx-video-time style="color:#fff;font-size:11px;font-weight:700;min-width:68px;">0:00 / 0:00</span>
-                                    <input data-nx-video-seek aria-label="Seek video" type="range" min="0" max="1000" value="0" style="flex:1;min-width:24px;accent-color:#10b981;height:4px;">
-                                    <button type="button" data-nx-video-mute aria-label="Unmute video" style="border:0;background:transparent;color:#fff;font-size:17px;padding:5px;">🔇</button>
-                                    <button type="button" data-nx-video-fullscreen aria-label="Fullscreen" style="border:0;background:transparent;color:#fff;font-size:19px;padding:5px;">⛶</button>
+                                    String(img).startsWith("NX_VIDEO_STREAM:") ? escAttr(img) : ""
+                                }" data-hls-url="${escAttr(cldMeta.hlsUrl)}" data-raw-src="${escAttr(previewSrc)}" ${posterAttr} src="${
+                                    cldMeta.hlsUrl ? "" : previewSrc
+                                }" playsinline webkit-playsinline muted preload="metadata" crossorigin="anonymous" disablepictureinpicture controlslist="nodownload noplaybackrate" style="width:100%;max-height:510px;min-height:260px;display:block;object-fit:cover;background:transparent;"></video>
+                                <div style="position:absolute;top:10px;right:10px;display:flex;align-items:center;gap:6px;z-index:5;">
+                                    <button type="button" data-nx-video-mute aria-label="Sound toggle" style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.22);background:rgba(9,13,22,0.68);color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);cursor:pointer;">🔇</button>
+                                    <button type="button" data-nx-video-fullscreen aria-label="Fullscreen" style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.22);background:rgba(9,13,22,0.68);color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);cursor:pointer;">⛶</button>
+                                </div>
+                                <span data-nx-video-time style="position:absolute;bottom:12px;right:10px;background:rgba(9,13,22,0.72);color:#e2e8f0;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:99px;z-index:5;pointer-events:none;backdrop-filter:blur(6px);display:none;">0:00</span>
+                                <button type="button" data-nx-video-center-play aria-label="Play video" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:56px;height:56px;border:1.5px solid rgba(255,255,255,0.35);border-radius:50%;background:rgba(9,13,22,0.62);color:#fff;font-size:21px;font-weight:900;display:flex;align-items:center;justify-content:center;padding-left:3px;z-index:4;backdrop-filter:blur(8px);cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,0.5);">▶</button>
+                                <div style="position:absolute;left:0;right:0;bottom:0;height:14px;display:flex;align-items:flex-end;z-index:5;padding:0;">
+                                    <input data-nx-video-seek aria-label="Seek video" type="range" min="0" max="1000" value="0" style="width:100%;margin:0;accent-color:#10b981;height:3.5px;cursor:pointer;opacity:0.9;">
                                 </div>
                             </div>
                         `;
@@ -2033,32 +2110,37 @@
             .join("");
     }
 
-    // INSTAGRAM-STYLE SMART 2.5s VIEWPORT PREVIEW (ZERO BLACK BOX + 85% LESS EGRESS!)
+    // INSTAGRAM-STYLE SMART 2.5s VIEWPORT PREVIEW + HLS CHUNKS (ZERO BLACK BOX + 90% LESS EGRESS!)
     const feedVideoViewportObserver = new IntersectionObserver((entries) => {
         entries.forEach((entry) => {
             const v = entry.target;
-            if (entry.isIntersecting && entry.intersectionRatio >= 0.65) {
-                if (!v.dataset.nxUserControlled && !v.dataset.nxPreviewDone && v.getAttribute("src")) {
-                    document.querySelectorAll("video.nx-official-video").forEach((other) => {
-                        if (other !== v && !other.paused) other.pause();
-                    });
-                    v.muted = true;
-                    v.play().then(() => {
-                        clearTimeout(v.__nxPreviewTimer);
-                        v.__nxPreviewTimer = setTimeout(() => {
-                            if (!v.dataset.nxUserControlled && !v.paused) {
-                                v.dataset.nxPreviewDone = "1";
-                                v.pause();
-                            }
-                        }, 2500);
-                    }).catch(() => {});
-                }
+            if (entry.isIntersecting && entry.intersectionRatio >= 0.55) {
+                attachVideoSourceSmart(v).then(() => {
+                    if (!v.dataset.nxUserControlled && !v.dataset.nxPreviewDone && (v.getAttribute("src") || v.__nxHls)) {
+                        document.querySelectorAll("video.nx-official-video").forEach((other) => {
+                            if (other !== v && !other.paused) other.pause();
+                        });
+                        v.muted = true;
+                        v.play().then(() => {
+                            clearTimeout(v.__nxPreviewTimer);
+                            v.__nxPreviewTimer = setTimeout(() => {
+                                if (!v.dataset.nxUserControlled && !v.paused) {
+                                    v.dataset.nxPreviewDone = "1";
+                                    v.pause();
+                                }
+                            }, 2500);
+                        }).catch(() => {
+                            // Autoplay blocked -> paint crisp first frame so video is NEVER black!
+                            try { if (v.readyState >= 1 && v.currentTime < 0.05) v.currentTime = 0.15; } catch (e) {}
+                        });
+                    }
+                });
             } else {
                 clearTimeout(v.__nxPreviewTimer);
                 if (!v.paused) v.pause();
             }
         });
-    }, { threshold: [0.25, 0.65] });
+    }, { threshold: [0.2, 0.55] });
 
     function bindNexusOfficialVideoControls(containerEl) {
         if (!containerEl) return;
@@ -2086,13 +2168,34 @@
             const update = () => {
                 const duration = Number.isFinite(video.duration) ? video.duration : 0;
                 if (seek && duration > 0) seek.value = String(Math.round((video.currentTime / duration) * 1000));
-                if (timeLabel) timeLabel.textContent = formatTime(video.currentTime) + " / " + formatTime(duration);
-                player.querySelectorAll("[data-nx-video-play]").forEach((button) => {
-                    button.textContent = video.paused ? "▶" : "Ⅱ";
-                });
+                if (timeLabel) {
+                    if (duration > 0) {
+                        timeLabel.textContent = formatTime(video.currentTime) + " / " + formatTime(duration);
+                        timeLabel.style.display = video.paused && video.currentTime < 0.2 ? "none" : "inline-block";
+                    } else {
+                        timeLabel.style.display = "none";
+                    }
+                }
                 if (centerButton) centerButton.style.display = video.paused ? "flex" : "none";
                 if (muteButton) muteButton.textContent = video.muted ? "🔇" : "🔊";
             };
+
+            // Paint real first frame on metadata load & cache tiny thumbnail so old videos NEVER show black!
+            video.addEventListener("loadeddata", () => {
+                try {
+                    const key = video.getAttribute("data-raw-src") || video.getAttribute("src") || "";
+                    if (key && !video.getAttribute("poster") && video.videoWidth > 0 && !videoPosterCache[key]) {
+                        const c = document.createElement("canvas");
+                        const sc = Math.min(1, 480 / video.videoWidth);
+                        c.width = Math.round(video.videoWidth * sc);
+                        c.height = Math.round(video.videoHeight * sc);
+                        c.getContext("2d").drawImage(video, 0, 0, c.width, c.height);
+                        const pUrl = c.toDataURL("image/webp", 0.65);
+                        if (pUrl && pUrl.length > 100) { videoPosterCache[key] = pUrl; video.poster = pUrl; }
+                    }
+                } catch (e) {}
+                update();
+            });
 
             const togglePlay = async (event) => {
                 if (event) {
@@ -2101,13 +2204,12 @@
                 }
                 clearTimeout(video.__nxPreviewTimer);
                 video.dataset.nxUserControlled = "1";
-                const badgeEl = player.querySelector("[data-nx-video-badge]");
+                await attachVideoSourceSmart(video);
                 if (video.paused) {
                     document.querySelectorAll("video.nx-official-video").forEach((other) => {
                         if (other !== video) other.pause();
                     });
                     video.muted = false;
-                    if (badgeEl) badgeEl.style.display = "none";
                     try {
                         await video.play();
                     } catch (error) {
