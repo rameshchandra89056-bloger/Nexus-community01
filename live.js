@@ -30,7 +30,7 @@
 
     let activeWpRoom = '', wpUnsub = null, wpParticipantUnsub = null;
     let currentMediaKey = '', currentMode = 'yt';
-    let isMainHidden = false, isRelHidden = true; // Hidden by default so chat has maximum space!
+    let isMainHidden = false, isRelHidden = false; // In-App Related / Up Next strip OPEN by default so users tap inside Nexus (zero YouTube redirect!)
     let searchResultsCache = [];
     let lastEmojiId = '';
     let activeDocData = null;
@@ -514,6 +514,7 @@
                     <button type="button" class="nx-tw-pill" onclick="NexusWatchParty.seekYtVideo(-15)">⏪15s</button>
                     <button type="button" class="nx-tw-pill" onclick="NexusWatchParty.togglePlayPause()">⏯️</button>
                     <button type="button" class="nx-tw-pill" onclick="NexusWatchParty.seekYtVideo(15)">⏩15s</button>
+                    <button type="button" class="nx-tw-pill" style="background:#a78bfa; color:#020617; border:none;" onclick="NexusWatchParty.playRelatedItem(0, ${isDm})">⏭️ Next</button>
                     <button type="button" class="nx-tw-pill" style="background:#10b981; color:#020617; border:none;" onclick="NexusWatchParty.syncExactSecondNow()">🔄 Sync</button>
                     <button type="button" id="nx-wp-speed-btn" class="nx-tw-pill" style="border-color:#38bdf8; color:#38bdf8;" onclick="NexusWatchParty.cyclePlaybackSpeed()">1x</button>
                     ${['🔥','❤️','😂'].map(em => `<button type="button" class="nx-tw-pill" onclick="NexusWatchParty.sendLiveEmoji('${em}')">${em}</button>`).join('')}
@@ -529,17 +530,21 @@
                     <button type="button" class="nx-tw-pill" style="background:#ef4444; border:none; color:white;" onclick="NexusWatchParty.stop()">✕</button>
                 </div>
                 <div id="nx-wp-main-stage" style="display:${isMainHidden ? 'none' : 'flex'}; flex-direction:column;">${stageHTML}</div>
-                <div id="nx-wp-related-stage" style="display:${isRelHidden ? 'none' : 'flex'}; flex-direction:column;">
-                    <div class="nx-horiz-strip">
-                        ${relList.map((r, i) => `
-                            <div onclick="NexusWatchParty.playRelatedItem(${i}, ${isDm})" style="min-width:155px; max-width:155px; background:#111827; border:1px solid #26334d; border-radius:10px; padding:5px; display:flex; align-items:center; gap:7px; cursor:pointer; flex-shrink:0;">
-                                <img src="${r.thumb}" style="width:36px; height:36px; border-radius:6px; object-fit:cover; flex-shrink:0;">
+                <div id="nx-wp-related-stage" style="display:${isRelHidden ? 'none' : 'flex'}; flex-direction:column; background:#050811; border-top:1px solid #1e293b;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:4px 10px 0; font-size:9.5px; font-weight:800; color:#38bdf8;">
+                        <span>🔥 Related / Up Next (Yahan tap karein — YouTube open nahi hoga!)</span>
+                        <span style="color:#34d399;">In-App Sync</span>
+                    </div>
+                    <div id="nx-wp-rel-strip" class="nx-horiz-strip">
+                        ${relList.length ? relList.map((r, i) => `
+                            <div onclick="NexusWatchParty.playRelatedItem(${i}, ${isDm})" style="min-width:162px; max-width:162px; background:#111827; border:1px solid #26334d; border-radius:10px; padding:5px; display:flex; align-items:center; gap:7px; cursor:pointer; flex-shrink:0;">
+                                <img src="${r.thumb}" loading="lazy" style="width:38px; height:38px; border-radius:7px; object-fit:cover; flex-shrink:0;">
                                 <div style="min-width:0; flex:1;">
                                     <div style="font-size:10.5px; font-weight:800; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${(r.title || '').replace(/</g, '&lt;')}</div>
-                                    <div style="font-size:9px; color:#10b981; font-weight:800;">Play ▶</div>
+                                    <div style="font-size:9px; color:#10b981; font-weight:800;">▶ Play In-App</div>
                                 </div>
                             </div>
-                        `).join('')}
+                        `).join('') : `<div style="font-size:11px; color:#94a3b8; padding:4px 2px;">⚡ Loading related songs for In-App play...</div>`}
                     </div>
                 </div>
             `;
@@ -549,6 +554,28 @@
                 if (aud && targetSec > 2) {
                     aud.currentTime = targetSec;
                 }
+            }
+            if (relList.length < 3) {
+                const seedQ = (docData.title || 'Hindi Hit Songs').replace(/YouTube Direct Video/i, 'Bollywood Hit Songs').slice(0, 45);
+                const fetcher = isMp3 ? searchMp3SongsOnly(seedQ) : searchYouTubeVideosOnly(seedQ);
+                fetcher.then((found) => {
+                    const fresh = (found || []).filter(x => x && (x.videoId !== docData.videoId && x.url !== docData.url)).slice(0, 8);
+                    if (!fresh.length) return;
+                    searchResultsCache = fresh;
+                    if (activeDocData) activeDocData.related = fresh;
+                    const strip = document.getElementById('nx-wp-rel-strip');
+                    if (strip) {
+                        strip.innerHTML = fresh.map((r, i) => `
+                            <div onclick="NexusWatchParty.playRelatedItem(${i}, ${isDm})" style="min-width:162px; max-width:162px; background:#111827; border:1px solid #26334d; border-radius:10px; padding:5px; display:flex; align-items:center; gap:7px; cursor:pointer; flex-shrink:0;">
+                                <img src="${r.thumb}" loading="lazy" style="width:38px; height:38px; border-radius:7px; object-fit:cover; flex-shrink:0;">
+                                <div style="min-width:0; flex:1;">
+                                    <div style="font-size:10.5px; font-weight:800; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${(r.title || '').replace(/</g, '&lt;')}</div>
+                                    <div style="font-size:9px; color:#10b981; font-weight:800;">▶ Play In-App</div>
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                }).catch(() => {});
             }
         } else {
             // Same media is already loaded: Sync exact second & Play/Pause state WITHOUT reloading iframe!
@@ -702,7 +729,7 @@
             let me = getMeUser();
             let ctx = getChatCtx(isDm);
             isMainHidden = false;
-            isRelHidden = true; // Keep related closed initially so chat screen stays big!
+            isRelHidden = false; // Keep In-App Related strip visible so tapping related songs never leaves Nexus!
             currentMediaKey = '';
 
             // Include all participant username/name tokens so partner's phone receives it 100%!
@@ -1298,6 +1325,7 @@
         }
     }
 
-    setInterval(() => bindAllMediaAndCallHooks(false), 2500);
+    window.__nxAttachWpWatcher = () => bindAllMediaAndCallHooks(true);
+    setInterval(() => bindAllMediaAndCallHooks(false), 4500);
     setTimeout(() => bindAllMediaAndCallHooks(true), 200);
 })(); // === END OF LIVE.JS ===
