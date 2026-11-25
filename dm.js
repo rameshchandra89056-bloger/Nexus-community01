@@ -64,7 +64,8 @@
         });
         const keep = new Set(finalNodes);
         Array.from(container.children).forEach(node => {
-            if (!keep.has(node)) node.remove();
+            // Preserve chat media bubbles (.nx-ig-media-bubble) so they never flash or jump on text/reaction updates!
+            if (!keep.has(node) && !node.classList.contains('nx-ig-media-bubble')) node.remove();
         });
 
         if (wasNearBottom) container.scrollTop = container.scrollHeight;
@@ -956,6 +957,9 @@
             }
 
             this.listenToRoom(me.username, cleanPartnerUname);
+            // Instantly attach Game & Watch Party watchers without waiting for background timers!
+            if (typeof window.__nxAttachLiveGameWatcher === 'function') window.__nxAttachLiveGameWatcher();
+            if (typeof window.__nxAttachWpWatcher === 'function') window.__nxAttachWpWatcher();
         },
 
         renderMessagesList: function(list, myUname) {
@@ -1134,19 +1138,26 @@
         },
 
         reactToDM: function(msgId, emoji) {
-            document.getElementById('nx-msg-action-modal').style.display = 'none';
+            const actModal = document.getElementById('nx-msg-action-modal');
+            if (actModal) actModal.style.display = 'none';
             let me = Nexus.getCurrentUser();
-            if (!me || !Nexus.db) return;
-            let m = dmMessagesCache.find(x => x.id === msgId);
+            const cleanId = String(msgId || '').trim();
+            if (!me || !Nexus.db || !cleanId || cleanId.startsWith('opt_')) return;
+            let m = dmMessagesCache.find(x => String(x.id) === cleanId);
             if (!m) return;
 
-            let likes = Array.isArray(m.likes) ? [...m.likes] : [];
-            if (likes.includes(me.username) && m.reaction === emoji) {
-                likes = likes.filter(u => u !== me.username);
-            } else if (!likes.includes(me.username)) {
-                likes.push(me.username);
+            const myNorm = normalizeUname(me.username);
+            let likes = Array.isArray(m.likes) ? m.likes.map(normalizeUname).filter(Boolean) : [];
+            if (likes.includes(myNorm) && m.reaction === emoji) {
+                likes = likes.filter(u => u !== myNorm);
+            } else if (!likes.includes(myNorm)) {
+                likes.push(myNorm);
             }
-            Nexus.db.collection("nexus_private_dms").doc(msgId).update({ likes: likes, reaction: emoji });
+            // 0ms OPTIMISTIC UI: Update exact message immediately on screen before server finishes!
+            m.likes = likes;
+            m.reaction = emoji;
+            this.renderMessagesList(dmMessagesCache, me.username);
+            Nexus.db.collection("nexus_private_dms").doc(cleanId).update({ likes: likes, reaction: emoji }).catch(() => {});
         },
 
         toggleStickerDrawer: function() {
@@ -1400,7 +1411,7 @@
                     return;
                 }
 
-                await Nexus.db.collection('nexus_private_dms').add({
+                const msgPayload = {
                     roomKey: roomKey,
                     participants: [cleanMyUname, cleanTargetUname],
                     fromUser: cleanMyUname,
@@ -1416,14 +1427,20 @@
                     edited: false,
                     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                     createdAt: Date.now()
-                });
+                };
 
+                // 0ms OPTIMISTIC SEND (Instagram/WhatsApp Speed!): Clear input & render immediately!
                 if (inp && !customStickerObj) {
                     inp.value = '';
                     resizeDmComposer();
                     try { localStorage.removeItem(dmDraftKey(cleanTargetUname)); } catch (e) {}
                 }
                 this.cancelReply();
+                const optId = 'opt_' + Date.now();
+                dmMessagesCache = [...dmMessagesCache, Object.assign({ id: optId }, msgPayload)];
+                this.renderMessagesList(dmMessagesCache, cleanMyUname);
+
+                await Nexus.db.collection('nexus_private_dms').add(msgPayload);
             } catch (error) {
                 Nexus.toast('❌ Message failed. Please retry.');
             }
