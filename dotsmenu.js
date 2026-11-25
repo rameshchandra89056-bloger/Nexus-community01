@@ -40,6 +40,7 @@
     let pomoInterval = null;
     let gameUnsub = null;
     let activeGameRoomId = '';
+    const liveGamesMemoryCache = {};
 
     function normU(u) {
         return String(u || '').toLowerCase().replace(/^@/, '').trim();
@@ -168,6 +169,7 @@
                         }
                     }
                 });
+                if (activeGame) liveGamesMemoryCache[activeGame.docId] = activeGame;
                 renderInChatLiveGameBanner(activeGame, ctx);
                 if (activeGame && document.getElementById('nx-live-game-modal-stage')) {
                     renderActiveGameModalContent(activeGame, ctx);
@@ -233,15 +235,15 @@
         return { q, ans, options: Array.from(opts).sort(() => Math.random() - 0.5) };
     }
 
-    window.startNew1v1LiveGame = async function(gameType = 'ttt') {
-        if (!window.Nexus || !Nexus.db) return;
+    // 0.01s INSTANT GAME LAUNCH (ZERO Firestore blocking wait — opens immediately on tap!)
+    window.startNew1v1LiveGame = function(gameType = 'ttt') {
+        const modal = document.getElementById('nx-global-modal');
         const ctx = getPartnerContext();
-        const ref = Nexus.db.collection("nexus_live_games").doc(ctx.roomKey);
-        const existing = await ref.get();
-        const prev = existing.exists ? existing.data() : {};
+        const prev = liveGamesMemoryCache[ctx.roomKey] || {};
         const mathQ = gameType === 'math' ? generateFastMathDuelProblem() : null;
 
         const payload = {
+            docId: ctx.roomKey,
             active: true,
             gameType: gameType,
             roomKey: ctx.roomKey,
@@ -262,26 +264,39 @@
             updatedAt: Date.now()
         };
 
-        await ref.set(payload);
-        window.openLive1v1GameModal();
-        if (Nexus.toast) Nexus.toast(`🎮 Game Invite sent to ${ctx.pDisplay}!`);
+        // 1. Render board in 0ms immediately!
+        liveGamesMemoryCache[ctx.roomKey] = payload;
+        if (modal) {
+            modal.innerHTML = `<div id="nx-live-game-modal-stage" class="nx-modal-box" style="border:2px solid #10b981;background:#090d16;padding:15px;max-width:365px;text-align:center;"></div>`;
+            modal.style.zIndex = '272000';
+            modal.style.display = 'flex';
+            renderActiveGameModalContent(payload, ctx);
+        }
+        renderInChatLiveGameBanner(payload, ctx);
+
+        // 2. Sync to Firestore in background without freezing UI!
+        if (window.Nexus && Nexus.db) {
+            const dbPayload = Object.assign({}, payload);
+            delete dbPayload.docId;
+            Nexus.db.collection("nexus_live_games").doc(ctx.roomKey).set(dbPayload).catch(() => {});
+        }
+        if (window.Nexus && Nexus.toast) Nexus.toast(`🎮 Game Live with ${ctx.pDisplay}!`);
     };
 
-    window.openLive1v1GameModal = async function() {
+    window.openLive1v1GameModal = function() {
         const modal = document.getElementById('nx-global-modal');
-        if (!modal || !window.Nexus || !Nexus.db) return;
+        if (!modal) return;
         const ctx = getPartnerContext();
-        const ref = Nexus.db.collection("nexus_live_games").doc(ctx.roomKey);
-        const doc = await ref.get();
+        const cached = liveGamesMemoryCache[ctx.roomKey];
 
-        if (!doc.exists || !doc.data().active) {
-            await window.startNew1v1LiveGame('ttt');
+        if (cached && cached.active) {
+            modal.innerHTML = `<div id="nx-live-game-modal-stage" class="nx-modal-box" style="border:2px solid #10b981;background:#090d16;padding:15px;max-width:365px;text-align:center;"></div>`;
+            modal.style.zIndex = '272000';
+            modal.style.display = 'flex';
+            renderActiveGameModalContent(cached, ctx);
             return;
         }
-
-        modal.innerHTML = `<div id="nx-live-game-modal-stage" class="nx-modal-box" style="border:2px solid #10b981;background:#090d16;padding:15px;max-width:365px;text-align:center;"></div>`;
-        modal.style.display = 'flex';
-        renderActiveGameModalContent(Object.assign({}, doc.data(), { docId: doc.id }), ctx);
+        window.startNew1v1LiveGame('ttt');
     };
 
     function renderActiveGameModalContent(g, ctx) {
@@ -397,9 +412,12 @@
         if (!window.Nexus || !Nexus.db) return;
         const ctx = getPartnerContext();
         const ref = Nexus.db.collection("nexus_live_games").doc(docId);
-        const doc = await ref.get();
-        if (!doc.exists) return;
-        const g = doc.data();
+        let g = liveGamesMemoryCache[docId];
+        if (!g) {
+            const doc = await ref.get();
+            if (!doc.exists) return;
+            g = Object.assign({}, doc.data(), { docId });
+        }
         if (g.winner || g.board[idx]) return;
 
         // STRICT TURN CHECK: Only the player whose turn it is can make a move!
@@ -444,7 +462,10 @@
             else updatePayload.scoreO = Number(g.scoreO || 0) + 1;
         }
 
-        await ref.set(updatePayload, { merge: true });
+        // 0ms Optimistic Board Update!
+        liveGamesMemoryCache[docId] = Object.assign({}, g, updatePayload, { docId });
+        renderActiveGameModalContent(liveGamesMemoryCache[docId], ctx);
+        ref.set(updatePayload, { merge: true }).catch(() => {});
     };
 
     window.makeRpsMove = async function(docId, moveChar) {
@@ -567,6 +588,211 @@
         } catch (e) {}
     };
 
+
+    // =========================================================================
+    // 3.5 CORE ADVANCED EXTERNAL PRO TOOLS (ZERO PAGE LOAD OVERHEAD!)
+    //     1. 🌐 Instant Hindi <-> English Live Translator (MyMemory Free API)
+    //     2. 📚 Wikipedia Concept & Study Explainer (Wikipedia REST API)
+    //     3. 🧮 Scientific & JEE Formula Calculator (1-Tap Send to Chat)
+    // =========================================================================
+    function insertTextIntoActiveChat(textStr) {
+        if (!textStr) return;
+        const dmRoot = document.getElementById('nx-dm-dedicated-root');
+        const isDmOpen = dmRoot && dmRoot.style.display !== 'none';
+        if (isDmOpen) {
+            const inp = document.getElementById('nx-dm-input');
+            if (inp) {
+                inp.value = textStr;
+                if (window.NexusDM && typeof NexusDM.sendDM === 'function') {
+                    NexusDM.sendDM();
+                    return;
+                }
+            }
+        } else {
+            const gInp = document.getElementById('nx-chat-msg-in') || document.querySelector('#nx-chat-room input, #nx-chat-room textarea');
+            if (gInp) {
+                gInp.value = textStr;
+                gInp.focus();
+                if (window.Nexus && Nexus.toast) Nexus.toast('✅ Inserted into message box — Tap Send!');
+                return;
+            }
+        }
+        navigator.clipboard?.writeText(textStr);
+        if (window.Nexus && Nexus.toast) Nexus.toast('📋 Copied to clipboard!');
+    }
+
+    // TOOL 1: 🌐 INSTANT LIVE TRANSLATOR (MyMemory External Free API — No API Key)
+    window.openNexusTranslatorTool = function() {
+        const modal = document.getElementById('nx-global-modal');
+        if (!modal) return;
+        modal.innerHTML = `
+            <div class="nx-modal-box" style="border:2px solid #38bdf8;background:#090d16;padding:15px;max-width:390px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <strong style="color:#38bdf8;font-size:15px;">🌐 Live Translator (Hindi ↔ English)</strong>
+                    <button type="button" onclick="document.getElementById('nx-global-modal').style.display='none'" style="background:none;border:none;color:#94a3b8;font-size:19px;cursor:pointer;">✕</button>
+                </div>
+                <select id="nx-tr-pair" style="width:100%;padding:8px 10px;border-radius:10px;background:#111827;border:1px solid #334155;color:#34d399;font-size:12px;font-weight:800;margin-bottom:8px;">
+                    <option value="en|hi">English ➔ Hindi (हिंदी)</option>
+                    <option value="hi|en">Hindi (हिंदी) ➔ English</option>
+                    <option value="en|bn">English ➔ Bengali</option>
+                    <option value="en|mr">English ➔ Marathi</option>
+                </select>
+                <textarea id="nx-tr-in" rows="3" placeholder="Type or paste any sentence or difficult word..." style="width:100%;padding:10px;border-radius:10px;background:#111827;border:1px solid #334155;color:#fff;font-size:13px;outline:none;resize:none;box-sizing:border-box;"></textarea>
+                <button type="button" id="nx-tr-go" style="width:100%;margin-top:8px;padding:10px;border-radius:11px;background:linear-gradient(90deg,#10b981,#06b6d4);color:#020617;border:none;font-weight:900;font-size:13px;cursor:pointer;">⚡ Translate Now</button>
+                <div id="nx-tr-out" style="display:none;margin-top:10px;padding:11px;border-radius:12px;background:#111827;border:1px solid #10b981;color:#f8fafc;font-size:13.5px;line-height:1.45;"></div>
+                <button type="button" id="nx-tr-send" style="display:none;width:100%;margin-top:8px;padding:9px;border-radius:10px;background:#1e293b;border:1px solid #10b981;color:#34d399;font-weight:900;font-size:12px;cursor:pointer;">📤 Send Translation to Chat</button>
+            </div>
+        `;
+        modal.style.zIndex = '272000';
+        modal.style.display = 'flex';
+        let lastTranslated = '';
+        modal.querySelector('#nx-tr-go').onclick = async function() {
+            const q = (modal.querySelector('#nx-tr-in').value || '').trim();
+            const pair = modal.querySelector('#nx-tr-pair').value || 'en|hi';
+            const out = modal.querySelector('#nx-tr-out');
+            const sendBtn = modal.querySelector('#nx-tr-send');
+            if (!q) return;
+            this.disabled = true; this.textContent = '⏳ Translating...';
+            try {
+                const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=${encodeURIComponent(pair)}`);
+                const d = await r.json();
+                lastTranslated = (d && d.responseData && d.responseData.translatedText) || 'Translation unavailable';
+                out.textContent = lastTranslated;
+                out.style.display = 'block';
+                sendBtn.style.display = 'block';
+            } catch (e) {
+                out.textContent = '⚠️ Network slow, try again.';
+                out.style.display = 'block';
+            }
+            this.disabled = false; this.textContent = '⚡ Translate Now';
+        };
+        modal.querySelector('#nx-tr-send').onclick = () => {
+            if (!lastTranslated) return;
+            modal.style.display = 'none';
+            insertTextIntoActiveChat('🌐 ' + lastTranslated);
+        };
+    };
+
+    // TOOL 2: 📚 WIKIPEDIA INSTANT CONCEPT EXPLAINER (Wikipedia REST External API)
+    window.openNexusWikiLookupTool = function() {
+        const modal = document.getElementById('nx-global-modal');
+        if (!modal) return;
+        modal.innerHTML = `
+            <div class="nx-modal-box" style="border:2px solid #a78bfa;background:#090d16;padding:15px;max-width:395px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <strong style="color:#d8b4fe;font-size:15px;">📚 Instant Concept Lookup (Wikipedia)</strong>
+                    <button type="button" onclick="document.getElementById('nx-global-modal').style.display='none'" style="background:none;border:none;color:#94a3b8;font-size:19px;cursor:pointer;">✕</button>
+                </div>
+                <div style="display:flex;gap:6px;margin-bottom:10px;">
+                    <input type="text" id="nx-wk-in" placeholder="e.g. Newton's laws, Logarithm, Hybridization..." style="flex:1;padding:9px 11px;border-radius:10px;background:#111827;border:1px solid #334155;color:#fff;font-size:12.5px;outline:none;">
+                    <button type="button" id="nx-wk-go" style="padding:9px 14px;border-radius:10px;background:#a78bfa;color:#020617;border:none;font-weight:900;font-size:12px;cursor:pointer;">Search</button>
+                </div>
+                <div id="nx-wk-res" style="max-height:50vh;overflow-y:auto;font-size:12.5px;color:#cbd5e1;line-height:1.5;">
+                    <div style="text-align:center;color:#64748b;padding:18px 8px;">Search any JEE Physics, Chemistry, Math, or Coding topic to get an instant verified summary &amp; share in chat!</div>
+                </div>
+            </div>
+        `;
+        modal.style.zIndex = '272000';
+        modal.style.display = 'flex';
+        const runWiki = async () => {
+            const q = (modal.querySelector('#nx-wk-in').value || '').trim();
+            const resBox = modal.querySelector('#nx-wk-res');
+            if (!q) return;
+            resBox.innerHTML = `<div style="text-align:center;color:#38bdf8;padding:14px;">⏳ Fetching verified summary for "${escHtml(q)}"...</div>`;
+            try {
+                const sRes = await fetch(`https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(q)}&limit=1&format=json&origin=*`);
+                const sData = await sRes.json();
+                const bestTitle = (sData && sData[1] && sData[1][0]) || q;
+                const sumRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(bestTitle)}`);
+                const sum = await sumRes.json();
+                if (!sum || !sum.extract) {
+                    resBox.innerHTML = `<div style="text-align:center;color:#fb7185;padding:14px;">Topic not found. Try a simpler spelling!</div>`;
+                    return;
+                }
+                const thumb = sum.thumbnail && sum.thumbnail.source ? `<img src="${escHtml(sum.thumbnail.source)}" style="width:100%;max-height:150px;object-fit:contain;border-radius:10px;margin-bottom:8px;background:#050811;">` : '';
+                resBox.innerHTML = `
+                    <div style="background:#111827;border:1px solid #26334d;border-radius:13px;padding:11px;">
+                        ${thumb}
+                        <div style="font-size:14.5px;font-weight:900;color:#34d399;margin-bottom:4px;">${escHtml(sum.title)}</div>
+                        <div style="font-size:12.5px;color:#e2e8f0;margin-bottom:10px;">${escHtml(sum.extract)}</div>
+                        <button type="button" id="nx-wk-share" style="width:100%;padding:9px;border-radius:10px;background:#10b981;color:#020617;border:none;font-weight:900;font-size:12px;cursor:pointer;">📤 Share Summary in Chat</button>
+                    </div>
+                `;
+                resBox.querySelector('#nx-wk-share').onclick = () => {
+                    modal.style.display = 'none';
+                    insertTextIntoActiveChat(`📚 *${sum.title}*\n${sum.extract.slice(0, 320)}...`);
+                };
+            } catch (e) {
+                resBox.innerHTML = `<div style="text-align:center;color:#fb7185;padding:14px;">⚠️ Network slow, try again.</div>`;
+            }
+        };
+        modal.querySelector('#nx-wk-go').onclick = runWiki;
+        modal.querySelector('#nx-wk-in').onkeydown = (e) => { if (e.key === 'Enter') runWiki(); };
+    };
+
+    // TOOL 3: 🧮 SCIENTIFIC & JEE CONSTANTS CALCULATOR (0ms Instant + 1-Tap Send to Chat)
+    window.openNexusSciCalcTool = function() {
+        const modal = document.getElementById('nx-global-modal');
+        if (!modal) return;
+        modal.innerHTML = `
+            <div class="nx-modal-box" style="border:2px solid #10b981;background:#090d16;padding:15px;max-width:375px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <strong style="color:#34d399;font-size:15px;">🧮 Scientific &amp; JEE Calculator</strong>
+                    <button type="button" onclick="document.getElementById('nx-global-modal').style.display='none'" style="background:none;border:none;color:#94a3b8;font-size:19px;cursor:pointer;">✕</button>
+                </div>
+                <input type="text" id="nx-calc-in" placeholder="e.g. sqrt(144) + log10(1000) * sin(pi/2)" style="width:100%;padding:11px 12px;border-radius:11px;background:#111827;border:1.5px solid #334155;color:#fff;font-family:monospace;font-size:14px;outline:none;box-sizing:border-box;">
+                <div id="nx-calc-ans" style="margin:8px 0 10px;padding:10px 12px;border-radius:11px;background:#050811;border:1px solid #1e293b;color:#34d399;font-family:monospace;font-size:17px;font-weight:900;text-align:right;">= 0</div>
+                <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">
+                    ${[
+                        ['sin(', 'sin'], ['cos(', 'cos'], ['tan(', 'tan'], ['sqrt(', '√'], ['log10(', 'log'], ['log(', 'ln'],
+                        ['^', 'xʸ'], ['pi', 'π'], ['9.8', 'g=9.8'], ['3e8', 'c=3e8'], ['8.314', 'R=8.314'], ['6.022e23', 'Nₐ']
+                    ].map(([ins, lbl]) => `<button type="button" data-cins="${ins}" style="padding:6px 9px;border-radius:8px;background:#1e293b;border:1px solid #334155;color:#38bdf8;font-size:11px;font-weight:800;cursor:pointer;">${lbl}</button>`).join('')}
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button type="button" id="nx-calc-send" style="flex:1;padding:10px;border-radius:11px;background:linear-gradient(90deg,#10b981,#06b6d4);color:#020617;border:none;font-weight:900;font-size:12.5px;cursor:pointer;">📤 Send Result to Chat</button>
+                    <button type="button" id="nx-calc-clr" style="padding:10px 14px;border-radius:11px;background:#1e293b;color:#fb7185;border:1px solid #334155;font-weight:800;font-size:12px;cursor:pointer;">Clear</button>
+                </div>
+            </div>
+        `;
+        modal.style.zIndex = '272000';
+        modal.style.display = 'flex';
+        const inp = modal.querySelector('#nx-calc-in');
+        const ansEl = modal.querySelector('#nx-calc-ans');
+        let lastEval = '';
+        const evaluateSafe = () => {
+            const raw = (inp.value || '').trim();
+            if (!raw) { ansEl.textContent = '= 0'; lastEval = ''; return; }
+            try {
+                if (/[^0-9a-zA-Z+\-*/().,^\s]/.test(raw)) throw new Error('bad');
+                const jsExpr = raw
+                    .replace(/\^/g, '**')
+                    .replace(/\bpi\b/gi, 'Math.PI')
+                    .replace(/\b(sin|cos|tan|asin|acos|atan|sqrt|abs|log10|log|exp|pow|round|floor|ceil)\b/g, 'Math.$1');
+                const val = Function('"use strict"; return (' + jsExpr + ');')();
+                if (typeof val === 'number' && Number.isFinite(val)) {
+                    lastEval = String(Number(val.toPrecision(10)));
+                    ansEl.textContent = '= ' + lastEval;
+                    ansEl.style.color = '#34d399';
+                } else {
+                    ansEl.textContent = '= ...'; lastEval = '';
+                }
+            } catch (e) {
+                ansEl.textContent = '= ...'; lastEval = '';
+            }
+        };
+        inp.oninput = evaluateSafe;
+        modal.querySelectorAll('[data-cins]').forEach(b => {
+            b.onclick = () => { inp.value += b.getAttribute('data-cins'); evaluateSafe(); inp.focus(); };
+        });
+        modal.querySelector('#nx-calc-clr').onclick = () => { inp.value = ''; evaluateSafe(); inp.focus(); };
+        modal.querySelector('#nx-calc-send').onclick = () => {
+            if (!lastEval) return;
+            modal.style.display = 'none';
+            insertTextIntoActiveChat(`🧮 ${inp.value.trim()} = ${lastEval}`);
+        };
+        setTimeout(() => inp.focus(), 60);
+    };
+
     // =========================================================================
     // 4. OPEN UNIFIED 1:1 DM ⋮ (3-DOTS) PRO MENU
     // =========================================================================
@@ -647,6 +873,31 @@
                         <div>
                             <div style="color:#34d399;">Live Shared Doubt Whiteboard</div>
                             <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Draw math/physics diagrams together live</div>
+                        </div>
+                    </button>
+
+
+                    <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(56,189,248,0.45);" onclick="window.openNexusTranslatorTool();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(56,189,248,0.18);">🌐</span>
+                        <div>
+                            <div style="color:#38bdf8;">Live Translator (Hindi ↔ English)</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Instant translate &amp; 1-tap send to chat</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(167,139,250,0.45);" onclick="window.openNexusWikiLookupTool();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(167,139,250,0.18);">📚</span>
+                        <div>
+                            <div style="color:#d8b4fe;">Instant Concept Lookup (Wikipedia)</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Search JEE/Coding topics &amp; share summary</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(16,185,129,0.45);" onclick="window.openNexusSciCalcTool();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(16,185,129,0.18);">🧮</span>
+                        <div>
+                            <div style="color:#34d399;">Scientific &amp; JEE Formula Calculator</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Trig, log, physics constants &amp; send result</div>
                         </div>
                     </button>
 
@@ -792,6 +1043,31 @@
                         </div>
                     </button>
 
+
+                    <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(56,189,248,0.45);" onclick="window.openNexusTranslatorTool();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(56,189,248,0.18);">🌐</span>
+                        <div>
+                            <div style="color:#38bdf8;">Live Translator (Hindi ↔ English)</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Instant translate &amp; 1-tap send to chat</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(167,139,250,0.45);" onclick="window.openNexusWikiLookupTool();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(167,139,250,0.18);">📚</span>
+                        <div>
+                            <div style="color:#d8b4fe;">Instant Concept Lookup (Wikipedia)</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Search JEE/Coding topics &amp; share summary</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(16,185,129,0.45);" onclick="window.openNexusSciCalcTool();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(16,185,129,0.18);">🧮</span>
+                        <div>
+                            <div style="color:#34d399;">Scientific &amp; JEE Formula Calculator</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Trig, log, physics constants &amp; send result</div>
+                        </div>
+                    </button>
+
                     <button type="button" class="nx-pro-dots-btn" onclick="document.getElementById('nx-global-modal').style.display='none'; if(window.NexusSuperChat) NexusSuperChat.openLiveSketchpadModal(false);">
                         <span class="nx-pro-dots-icon" style="background:rgba(16,185,129,0.18);">🎨</span>
                         <div>
@@ -839,7 +1115,8 @@
         openGroupMenu: openUnifiedGroupThreeDotsMenu
     };
 
-    setInterval(() => bindThreeDotsButtonsEverywhere(false), 3000);
+    window.__nxAttachLiveGameWatcher = () => watchIncomingGameBannerInChat();
+    setInterval(() => bindThreeDotsButtonsEverywhere(false), 5000);
     setTimeout(() => bindThreeDotsButtonsEverywhere(true), 250);
 })();
 // === END OF DOTSMENU.JS ===
