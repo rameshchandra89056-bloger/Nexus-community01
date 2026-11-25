@@ -4111,32 +4111,40 @@
         document.head.appendChild(zStyle);
     }
 
-    // 2. Guaranteed 3-Dot (⋮) Click Router inside 1:1 DM Chat & Group Chat
+    // 2. Guaranteed Top-Header 3-Dot (⋮) Click Router (NEVER hijacks photo ••• or message ⋯ buttons!)
     document.addEventListener("click", function (e) {
         const btn = e.target.closest("button");
         if (!btn) return;
         const txt = (btn.innerText || "").trim();
-        if (txt !== "⋮" && txt !== "•••") return;
-        if (btn.classList.contains("nx-dm-message-menu-btn") || btn.closest(".nx-dm-bubble-anim")) return;
+        if (txt !== "⋮") return;
+        if (
+            btn.classList.contains("nx-dm-message-menu-btn") ||
+            btn.classList.contains("nx-media-dots-btn") ||
+            btn.hasAttribute("data-nx-dm-menu") ||
+            btn.closest(".nx-dm-bubble-anim") ||
+            btn.closest(".nx-ig-media-bubble") ||
+            btn.closest("#nx-dm-msgs-box") ||
+            btn.closest("#nx-room-messages")
+        ) return;
+
+        // Only top header bar (within top 80px of viewport) can open the Chat ⋮ Pro Menu!
+        const rect = btn.getBoundingClientRect();
+        if (rect.top > 85) return;
 
         const dmRoot = document.getElementById("nx-dm-dedicated-root");
         const grpRoom = document.getElementById("nx-chat-room");
 
-        if (dmRoot && dmRoot.contains(btn)) {
+        if (dmRoot && dmRoot.style.display !== "none" && dmRoot.contains(btn)) {
             e.preventDefault();
             e.stopPropagation();
             if (window.NexusDotsMenu && NexusDotsMenu.openDmMenu) NexusDotsMenu.openDmMenu();
             else if (window.NexusDM && NexusDM.openChatMenu) NexusDM.openChatMenu();
-            const gModal = document.getElementById("nx-global-modal");
-            if (gModal) { gModal.style.zIndex = "250000"; gModal.style.display = "flex"; }
             return;
         }
-        if (grpRoom && grpRoom.contains(btn)) {
+        if (grpRoom && grpRoom.style.display !== "none" && grpRoom.contains(btn)) {
             e.preventDefault();
             e.stopPropagation();
             if (window.NexusDotsMenu && NexusDotsMenu.openGroupMenu) NexusDotsMenu.openGroupMenu();
-            const gModal = document.getElementById("nx-global-modal");
-            if (gModal) { gModal.style.zIndex = "250000"; gModal.style.display = "flex"; }
         }
     }, true);
 
