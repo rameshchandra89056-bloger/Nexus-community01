@@ -1540,34 +1540,34 @@
         }
     </script>
 
-    <!-- ================= CORE NEXUS MODULES (ALL CACHE-BUSTED TO ?v=51 • 3 CONFIRMED DUPLICATES DISABLED SAFELY) ================= -->
-    <script src="about.js?v=51" charset="UTF-8"></script>
-    <script src="advance.js?v=51" charset="UTF-8"></script>
-    <script src="board.js?v=51" charset="UTF-8"></script>
-    <script src="cards.js?v=51" charset="UTF-8"></script>
-    <script src="chat.js?v=51" charset="UTF-8"></script>
+    <!-- ================= CORE NEXUS MODULES (ALL CACHE-BUSTED TO ?v=52 • 3 CONFIRMED DUPLICATES DISABLED SAFELY) ================= -->
+    <script src="about.js?v=52" charset="UTF-8"></script>
+    <script src="advance.js?v=52" charset="UTF-8"></script>
+    <script src="board.js?v=52" charset="UTF-8"></script>
+    <script src="cards.js?v=52" charset="UTF-8"></script>
+    <script src="chat.js?v=52" charset="UTF-8"></script>
     <script src="core.js?v=86" charset="UTF-8"></script>
-    <script src="dm.js?v=51" charset="UTF-8"></script>
-    <!-- Disabled safe duplicate (already built into dm.js): <script src="dminbox.js?v=51" charset="UTF-8"></script> -->
-    <script src="dmtools.js?v=51" charset="UTF-8"></script>
-    <script src="dotsmenu.js?v=51" charset="UTF-8"></script>
-    <script src="emojis.js?v=51" charset="UTF-8"></script>
-    <script src="home.js?v=51" charset="UTF-8"></script>
-    <script src="live.js?v=51" charset="UTF-8"></script>
-    <!-- Disabled safe duplicate (already built into live.js): <script src="mp3dj.js?v=51" charset="UTF-8"></script> -->
-    <script src="notify.js?v=51" charset="UTF-8"></script>
-    <script src="power.js?v=51" charset="UTF-8"></script>
-    <script src="pro.js?v=51" charset="UTF-8"></script>
-    <script src="pwa.js?v=51" charset="UTF-8"></script>
-    <!-- Disabled safe duplicate (already built into live.js): <script src="screen.js?v=51" charset="UTF-8"></script> -->
-    <script src="superchat.js?v=51" charset="UTF-8"></script>
-    <script src="ultra.js?v=51" charset="UTF-8"></script>
-    <script src="voice.js?v=51" charset="UTF-8"></script>
+    <script src="dm.js?v=52" charset="UTF-8"></script>
+    <!-- Disabled safe duplicate (already built into dm.js): <script src="dminbox.js?v=52" charset="UTF-8"></script> -->
+    <script src="dmtools.js?v=52" charset="UTF-8"></script>
+    <script src="dotsmenu.js?v=52" charset="UTF-8"></script>
+    <script src="emojis.js?v=52" charset="UTF-8"></script>
+    <script src="home.js?v=52" charset="UTF-8"></script>
+    <script src="live.js?v=52" charset="UTF-8"></script>
+    <!-- Disabled safe duplicate (already built into live.js): <script src="mp3dj.js?v=52" charset="UTF-8"></script> -->
+    <script src="notify.js?v=52" charset="UTF-8"></script>
+    <script src="power.js?v=52" charset="UTF-8"></script>
+    <script src="pro.js?v=52" charset="UTF-8"></script>
+    <script src="pwa.js?v=52" charset="UTF-8"></script>
+    <!-- Disabled safe duplicate (already built into live.js): <script src="screen.js?v=52" charset="UTF-8"></script> -->
+    <script src="superchat.js?v=52" charset="UTF-8"></script>
+    <script src="ultra.js?v=52" charset="UTF-8"></script>
+    <script src="voice.js?v=52" charset="UTF-8"></script>
 
-    <!-- MASTER UPGRADED MODULES LOADED LAST WITH ?v=51 CACHE-BUSTER -->
-    <script src="settings.js?v=51" charset="UTF-8"></script>
-    <script src="profile.js?v=51" charset="UTF-8"></script>
-    <script src="post.js?v=51" charset="UTF-8"></script>
+    <!-- MASTER UPGRADED MODULES LOADED LAST WITH ?v=52 CACHE-BUSTER -->
+    <script src="settings.js?v=52" charset="UTF-8"></script>
+    <script src="profile.js?v=52" charset="UTF-8"></script>
+    <script src="post.js?v=52" charset="UTF-8"></script>
     <!-- ============================================================================
          NEXUS V33 COMPLETE UNCUT MASTER ENGINE (PART 2 OF index.html):
          1. Instant Profile Tab Opener (Zero Blank Profile Screen!)
@@ -2340,7 +2340,7 @@
 
             if (!isElementVisible(msgInput)) return null;
 
-            const exactIds = ["nx-dm-messages", "nx-chat-messages", "chat-messages", "dm-messages"];
+            const exactIds = ["nx-dm-msgs-box", "nx-dm-messages", "nx-room-messages", "nx-chat-messages", "chat-messages", "dm-messages"];
             for (const id of exactIds) {
                 const el = document.getElementById(id);
                 if (isElementVisible(el) && !el.innerText.includes("Chat →")) {
@@ -2388,55 +2388,22 @@
         }
 
         function getExactPartnerOrRoomTitle() {
-            const chatBox = getStrictOpenChatMessagesBox();
-            if (!chatBox) return "";
-
-            const chatRoot = chatBox.parentElement || document.body;
-            const boxRect = chatBox.getBoundingClientRect();
-
-            const imgs = chatRoot.querySelectorAll("img");
-            for (const img of imgs) {
-                if (chatBox.contains(img)) continue;
-                const r = img.getBoundingClientRect();
-                if (r.bottom <= boxRect.top + 25 && r.width >= 24 && r.width <= 64) {
-                    const src = img.getAttribute("src") || "";
-                    if (src && src.length > 25 && window.Nexus && Array.isArray(Nexus.users)) {
-                        const dpMatch = Nexus.users.find((u) => u && u.dp && u.dp.slice(0, 120) === src.slice(0, 120));
-                        if (dpMatch && dpMatch.username) return dpMatch.username;
-                    }
-                }
+            const dmRoot = document.getElementById("nx-dm-dedicated-root");
+            if (dmRoot && dmRoot.style.display !== "none") {
+                // AUTHORITATIVE 1:1 PARTNER ID FIRST (NEVER scrape @mohiy from Watch Party dock or guess from display dots!)
+                const nameEl = document.getElementById("nx-dm-partner-name");
+                const exactAttr = nameEl && nameEl.getAttribute("data-partner-username");
+                if (exactAttr && exactAttr.trim()) return exactAttr.trim().toLowerCase();
+                if (window.NexusDM && NexusDM.activePartner) return String(NexusDM.activePartner).trim().toLowerCase();
+                if (window.currentChatUser) return String(window.currentChatUser).trim().toLowerCase();
             }
 
-            const allEls = chatRoot.querySelectorAll("div, span, p, strong, b, h1, h2, h3, h4");
-            for (const el of allEls) {
-                if (chatBox.contains(el) || el.closest("#nx-official-session-bar")) continue;
-                const r = el.getBoundingClientRect();
-                if (r.bottom <= boxRect.top + 25 && r.width > 30) {
-                    const rawLines = (el.innerText || "")
-                        .split("\n")
-                        .map((l) => l.replace(/🔐\s*E2EE/g, "").replace(/🚫/g, "").trim())
-                        .filter(
-                            (l) =>
-                                l.length > 1 &&
-                                l !== "←" &&
-                                l !== "⋮" &&
-                                l !== "•••" &&
-                                !l.includes("Online Now") &&
-                                !l.includes("Last seen") &&
-                                !l.includes("Offline") &&
-                                !l.includes("Live Room") &&
-                                !l.includes("Nexus") &&
-                                !l.includes("Session:") &&
-                                !l.includes("NXS-") &&
-                                !l.includes("Chat →")
-                        );
-                    if (rawLines.length > 0 && rawLines[0].length < 48) {
-                        return rawLines[0];
-                    }
-                }
+            const grpRoom = document.getElementById("nx-chat-room");
+            if (grpRoom && grpRoom.style.display !== "none") {
+                const grpTitle = document.getElementById("nx-room-title");
+                if (grpTitle && grpTitle.innerText.trim()) return "group_" + grpTitle.innerText.trim();
             }
-
-            return window.currentChatUser || window.currentRoomId || "saved_messages";
+            return "";
         }
 
         function getPartnerIdentityTokens() {
@@ -2444,7 +2411,7 @@
             const myUname = getMyUsername() || "guest";
             const lower = title.toLowerCase().trim();
 
-            if (lower.includes("saved messages") || lower === "saved_messages") {
+            if (!lower || lower.includes("saved messages") || lower === "saved_messages" || lower === myUname) {
                 return { roomKey: "dm_saved_" + myUname, partnerUname: myUname, partnerAlpha: "saved" };
             }
 
@@ -2507,30 +2474,24 @@
         function doesMediaDocBelongToCurrentOpenChat(docData) {
             if (!docData) return false;
             const tokens = getPartnerIdentityTokens();
-            if (docData.roomKey === tokens.roomKey) return true;
+            const docRk = String(docData.roomKey || "").toLowerCase().trim();
+            if (!docRk || !tokens.roomKey) return false;
 
+            // STRICT ISOLATION: Exact roomKey match ONLY for Saved Messages & Groups!
+            if (docRk === tokens.roomKey) return true;
+            if (tokens.partnerAlpha === "saved" || tokens.roomKey.startsWith("grp_") || docRk.startsWith("dm_saved_") || docRk.startsWith("grp_")) {
+                return false;
+            }
+
+            // For 1:1 DM, allow ONLY exact bidirectional (myUname <-> partnerUname) pair — NEVER loose substring matching!
             const myUname = getMyUsername();
-            const myAlpha = myUname.replace(/[^a-z0-9]/g, "").slice(0, 6);
-            const docRk = String(docData.roomKey || "").toLowerCase();
-            const docSender = String(docData.sender || "").toLowerCase();
-            const docTarget = String(docData.targetPartner || "").toLowerCase();
-
-            if (!myUname || tokens.partnerAlpha === "saved" || tokens.roomKey.startsWith("grp_")) return false;
-
-            const iAmInvolved =
-                docSender === myUname ||
-                docTarget === myUname ||
-                (myAlpha.length >= 3 && docRk.includes(myAlpha));
-
-            const partnerIsInvolved =
-                docSender === tokens.partnerUname ||
-                docTarget === tokens.partnerUname ||
-                (tokens.partnerAlpha.length >= 3 &&
-                    (docRk.includes(tokens.partnerAlpha.slice(0, 6)) ||
-                        docSender.includes(tokens.partnerAlpha.slice(0, 6)) ||
-                        docTarget.includes(tokens.partnerAlpha.slice(0, 6))));
-
-            return Boolean(iAmInvolved && partnerIsInvolved);
+            const docSender = String(docData.sender || "").toLowerCase().trim();
+            const docTarget = String(docData.targetPartner || "").toLowerCase().trim();
+            if (!myUname || !tokens.partnerUname || tokens.partnerUname === myUname) return false;
+            return (
+                (docSender === myUname && docTarget === tokens.partnerUname) ||
+                (docSender === tokens.partnerUname && docTarget === myUname)
+            );
         }
 
         function getMediaMinuteScore(mb) {
@@ -2634,7 +2595,8 @@
         }
 
         function installZeroBlinkWhatsAppPatch(chatBox) {
-            if (!chatBox || chatBox.__nxV30ZeroBlink) return;
+            // dm.js uses keyed patchLiveMessageDOM on #nx-dm-msgs-box — NEVER override its innerHTML (fixes wrong-message reactions!)
+            if (!chatBox || chatBox.__nxV30ZeroBlink || chatBox.id === "nx-dm-msgs-box") return;
             chatBox.__nxV30ZeroBlink = true;
 
             const nativeDesc = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML");
@@ -2674,9 +2636,13 @@
                         const cur = curNodes[i];
                         if (!cur) {
                             this.appendChild(inc);
-                        } else if (cur.innerHTML !== inc.innerHTML) {
+                        } else if (cur.outerHTML !== inc.outerHTML) {
                             nativeDesc.set.call(cur, inc.innerHTML);
                             cur.className = inc.className;
+                            if (inc.id) cur.id = inc.id;
+                            Array.from(inc.attributes).forEach((attr) => {
+                                if (attr.name.startsWith("data-")) cur.setAttribute(attr.name, attr.value);
+                            });
                         }
                     });
 
@@ -3557,10 +3523,9 @@
         }
 
         function syncActiveRoomStreams() {
-            startGlobalMediaListener();
-
             const chatBox = getStrictOpenChatMessagesBox();
             if (!chatBox || !window.Nexus || !Nexus.db) return;
+            startGlobalMediaListener();
 
             const rk = getSharedRoomKey();
             if (!rk) return;
@@ -3622,7 +3587,7 @@
             const ae = document.activeElement;
             if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable)) return;
             syncActiveRoomStreams();
-        }, 1500);
+        }, 3000);
 
         function sendYtCmd(func, args = []) {
             document.querySelectorAll('iframe[src*="youtube"]').forEach((f) => {
