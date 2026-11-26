@@ -885,6 +885,25 @@
         body.nx-theme-ocean .nx-header,
         body.nx-theme-ocean .nx-bottom-nav { background: #0a1b33 !important; border-color: #16335b !important; }
         body.nx-theme-ocean .nx-v31-post-card { background: #0d213d !important; border-color: #1c3d6e !important; }
+        /* =====================================================================
+           🎥 DEMO / SCREEN-RECORD PRIVACY BLUR MODE (v56)
+           Blurs all user DPs, names, @usernames & personal DMs ("dhundhla")
+           while keeping Settings, Themes & Nexus Branding 100% razor-sharp!
+           ===================================================================== */
+        body.nx-demo-privacy-blur #nx-stories-bar img,
+        body.nx-demo-privacy-blur #nx-stories-bar span,
+        body.nx-demo-privacy-blur #nx-stories-bar div > div,
+        body.nx-demo-privacy-blur [data-card-author],
+        body.nx-demo-privacy-blur #nx-ig-profile-root img,
+        body.nx-demo-privacy-blur #nx-prof-switch-trigger,
+        body.nx-demo-privacy-blur #nx-my-bio-card-trigger,
+        body.nx-demo-privacy-blur #nx-public-profile-modal img,
+        body.nx-demo-privacy-blur #nx-dm-partner-name,
+        body.nx-demo-privacy-blur #nx-dm-msgs-box .nx-dm-msg-text {
+            filter: blur(7px) brightness(0.75) !important;
+            transition: filter 0.2s ease !important;
+            user-select: none !important;
+        }
 
     </style>
 </head>
@@ -1684,34 +1703,34 @@
         }
     </script>
 
-    <!-- ================= CORE NEXUS MODULES (ALL CACHE-BUSTED TO ?v=54 • 3 CONFIRMED DUPLICATES DISABLED SAFELY) ================= -->
-    <script src="about.js?v=54" charset="UTF-8"></script>
-    <script src="advance.js?v=54" charset="UTF-8"></script>
-    <script src="board.js?v=54" charset="UTF-8"></script>
-    <script src="cards.js?v=54" charset="UTF-8"></script>
-    <script src="chat.js?v=54" charset="UTF-8"></script>
+    <!-- ================= CORE NEXUS MODULES (ALL CACHE-BUSTED TO ?v=56 • 3 CONFIRMED DUPLICATES DISABLED SAFELY) ================= -->
+    <script src="about.js?v=56" charset="UTF-8"></script>
+    <script src="advance.js?v=56" charset="UTF-8"></script>
+    <script src="board.js?v=56" charset="UTF-8"></script>
+    <script src="cards.js?v=56" charset="UTF-8"></script>
+    <script src="chat.js?v=56" charset="UTF-8"></script>
     <script src="core.js?v=86" charset="UTF-8"></script>
-    <!-- dm.js?v=54 moved below power.js/emojis.js so unified reactions & action sheet are never hijacked -->
-    <script src="dmtools.js?v=54" charset="UTF-8"></script>
-    <script src="dotsmenu.js?v=54" charset="UTF-8"></script>
-    <script src="emojis.js?v=54" charset="UTF-8"></script>
-    <script src="home.js?v=54" charset="UTF-8"></script>
-    <script src="live.js?v=54" charset="UTF-8"></script>
-    <!-- Disabled safe duplicate (already built into live.js): <script src="mp3dj.js?v=54" charset="UTF-8"></script> -->
-    <script src="notify.js?v=54" charset="UTF-8"></script>
-    <script src="power.js?v=54" charset="UTF-8"></script>
-    <script src="pro.js?v=54" charset="UTF-8"></script>
-    <script src="pwa.js?v=54" charset="UTF-8"></script>
-    <!-- Disabled safe duplicate (already built into live.js): <script src="screen.js?v=54" charset="UTF-8"></script> -->
-    <script src="superchat.js?v=54" charset="UTF-8"></script>
-    <script src="ultra.js?v=54" charset="UTF-8"></script>
-    <script src="voice.js?v=54" charset="UTF-8"></script>
+    <!-- dm.js?v=56 moved below power.js/emojis.js so unified reactions & action sheet are never hijacked -->
+    <script src="dmtools.js?v=56" charset="UTF-8"></script>
+    <script src="dotsmenu.js?v=56" charset="UTF-8"></script>
+    <script src="emojis.js?v=56" charset="UTF-8"></script>
+    <script src="home.js?v=56" charset="UTF-8"></script>
+    <script src="live.js?v=56" charset="UTF-8"></script>
+    <!-- Disabled safe duplicate (already built into live.js): <script src="mp3dj.js?v=56" charset="UTF-8"></script> -->
+    <script src="notify.js?v=56" charset="UTF-8"></script>
+    <script src="power.js?v=56" charset="UTF-8"></script>
+    <script src="pro.js?v=56" charset="UTF-8"></script>
+    <script src="pwa.js?v=56" charset="UTF-8"></script>
+    <!-- Disabled safe duplicate (already built into live.js): <script src="screen.js?v=56" charset="UTF-8"></script> -->
+    <script src="superchat.js?v=56" charset="UTF-8"></script>
+    <script src="ultra.js?v=56" charset="UTF-8"></script>
+    <script src="voice.js?v=56" charset="UTF-8"></script>
 
-    <!-- MASTER UPGRADED MODULES LOADED LAST WITH ?v=54 CACHE-BUSTER -->
-    <script src="dm.js?v=54" charset="UTF-8"></script>
-    <script src="settings.js?v=54" charset="UTF-8"></script>
-    <script src="profile.js?v=54" charset="UTF-8"></script>
-    <script src="post.js?v=54" charset="UTF-8"></script>
+    <!-- MASTER UPGRADED MODULES LOADED LAST WITH ?v=56 CACHE-BUSTER -->
+    <script src="dm.js?v=56" charset="UTF-8"></script>
+    <script src="settings.js?v=56" charset="UTF-8"></script>
+    <script src="profile.js?v=56" charset="UTF-8"></script>
+    <script src="post.js?v=56" charset="UTF-8"></script>
     <!-- ============================================================================
          NEXUS V33 COMPLETE UNCUT MASTER ENGINE (PART 2 OF index.html):
          1. Instant Profile Tab Opener (Zero Blank Profile Screen!)
@@ -3595,13 +3614,16 @@
                 const bindInp = (id, forcedType, isVo) => {
                     const el = document.getElementById(id);
                     if (!el) return;
-                    el.addEventListener("change", (e) => {
+                    el.addEventListener("change", async (e) => {
                         const menuEl = document.getElementById("nx-whatsapp-plus-sheet");
                         if (menuEl) menuEl.style.display = "none";
-                        if (e.target.files && e.target.files.length) {
-                            sendSingleOrMultipleFiles(e.target.files, forcedType, isVo);
+                        const picked = Array.from(e.target.files || []);
+                        if (!picked.length) return;
+                        try {
+                            await sendSingleOrMultipleFiles(picked, forcedType, isVo);
+                        } finally {
+                            e.target.value = "";
                         }
-                        e.target.value = "";
                     });
                 };
 
@@ -3977,6 +3999,15 @@
         });
     };
 
+    window.toggleNexusDemoPrivacyBlur = function (isOn) {
+        try { localStorage.setItem("nx_demo_blur_v1", isOn ? "1" : "0"); } catch (e) {}
+        document.body.classList.toggle("nx-demo-privacy-blur", Boolean(isOn));
+        if (window.Nexus && Nexus.toast) Nexus.toast(isOn ? "🎥 Privacy Blur ON (Profiles Hidden!)" : "🎥 Privacy Blur OFF");
+    };
+    if (localStorage.getItem("nx_demo_blur_v1") === "1") {
+        document.body.classList.add("nx-demo-privacy-blur");
+    }
+
     // Apply saved theme immediately on load (zero flash!)
     window.applyNexusAppTheme(localStorage.getItem(THEME_KEY) || "dark");
 
@@ -3999,6 +4030,13 @@
                 <button type="button" data-nx-theme-pick="dark" onclick="window.applyNexusAppTheme('dark'); if(window.Nexus) Nexus.toast('🌙 Dark Pro Mode ON!');" style="padding:10px 6px; border-radius:12px; background:#090d16; color:#f8fafc; border:2px solid ${cur==='dark'?'#10b981':'#334155'}; font-size:12px; font-weight:900; cursor:pointer;">🌙 Dark</button>
                 <button type="button" data-nx-theme-pick="ocean" onclick="window.applyNexusAppTheme('ocean'); if(window.Nexus) Nexus.toast('🌌 Ocean Blue Mode ON!');" style="padding:10px 6px; border-radius:12px; background:#0a1b33; color:#7dd3fc; border:2px solid ${cur==='ocean'?'#10b981':'#1e3a5f'}; font-size:12px; font-weight:900; cursor:pointer;">🌌 Ocean</button>
             </div>
+            <label style="margin-top:10px; padding-top:9px; border-top:1px solid rgba(148,163,184,0.16); display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer;">
+                <div>
+                    <div style="font-size:12.5px; font-weight:900; color:#f8fafc;">🎥 Demo Privacy Blur Mode (Hide Profiles)</div>
+                    <div style="font-size:10.5px; color:#94a3b8;">Video shoot karte waqt sabhi profiles/DPs dhundhle (blur) rakhega</div>
+                </div>
+                <input type="checkbox" id="nx-st-privacy-blur-tog" ${localStorage.getItem('nx_demo_blur_v1')==='1'?'checked':''} onchange="window.toggleNexusDemoPrivacyBlur(this.checked)" style="width:19px; height:19px; accent-color:#10b981; cursor:pointer; flex-shrink:0;" />
+            </label>
         `;
         stTab.insertBefore(card, stTab.firstChild);
     }
@@ -4009,6 +4047,794 @@
         const stTab = document.getElementById("tab-settings");
         if (stTab && stTab.classList.contains("active")) injectThemeCardIntoSettings();
     }, 1200);
+})();
+</script>
+
+
+<script>
+(function () {
+    if (window.__NX_V55_MEDIA_GUARD_AND_SETTINGS__) return;
+    window.__NX_V55_MEDIA_GUARD_AND_SETTINGS__ = true;
+
+    const MEDIA_PREF_KEY = "nx_media_prefs_v1";
+    const EXAM_KEY = "nx_exam_target_v1";
+
+    function readMediaPrefs() {
+        try {
+            const p = JSON.parse(localStorage.getItem(MEDIA_PREF_KEY) || "{}");
+            return {
+                autoPlayVideos: p.autoPlayVideos !== false,
+                autoPlaySongs: p.autoPlaySongs !== false,
+                autoStopOnLeave: p.autoStopOnLeave !== false,
+                lowDataMode: Boolean(p.lowDataMode)
+            };
+        } catch (e) {
+            return { autoPlayVideos: true, autoPlaySongs: true, autoStopOnLeave: true, lowDataMode: false };
+        }
+    }
+
+    function saveMediaPref(k, val) {
+        const cur = readMediaPrefs();
+        cur[k] = val;
+        try { localStorage.setItem(MEDIA_PREF_KEY, JSON.stringify(cur)); } catch (e) {}
+        if (!cur.autoPlaySongs && typeof window.__nxStopAllProfileMedia === "function") {
+            window.__nxStopAllProfileMedia();
+        }
+    }
+
+    // =========================================================================
+    // 1. UNIVERSAL AUTO-STOP ALL SONGS & VIDEOS WHEN USER LEAVES WEBSITE!
+    // =========================================================================
+    window.stopAllNexusMediaNow = function () {
+        if (typeof window.__nxStopAllProfileMedia === "function") {
+            try { window.__nxStopAllProfileMedia(); } catch (e) {}
+        }
+        document.querySelectorAll("video, audio").forEach((el) => {
+            try { if (!el.paused) el.pause(); } catch (e) {}
+        });
+        document.querySelectorAll('iframe[src*="youtube"]').forEach((f) => {
+            try {
+                f.contentWindow.postMessage(JSON.stringify({ event: "command", func: "pauseVideo", args: [] }), "*");
+            } catch (e) {}
+        });
+        if (window.__nxFocusAudioCtx) {
+            try { window.__nxFocusAudioCtx.close(); } catch (e) {}
+            window.__nxFocusAudioCtx = null;
+            const fb = document.getElementById("nx-st-focus-noise-btn");
+            if (fb) fb.textContent = "🌧️ Study Rain Focus: OFF";
+        }
+    };
+
+    const handleLeaveSite = () => {
+        if (!readMediaPrefs().autoStopOnLeave) return;
+        window.stopAllNexusMediaNow();
+    };
+    document.addEventListener("visibilitychange", () => { if (document.hidden) handleLeaveSite(); });
+    window.addEventListener("pagehide", handleLeaveSite);
+    window.addEventListener("beforeunload", handleLeaveSite);
+    window.addEventListener("blur", () => {
+        setTimeout(() => { if (document.hidden || !document.hasFocus()) handleLeaveSite(); }, 180);
+    });
+
+    // =========================================================================
+    // 2. PURE WEB AUDIO STUDY FOCUS RAIN SOUND (0 KB DATA, WORKS OFFLINE!)
+    // =========================================================================
+    window.toggleNexusFocusRain = function () {
+        const btn = document.getElementById("nx-st-focus-noise-btn");
+        if (window.__nxFocusAudioCtx) {
+            try { window.__nxFocusAudioCtx.close(); } catch (e) {}
+            window.__nxFocusAudioCtx = null;
+            if (btn) btn.textContent = "🌧️ Study Rain Focus: OFF";
+            return;
+        }
+        try {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            const ctx = new AC();
+            const bufSize = ctx.sampleRate * 2;
+            const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+            const data = buf.getChannelData(0);
+            let b0 = 0, b1 = 0, b2 = 0;
+            for (let i = 0; i < bufSize; i++) {
+                const white = Math.random() * 2 - 1;
+                b0 = 0.99765 * b0 + white * 0.0990460;
+                b1 = 0.96300 * b1 + white * 0.2965164;
+                b2 = 0.57000 * b2 + white * 1.0526913;
+                data[i] = (b0 + b1 + b2 + white * 0.1848) * 0.04;
+            }
+            const src = ctx.createBufferSource();
+            src.buffer = buf;
+            src.loop = true;
+            const lpf = ctx.createBiquadFilter();
+            lpf.type = "lowpass";
+            lpf.frequency.value = 950;
+            src.connect(lpf);
+            lpf.connect(ctx.destination);
+            src.start();
+            window.__nxFocusAudioCtx = ctx;
+            if (btn) btn.textContent = "🌧️ Study Rain Focus: ON (Tap Stop)";
+            if (window.Nexus && Nexus.toast) Nexus.toast("🌧️ Focus Ambient Sound ON!");
+        } catch (e) {
+            if (window.Nexus && Nexus.toast) Nexus.toast("⚠️ Audio blocked by browser.");
+        }
+    };
+
+    // =========================================================================
+    // 3. STRUCTURED PRO UTILITIES SUITE INSIDE SETTINGS TAB (#tab-settings)
+    // =========================================================================
+    function calcLocalStorageKB() {
+        let chars = 0;
+        try {
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                chars += (k ? k.length : 0) + (localStorage.getItem(k) || "").length;
+            }
+        } catch (e) {}
+        return Math.round((chars * 2) / 1024);
+    }
+
+    function getExamCountdownInfo() {
+        try {
+            const saved = JSON.parse(localStorage.getItem(EXAM_KEY) || "null");
+            if (saved && saved.name && saved.date) {
+                const days = Math.ceil((Date.parse(saved.date) - Date.now()) / 86400000);
+                return { name: saved.name, date: saved.date, days };
+            }
+        } catch (e) {}
+        const defDate = "2027-01-22";
+        const days = Math.ceil((Date.parse(defDate) - Date.now()) / 86400000);
+        return { name: "JEE Main 2027", date: defDate, days };
+    }
+
+    function injectProSettingsSuite() {
+        const stTab = document.getElementById("tab-settings");
+        if (!stTab || document.getElementById("nx-v55-pro-settings-suite")) return;
+
+        const prefs = readMediaPrefs();
+        const usedKB = calcLocalStorageKB();
+        const outboxCnt = (window.NexusDM && typeof NexusDM.getOutboxCount === "function") ? NexusDM.getOutboxCount() : 0;
+        const exam = getExamCountdownInfo();
+        const netType = (navigator.connection && navigator.connection.effectiveType) ? navigator.connection.effectiveType.toUpperCase() : (navigator.onLine ? "ONLINE" : "OFFLINE");
+
+        const wrap = document.createElement("div");
+        wrap.id = "nx-v55-pro-settings-suite";
+        wrap.style.cssText = "margin:8px 12px 14px; display:flex; flex-direction:column; gap:10px;";
+
+        const cardCss = "padding:13px 14px; border-radius:16px; background:#0f172a; border:1px solid #1e293b;";
+        const togRow = (id, label, sub, checked) => `
+            <label style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 0; border-bottom:1px solid rgba(148,163,184,0.12); cursor:pointer;">
+                <div style="min-width:0;">
+                    <div style="font-size:12.5px; font-weight:800; color:#f8fafc;">${label}</div>
+                    <div style="font-size:10.5px; color:#94a3b8;">${sub}</div>
+                </div>
+                <input type="checkbox" id="${id}" ${checked ? "checked" : ""} style="width:19px; height:19px; accent-color:#10b981; flex-shrink:0; cursor:pointer;" />
+            </label>`;
+
+        wrap.innerHTML = `
+            <!-- 1. SMART MEDIA & DATA SAVER -->
+            <div style="${cardCss}">
+                <div style="font-size:13px; font-weight:900; color:#38bdf8; margin-bottom:6px;">📶 Smart Media, Auto-Play &amp; Data Saver</div>
+                ${togRow("nx-pref-autovid", "🎬 Auto-Play Feed Videos", "Smart progressive fast-start on scroll", prefs.autoPlayVideos)}
+                ${togRow("nx-pref-autosong", "🎵 Auto-Play Post Songs", "Auto-play on view, pause on scroll away", prefs.autoPlaySongs)}
+                ${togRow("nx-pref-autostop", "🛑 Auto-Stop Media on Leaving Site", "Instantly pauses all songs & videos on exit", prefs.autoStopOnLeave)}
+                ${togRow("nx-pref-lowdata", "⚡ 4G Low-Data Fast-Start Mode", "Starts videos at lowest bitrate to save data", prefs.lowDataMode)}
+            </div>
+
+            <!-- 2. NETWORK DIAGNOSTICS & OFFLINE OUTBOX -->
+            <div style="${cardCss}">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                    <div style="font-size:13px; font-weight:900; color:#34d399;">⚡ Network &amp; Local Outbox Sync</div>
+                    <span id="nx-st-net-pill" style="font-size:10.5px; font-weight:900; padding:3px 9px; border-radius:99px; background:rgba(16,185,129,0.18); color:#34d399;">${netType}</span>
+                </div>
+                <div id="nx-st-outbox-info" style="font-size:11.5px; color:#cbd5e1; margin-bottom:9px;">
+                    Queued Offline Messages/Photos: <b style="color:#fde047;">${outboxCnt}</b> • Ping: <b id="nx-st-ping-val" style="color:#38bdf8;">Tap Test</b>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    <button type="button" id="nx-st-ping-btn" style="padding:9px; border-radius:11px; background:#1e293b; border:1px solid #334155; color:#38bdf8; font-size:11.5px; font-weight:900; cursor:pointer;">📡 Run Speed Ping</button>
+                    <button type="button" id="nx-st-sync-btn" style="padding:9px; border-radius:11px; background:#10b981; border:none; color:#020617; font-size:11.5px; font-weight:900; cursor:pointer;">🔄 Force Sync Queue</button>
+                </div>
+            </div>
+
+            <!-- 3. STORAGE CLEANER & ACCOUNT BACKUP -->
+            <div style="${cardCss}">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                    <div style="font-size:13px; font-weight:900; color:#fbbf24;">🧹 Storage Cleaner &amp; Backup</div>
+                    <span id="nx-st-storage-kb" style="font-size:11px; font-weight:800; color:#94a3b8;">${usedKB} KB / 5,000 KB</span>
+                </div>
+                <div style="height:6px; background:#1e293b; border-radius:99px; overflow:hidden; margin-bottom:10px;">
+                    <div id="nx-st-storage-bar" style="height:100%; width:${Math.min(100, Math.round((usedKB / 5000) * 100))}%; background:linear-gradient(90deg,#10b981,#fbbf24);"></div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    <button type="button" id="nx-st-clean-cache" style="padding:9px; border-radius:11px; background:#1e293b; border:1px solid #334155; color:#fde047; font-size:11.5px; font-weight:900; cursor:pointer;">🧹 Clear Junk Cache</button>
+                    <button type="button" id="nx-st-export-bak" style="padding:9px; border-radius:11px; background:#1e293b; border:1px solid #334155; color:#34d399; font-size:11.5px; font-weight:900; cursor:pointer;">📥 Export Backup</button>
+                </div>
+            </div>
+
+            <!-- 4. STUDENT FOCUS & QUICK EXTERNAL PRO TOOLS -->
+            <div style="${cardCss}">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                    <div style="font-size:13px; font-weight:900; color:#d8b4fe;">🎯 Student Focus &amp; Pro Tools</div>
+                    <button type="button" id="nx-st-edit-exam" style="background:none; border:1px solid #334155; color:#38bdf8; border-radius:8px; padding:3px 8px; font-size:10.5px; font-weight:800; cursor:pointer;">Edit Target</button>
+                </div>
+                <div id="nx-st-exam-box" style="padding:9px 11px; border-radius:12px; background:#111827; border:1px solid #26334d; display:flex; align-items:center; justify-content:space-between; margin-bottom:9px;">
+                    <div>
+                        <div style="font-size:12.5px; font-weight:900; color:#f8fafc;">${exam.name}</div>
+                        <div style="font-size:10.5px; color:#94a3b8;">Target Date: ${exam.date}</div>
+                    </div>
+                    <div style="font-size:16px; font-weight:900; color:#10b981;">${exam.days > 0 ? exam.days + " Days" : "Live!"}</div>
+                </div>
+                <button type="button" id="nx-st-focus-noise-btn" onclick="window.toggleNexusFocusRain()" style="width:100%; padding:9px; border-radius:11px; background:#1e293b; border:1px solid #38bdf8; color:#7dd3fc; font-size:12px; font-weight:900; cursor:pointer; margin-bottom:9px;">
+                    🌧️ Study Rain Focus: OFF
+                </button>
+                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px;">
+                    <button type="button" onclick="if(window.openNexusTranslatorTool) openNexusTranslatorTool()" style="padding:8px 4px; border-radius:10px; background:#1e293b; border:1px solid #334155; color:#38bdf8; font-size:11px; font-weight:800; cursor:pointer;">🌐 Translate</button>
+                    <button type="button" onclick="if(window.openNexusDictionaryTool) openNexusDictionaryTool()" style="padding:8px 4px; border-radius:10px; background:#1e293b; border:1px solid #334155; color:#7dd3fc; font-size:11px; font-weight:800; cursor:pointer;">📖 Dict</button>
+                    <button type="button" onclick="if(window.openNexusWikiLookupTool) openNexusWikiLookupTool()" style="padding:8px 4px; border-radius:10px; background:#1e293b; border:1px solid #334155; color:#d8b4fe; font-size:11px; font-weight:800; cursor:pointer;">📚 Wiki</button>
+                    <button type="button" onclick="if(window.openNexusSciCalcTool) openNexusSciCalcTool()" style="padding:8px 4px; border-radius:10px; background:#1e293b; border:1px solid #334155; color:#34d399; font-size:11px; font-weight:800; cursor:pointer;">🧮 Sci Calc</button>
+                    <button type="button" onclick="if(window.openNexusAiDoubtTool) openNexusAiDoubtTool()" style="padding:8px 4px; border-radius:10px; background:#1e293b; border:1px solid #334155; color:#10b981; font-size:11px; font-weight:800; cursor:pointer;">🤖 AI Doubt</button>
+                    <button type="button" onclick="if(window.openNexusQrMakerTool) openNexusQrMakerTool()" style="padding:8px 4px; border-radius:10px; background:#1e293b; border:1px solid #334155; color:#fde047; font-size:11px; font-weight:800; cursor:pointer;">📱 QR Maker</button>
+                </div>
+            </div>
+        `;
+
+        const themeCard = document.getElementById("nx-master-theme-card");
+        if (themeCard && themeCard.parentNode === stTab) {
+            stTab.insertBefore(wrap, themeCard.nextSibling);
+        } else {
+            stTab.insertBefore(wrap, stTab.firstChild);
+        }
+
+        // Bind toggles
+        wrap.querySelector("#nx-pref-autovid").onchange = (e) => { saveMediaPref("autoPlayVideos", e.target.checked); Nexus.toast(e.target.checked ? "🎬 Auto-Play Videos ON" : "🎬 Auto-Play Videos OFF"); };
+        wrap.querySelector("#nx-pref-autosong").onchange = (e) => { saveMediaPref("autoPlaySongs", e.target.checked); Nexus.toast(e.target.checked ? "🎵 Auto-Play Songs ON" : "🎵 Auto-Play Songs OFF"); };
+        wrap.querySelector("#nx-pref-autostop").onchange = (e) => { saveMediaPref("autoStopOnLeave", e.target.checked); Nexus.toast(e.target.checked ? "🛑 Auto-Stop on Exit ON" : "🛑 Auto-Stop on Exit OFF"); };
+        wrap.querySelector("#nx-pref-lowdata").onchange = (e) => { saveMediaPref("lowDataMode", e.target.checked); Nexus.toast(e.target.checked ? "⚡ 4G Low-Data Mode ON" : "⚡ Normal HD Streaming"); };
+
+        // Bind Network Ping & Force Sync
+        wrap.querySelector("#nx-st-ping-btn").onclick = async function () {
+            const valEl = wrap.querySelector("#nx-st-ping-val");
+            if (valEl) valEl.textContent = "Testing...";
+            const t0 = performance.now();
+            try {
+                await fetch("https://fegmtyoxijvktoxtealo.supabase.co/rest/v1/", { mode: "no-cors", cache: "no-store" });
+                const ms = Math.round(performance.now() - t0);
+                if (valEl) {
+                    valEl.textContent = `${ms} ms (${ms < 180 ? "Fast 🟢" : (ms < 450 ? "Medium 🟡" : "Slow 🔴")})`;
+                }
+            } catch (e) {
+                if (valEl) valEl.textContent = "Offline 🔴";
+            }
+        };
+        wrap.querySelector("#nx-st-sync-btn").onclick = async () => {
+            if (window.NexusDM && typeof NexusDM.flushOutbox === "function") await NexusDM.flushOutbox();
+            if (window.Nexus && typeof Nexus.forceInstantDualCloudSync === "function") await Nexus.forceInstantDualCloudSync();
+            const cnt = (window.NexusDM && NexusDM.getOutboxCount) ? NexusDM.getOutboxCount() : 0;
+            const info = wrap.querySelector("#nx-st-outbox-info");
+            if (info) info.innerHTML = `Queued Offline Messages/Photos: <b style="color:#fde047;">${cnt}</b> • Synced ✓`;
+            if (window.Nexus && Nexus.toast) Nexus.toast("✅ Cloud & Outbox Synced!");
+        };
+
+        // Bind Cache Cleaner & Backup Export
+        wrap.querySelector("#nx-st-clean-cache").onclick = () => {
+            ["nx_light_posts_v1", "nx_master_users_v1", "nx_v6_sb_posts", "nx_v6_sb_users"].forEach((k) => {
+                try { localStorage.removeItem(k); } catch (e) {}
+            });
+            const kb = calcLocalStorageKB();
+            wrap.querySelector("#nx-st-storage-kb").textContent = `${kb} KB / 5,000 KB`;
+            wrap.querySelector("#nx-st-storage-bar").style.width = `${Math.min(100, Math.round((kb / 5000) * 100))}%`;
+            if (window.Nexus && Nexus.toast) Nexus.toast("🧹 Junk Cache Cleared (Login 100% Safe)!");
+        };
+        wrap.querySelector("#nx-st-export-bak").onclick = () => {
+            const payload = {
+                exportedAt: new Date().toISOString(),
+                account: JSON.parse(localStorage.getItem("nx_active_account") || "null"),
+                savedVaultPosts: JSON.parse(localStorage.getItem("nx_saved_posts") || "[]"),
+                gameRewards: JSON.parse(localStorage.getItem("nx_game_rewards_v1") || "{}"),
+                mediaPrefs: readMediaPrefs()
+            };
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+            a.download = `Nexus_Backup_${Date.now()}.json`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            if (window.Nexus && Nexus.toast) Nexus.toast("📥 Account Backup Downloaded (.json)!");
+        };
+
+        // Bind Exam Countdown Editor
+        wrap.querySelector("#nx-st-edit-exam").onclick = () => {
+            const cur = getExamCountdownInfo();
+            const nm = prompt("Exam / Goal Name:", cur.name);
+            if (!nm) return;
+            const dt = prompt("Target Date (YYYY-MM-DD):", cur.date);
+            if (!dt || isNaN(Date.parse(dt))) return;
+            localStorage.setItem(EXAM_KEY, JSON.stringify({ name: nm.trim(), date: dt.trim() }));
+            wrap.remove();
+            injectProSettingsSuite();
+            if (window.Nexus && Nexus.toast) Nexus.toast("🎯 Target Exam Countdown Updated!");
+        };
+    }
+
+    setTimeout(injectProSettingsSuite, 450);
+    setInterval(() => {
+        if (document.visibilityState === "hidden") return;
+        const stTab = document.getElementById("tab-settings");
+        if (stTab && stTab.classList.contains("active")) injectProSettingsSuite();
+    }, 1500);
+})();
+</script>
+
+
+<script>
+(function () {
+    if (window.__NX_V56_TURBO_CREATOR_STUDIO__) return;
+    window.__NX_V56_TURBO_CREATOR_STUDIO__ = true;
+
+    // 1. AUTO-CAPTURE CRISP VIDEO THUMBNAIL FRAME (0.2s — ZERO BLACK SCREEN!)
+    function captureVideoPosterFrame(file) {
+        return new Promise((resolve) => {
+            try {
+                const url = URL.createObjectURL(file);
+                const v = document.createElement("video");
+                v.muted = true;
+                v.playsInline = true;
+                v.preload = "auto";
+                v.src = url;
+                const done = (out) => { try { URL.revokeObjectURL(url); } catch (e) {} resolve(out || ""); };
+                const timer = setTimeout(() => done(""), 3500);
+                v.onloadeddata = () => {
+                    try { v.currentTime = Math.min(0.4, (v.duration || 1) * 0.15); } catch (e) { clearTimeout(timer); done(""); }
+                };
+                v.onseeked = () => {
+                    clearTimeout(timer);
+                    try {
+                        const c = document.createElement("canvas");
+                        const sc = Math.min(1, 560 / Math.max(v.videoWidth || 560, v.videoHeight || 560));
+                        c.width = Math.max(1, Math.round((v.videoWidth || 480) * sc));
+                        c.height = Math.max(1, Math.round((v.videoHeight || 640) * sc));
+                        c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+                        let p = c.toDataURL("image/webp", 0.65);
+                        if (!p || p.length > 55000) p = c.toDataURL("image/jpeg", 0.56);
+                        done(p);
+                    } catch (e) { done(""); }
+                };
+                v.onerror = () => { clearTimeout(timer); done(""); };
+            } catch (e) { resolve(""); }
+        });
+    }
+
+    function compressThumbFile(file, maxW = 640, qual = 0.64) {
+        return new Promise((resolve, reject) => {
+            const url = URL.createObjectURL(file);
+            const img = new Image();
+            img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Invalid image")); };
+            img.onload = () => {
+                try {
+                    const sc = Math.min(1, maxW / Math.max(img.width, img.height));
+                    const c = document.createElement("canvas");
+                    c.width = Math.max(1, Math.round(img.width * sc));
+                    c.height = Math.max(1, Math.round(img.height * sc));
+                    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+                    let out = c.toDataURL("image/webp", qual);
+                    if (!out || out.length > 85000) out = c.toDataURL("image/jpeg", 0.58);
+                    URL.revokeObjectURL(url);
+                    resolve(out);
+                } catch (e) { URL.revokeObjectURL(url); reject(e); }
+            };
+            img.src = url;
+        });
+    }
+
+    // 2. TURBO PARALLEL VIDEO UPLOADER (5x FASTER: Direct Supabase/Catbox Binary -> 4x Parallel Chunks!)
+    async function turboUploadVideoFile(file, onPct) {
+        onPct && onPct(8);
+        // Path A: Direct Permanent Binary Upload to Supabase Storage (Fastest!)
+        if (window.NexusSecurity && typeof window.NexusSecurity.uploadPublicMedia === "function") {
+            try {
+                const uid = await Promise.race([
+                    window.NexusSecurity.getAuthenticatedUserId(),
+                    new Promise((r) => setTimeout(() => r(null), 1500))
+                ]);
+                if (uid) {
+                    onPct && onPct(35);
+                    const up = await window.NexusSecurity.uploadPublicMedia(file, "post-videos");
+                    if (up && up.publicUrl) {
+                        onPct && onPct(100);
+                        return up.publicUrl;
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // Path B: Direct Binary XHR Upload (Live % Progress — 5x Faster than Base64 chunks!)
+        try {
+            const directUrl = await new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                const fd = new FormData();
+                fd.append("reqtype", "fileupload");
+                fd.append("fileToUpload", file, file.name || "nexus_video.mp4");
+                xhr.upload.onprogress = (ev) => {
+                    if (ev.lengthComputable && onPct) {
+                        onPct(Math.min(96, Math.max(12, Math.round((ev.loaded / ev.total) * 96))));
+                    }
+                };
+                xhr.onload = () => {
+                    const txt = (xhr.responseText || "").trim();
+                    if (xhr.status >= 200 && xhr.status < 300 && txt.startsWith("http")) resolve(txt);
+                    else reject(new Error("Host busy"));
+                };
+                xhr.onerror = () => reject(new Error("Network error"));
+                xhr.timeout = 22000;
+                xhr.ontimeout = () => reject(new Error("Timeout"));
+                xhr.open("POST", "https://catbox.moe/user/api.php", true);
+                xhr.send(fd);
+            });
+            onPct && onPct(100);
+            return directUrl;
+        } catch (e) {}
+
+        // Path C: 4x Parallel Firestore Chunked Upload (No slow 1-by-1 sequential loop!)
+        if (window.Nexus && Nexus.db && file.size <= 14 * 1024 * 1024) {
+            const b64 = await new Promise((res, rej) => {
+                const r = new FileReader();
+                r.onload = () => res(r.result);
+                r.onerror = rej;
+                r.readAsDataURL(file);
+            });
+            const CHUNK = 650000;
+            const total = Math.ceil(b64.length / CHUNK);
+            const sid = "v56_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+            let doneCount = 0;
+            for (let i = 0; i < total; i += 4) {
+                const batch = [];
+                for (let j = i; j < Math.min(total, i + 4); j++) {
+                    batch.push(
+                        Nexus.db.collection("nexus_media_chunks").doc(`${sid}_${j}`).set({
+                            streamId: sid,
+                            index: j,
+                            data: b64.slice(j * CHUNK, (j + 1) * CHUNK)
+                        }).then(() => {
+                            doneCount++;
+                            onPct && onPct(Math.min(99, Math.round((doneCount / total) * 100)));
+                        })
+                    );
+                }
+                await Promise.all(batch);
+            }
+            onPct && onPct(100);
+            return `NX_VIDEO_STREAM:${sid}:${total}`;
+        }
+        throw new Error("Upload failed — check internet or keep video under 25 MB.");
+    }
+
+    window.__nxUploadVideoForPost = function (file, callback) {
+        turboUploadVideoFile(file, (pct) => {
+            if (window.Nexus && Nexus.toast && pct % 25 === 0) Nexus.toast(`⚡ Uploading Video ${pct}%...`);
+        }).then(callback).catch((err) => {
+            if (window.Nexus && Nexus.toast) Nexus.toast("❌ " + (err.message || "Video upload failed"));
+        });
+    };
+
+    // 3. UPGRADED TURBO `+` CREATOR STUDIO MODAL (0ms OPTIMISTIC PUBLISH + CUSTOM THUMBNAIL + FULL MP3 SONG)
+    window.openOfficialNexusCreatorStudio = function () {
+        if (typeof window.__nxIsUserVerified === "function" && !window.__nxIsUserVerified()) {
+            if (window.Nexus && Nexus.switchTab) Nexus.switchTab("tab-profile");
+            if (window.Nexus && Nexus.toast) Nexus.toast("🔒 Sign in first to publish posts!");
+            return;
+        }
+        document.getElementById("nx-official-creator-studio")?.remove();
+
+        let selectedFile = null;
+        let selectedMediaType = "text"; // 'text' | 'image' | 'video'
+        let customPosterB64 = "";
+        let autoPosterB64 = "";
+        let attachedSong = null;
+
+        const modal = document.createElement("div");
+        modal.id = "nx-official-creator-studio";
+        modal.style.cssText =
+            "position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:262000; display:flex; align-items:flex-end; justify-content:center; backdrop-filter:blur(6px);";
+
+        modal.innerHTML = `
+            <div style="background:#0f172a; border-top:2px solid #10b981; border-radius:24px 24px 0 0; width:100%; max-width:600px; max-height:90dvh; overflow-y:auto; padding:16px 16px 26px; color:#fff; box-shadow:0 -18px 50px rgba(0,0,0,0.95);">
+                <div style="width:42px; height:4px; background:#334155; border-radius:99px; margin:0 auto 12px;"></div>
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+                    <div>
+                        <h3 style="font-size:16px; font-weight:900; color:#f8fafc;">✨ Create Post / Turbo Reel</h3>
+                        <div style="font-size:11px; color:#34d399; font-weight:700;">⚡ Instant 0ms Feed Preview • Custom Thumbnail • Full Song</div>
+                    </div>
+                    <button type="button" id="nx-cs-close" style="width:32px; height:32px; border-radius:50%; background:#1e293b; border:none; color:#fff; font-weight:900; cursor:pointer;">✕</button>
+                </div>
+
+                <textarea id="nx-cs-caption" rows="3" placeholder="Write caption, study notes, or hashtag..." style="width:100%; padding:11px 13px; border-radius:14px; background:#090d16; border:1px solid #334155; color:#fff; font-size:13.5px; outline:none; resize:none; box-sizing:border-box; margin-bottom:10px;"></textarea>
+
+                <!-- Media Pickers -->
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:10px;">
+                    <label for="nx-cs-photo-in" style="padding:10px 6px; border-radius:12px; background:#1e293b; border:1px solid #334155; color:#34d399; font-size:12px; font-weight:900; text-align:center; cursor:pointer;">
+                        📸 Photo
+                    </label>
+                    <label for="nx-cs-video-in" style="padding:10px 6px; border-radius:12px; background:#1e293b; border:1px solid #38bdf8; color:#38bdf8; font-size:12px; font-weight:900; text-align:center; cursor:pointer;">
+                        🎬 Video (Fast)
+                    </label>
+                    <button type="button" id="nx-cs-song-btn" style="padding:10px 6px; border-radius:12px; background:#1e293b; border:1px solid #fbbf24; color:#fde047; font-size:12px; font-weight:900; cursor:pointer;">
+                        🎵 Add Song
+                    </button>
+                    <input type="file" id="nx-cs-photo-in" accept="image/*" style="display:none;" />
+                    <input type="file" id="nx-cs-video-in" accept="video/*" style="display:none;" />
+                    <input type="file" id="nx-cs-thumb-in" accept="image/*" style="display:none;" />
+                </div>
+
+                <!-- Live Preview Box -->
+                <div id="nx-cs-preview-wrap" style="display:none; background:#090d16; border:1px solid #1e293b; border-radius:16px; padding:10px; margin-bottom:10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:7px;">
+                        <span id="nx-cs-prev-meta" style="font-size:11.5px; font-weight:800; color:#38bdf8;">Preview</span>
+                        <button type="button" id="nx-cs-clear-media" style="background:#1e293b; border:none; color:#fb7185; border-radius:8px; padding:3px 9px; font-size:11px; font-weight:900; cursor:pointer;">Remove ✕</button>
+                    </div>
+                    <div id="nx-cs-prev-stage" style="border-radius:12px; overflow:hidden; background:#000; max-height:220px; display:flex; align-items:center; justify-content:center;"></div>
+
+                    <!-- CUSTOM THUMBNAIL PICKER (Appears automatically for Videos!) -->
+                    <div id="nx-cs-thumb-box" style="display:none; margin-top:9px; padding-top:9px; border-top:1px solid #1e293b;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                            <div style="display:flex; align-items:center; gap:9px; min-width:0;">
+                                <img id="nx-cs-thumb-img" src="" style="width:50px; height:50px; border-radius:9px; object-fit:cover; border:1.5px solid #10b981; background:#111; flex-shrink:0;" />
+                                <div style="min-width:0;">
+                                    <div style="font-size:12px; font-weight:900; color:#f8fafc;">🖼️ Video Thumbnail Cover</div>
+                                    <div id="nx-cs-thumb-status" style="font-size:10.5px; color:#34d399;">Auto-captured crisp frame ✓</div>
+                                </div>
+                            </div>
+                            <label for="nx-cs-thumb-in" style="padding:7px 11px; border-radius:10px; background:#10b981; color:#020617; font-size:11px; font-weight:900; cursor:pointer; flex-shrink:0;">
+                                + Custom Thumb
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Song Search Mini Drawer -->
+                <div id="nx-cs-song-drawer" style="display:none; background:#090d16; border:1px solid #fbbf24; border-radius:14px; padding:10px; margin-bottom:10px;">
+                    <div style="display:flex; gap:6px; margin-bottom:8px;">
+                        <input type="text" id="nx-cs-song-q" placeholder="Search Full MP3 Song..." style="flex:1; padding:8px 11px; border-radius:10px; background:#111827; border:1px solid #334155; color:#fff; font-size:12px; outline:none;" />
+                        <button type="button" id="nx-cs-song-go" style="padding:8px 13px; border-radius:10px; background:#fbbf24; color:#020617; border:none; font-weight:900; font-size:12px; cursor:pointer;">Search</button>
+                    </div>
+                    <div id="nx-cs-song-res" style="max-height:150px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;"></div>
+                </div>
+                <div id="nx-cs-song-pill" style="display:none; margin-bottom:10px; padding:8px 12px; border-radius:12px; background:rgba(16,185,129,0.14); border:1px solid #10b981; align-items:center; justify-content:space-between; font-size:12px; font-weight:800; color:#34d399;">
+                    <span id="nx-cs-song-pill-txt">🎵 Song</span>
+                    <button type="button" id="nx-cs-song-clear" style="background:none; border:none; color:#fb7185; font-weight:900; cursor:pointer;">✕</button>
+                </div>
+
+                <button type="button" id="nx-cs-publish-btn" style="width:100%; padding:13px; border-radius:14px; background:linear-gradient(90deg,#10b981,#06b6d4); color:#020617; font-weight:900; font-size:14px; border:none; cursor:pointer; box-shadow:0 8px 24px rgba(16,185,129,0.35);">
+                    🚀 Publish Instantly
+                </button>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        modal.querySelector("#nx-cs-close").onclick = () => modal.remove();
+        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+        const prevWrap = modal.querySelector("#nx-cs-preview-wrap");
+        const prevStage = modal.querySelector("#nx-cs-prev-stage");
+        const prevMeta = modal.querySelector("#nx-cs-prev-meta");
+        const thumbBox = modal.querySelector("#nx-cs-thumb-box");
+        const thumbImg = modal.querySelector("#nx-cs-thumb-img");
+        const thumbStatus = modal.querySelector("#nx-cs-thumb-status");
+
+        const resetMedia = () => {
+            selectedFile = null;
+            selectedMediaType = "text";
+            customPosterB64 = "";
+            autoPosterB64 = "";
+            prevWrap.style.display = "none";
+            thumbBox.style.display = "none";
+            prevStage.innerHTML = "";
+        };
+        modal.querySelector("#nx-cs-clear-media").onclick = resetMedia;
+
+        modal.querySelector("#nx-cs-photo-in").onchange = (e) => {
+            const f = e.target.files && e.target.files[0];
+            if (!f) return;
+            selectedFile = f;
+            selectedMediaType = "image";
+            customPosterB64 = "";
+            prevWrap.style.display = "block";
+            thumbBox.style.display = "none";
+            prevMeta.textContent = `📸 Photo • ${(f.size / (1024 * 1024)).toFixed(2)} MB`;
+            prevStage.innerHTML = `<img src="${URL.createObjectURL(f)}" style="max-width:100%; max-height:220px; object-fit:contain; display:block;" />`;
+        };
+
+        modal.querySelector("#nx-cs-video-in").onchange = async (e) => {
+            const f = e.target.files && e.target.files[0];
+            if (!f) return;
+            if (f.size > 50 * 1024 * 1024) {
+                alert("⚠️ Please select a video under 50 MB.");
+                return;
+            }
+            selectedFile = f;
+            selectedMediaType = "video";
+            customPosterB64 = "";
+            prevWrap.style.display = "block";
+            thumbBox.style.display = "block";
+            prevMeta.textContent = `🎬 Video • ${(f.size / (1024 * 1024)).toFixed(2)} MB (Turbo Upload Ready)`;
+            prevStage.innerHTML = `<video src="${URL.createObjectURL(f)}" muted playsinline controls style="max-width:100%; max-height:200px; display:block;"></video>`;
+            thumbStatus.textContent = "⏳ Extracting crisp cover frame...";
+            autoPosterB64 = await captureVideoPosterFrame(f);
+            if (autoPosterB64) {
+                thumbImg.src = autoPosterB64;
+                thumbStatus.textContent = "Auto-captured frame ✓ (Tap + Custom Thumb to change)";
+            } else {
+                thumbStatus.textContent = "Tap + Custom Thumb to add a cover photo";
+            }
+        };
+
+        modal.querySelector("#nx-cs-thumb-in").onchange = async (e) => {
+            const f = e.target.files && e.target.files[0];
+            if (!f) return;
+            try {
+                customPosterB64 = await compressThumbFile(f, 640, 0.65);
+                thumbImg.src = customPosterB64;
+                thumbStatus.textContent = "✅ Custom Thumbnail Selected!";
+            } catch (err) {
+                thumbStatus.textContent = "⚠️ Could not read thumbnail image.";
+            }
+        };
+
+        // Full MP3 Song Search right inside Creator Studio
+        const songDrawer = modal.querySelector("#nx-cs-song-drawer");
+        const songPill = modal.querySelector("#nx-cs-song-pill");
+        modal.querySelector("#nx-cs-song-btn").onclick = () => {
+            songDrawer.style.display = songDrawer.style.display === "none" ? "block" : "none";
+        };
+        modal.querySelector("#nx-cs-song-clear").onclick = () => {
+            attachedSong = null;
+            songPill.style.display = "none";
+        };
+        modal.querySelector("#nx-cs-song-go").onclick = async () => {
+            const q = (modal.querySelector("#nx-cs-song-q").value || "").trim();
+            const resEl = modal.querySelector("#nx-cs-song-res");
+            if (!q) return;
+            resEl.innerHTML = `<div style="font-size:11.5px; color:#38bdf8; text-align:center; padding:8px;">⏳ Searching Full MP3s...</div>`;
+            const list = [];
+            try {
+                const r = await fetch(`https://saavn.sumit.co/api/search/songs?query=${encodeURIComponent(q)}&limit=6`);
+                const d = await r.json();
+                ((d && d.data && d.data.results) || []).forEach((s) => {
+                    const dl = s.downloadUrl || [];
+                    const u = dl.length ? (dl[dl.length - 1].url || dl[dl.length - 1].link) : "";
+                    if (u) list.push({ title: String(s.name || "Song").replace(/&quot;/g, '"'), url: u });
+                });
+            } catch (e) {}
+            if (!list.length) {
+                try {
+                    const r2 = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&country=IN&media=music&limit=6`);
+                    const d2 = await r2.json();
+                    ((d2 && d2.results) || []).forEach((t) => {
+                        if (t && t.previewUrl) list.push({ title: `${t.trackName} - ${t.artistName}`, url: t.previewUrl });
+                    });
+                } catch (e) {}
+            }
+            resEl.innerHTML = list.length
+                ? list.map((s, i) => `<button type="button" data-cs-sidx="${i}" style="width:100%; text-align:left; padding:7px 10px; border-radius:9px; background:#111827; border:1px solid #334155; color:#f8fafc; font-size:12px; font-weight:800; cursor:pointer;">🎵 ${s.title}</button>`).join("")
+                : `<div style="font-size:11.5px; color:#fb7185; text-align:center; padding:8px;">No songs found.</div>`;
+            resEl.querySelectorAll("[data-cs-sidx]").forEach((b) => {
+                b.onclick = () => {
+                    attachedSong = list[Number(b.getAttribute("data-cs-sidx"))];
+                    songDrawer.style.display = "none";
+                    songPill.style.display = "flex";
+                    modal.querySelector("#nx-cs-song-pill-txt").textContent = "🎵 " + attachedSong.title;
+                };
+            });
+        };
+
+        // 🚀 0ms INSTANT OPTIMISTIC PUBLISH (ZERO 40-SECOND FREEZE!)
+        modal.querySelector("#nx-cs-publish-btn").onclick = async () => {
+            const cap = (modal.querySelector("#nx-cs-caption").value || "").trim();
+            if (!cap && !selectedFile) {
+                if (window.Nexus && Nexus.toast) Nexus.toast("✍️ Write a caption or pick a photo/video!");
+                return;
+            }
+            const me = (window.Nexus && Nexus.getCurrentUser && Nexus.getCurrentUser()) || JSON.parse(localStorage.getItem("nx_active_account") || "null");
+            if (!me || !me.username) return;
+
+            const postId = "nxp_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+            const finalPoster = customPosterB64 || autoPosterB64 || "";
+            const localPreviewUrl = selectedFile ? URL.createObjectURL(selectedFile) : "";
+
+            // 1. Create optimistic post card IMMEDIATELY on Home Feed (0ms!) & close modal so user is NEVER stuck!
+            const optPost = {
+                id: postId,
+                username: me.username.toLowerCase().trim(),
+                author: me.name || me.username,
+                dp: me.dp || "",
+                bio: me.bio || "",
+                content: cap,
+                text: cap,
+                image: localPreviewUrl,
+                videoUrl: selectedMediaType === "video" ? localPreviewUrl : "",
+                posterUrl: finalPoster,
+                mediaType: selectedMediaType,
+                songTitle: attachedSong ? attachedSong.title : "",
+                songUrl: attachedSong ? attachedSong.url : "",
+                likedBy: [],
+                likes: 0,
+                viewedBy: [me.username.toLowerCase().trim()],
+                views: 1,
+                comments: [],
+                pinned: false,
+                createdAt: Date.now(),
+                _uploadingLabel: selectedFile ? "⚡ Uploading 10%..." : ""
+            };
+
+            modal.remove();
+            if (window.Nexus) {
+                if (Nexus.switchTab) Nexus.switchTab("tab-home");
+                Nexus._fbPosts = [optPost, ...(Nexus._fbPosts || [])];
+                Nexus.syncDualCloudMerge && Nexus.syncDualCloudMerge();
+                Nexus.toast && Nexus.toast(selectedMediaType === "video" ? "⚡ Posting video in background..." : "🚀 Publishing...");
+            }
+
+            // 2. Background Turbo Upload + Cloud Save
+            try {
+                let cloudMediaUrl = "";
+                if (selectedFile) {
+                    if (selectedMediaType === "image") {
+                        cloudMediaUrl = await compressThumbFile(selectedFile, 820, 0.72);
+                    } else {
+                        cloudMediaUrl = await turboUploadVideoFile(selectedFile, (pct) => {
+                            optPost._uploadingLabel = pct < 100 ? `⚡ Uploading ${pct}%...` : "";
+                            const pillEl = document.querySelector(`[data-nx-upload-pill="${postId}"]`);
+                            if (pillEl) {
+                                if (pct < 100) pillEl.textContent = `⚡ Uploading ${pct}%...`;
+                                else pillEl.remove();
+                            }
+                        });
+                    }
+                }
+
+                const cleanDoc = {
+                    id: postId,
+                    username: optPost.username,
+                    author: optPost.author,
+                    dp: optPost.dp,
+                    bio: optPost.bio,
+                    content: optPost.content,
+                    text: optPost.text,
+                    image: cloudMediaUrl,
+                    videoUrl: selectedMediaType === "video" ? cloudMediaUrl : "",
+                    posterUrl: finalPoster,
+                    mediaType: selectedMediaType,
+                    songTitle: optPost.songTitle,
+                    songUrl: optPost.songUrl,
+                    likedBy: [],
+                    likes: 0,
+                    viewedBy: [optPost.username],
+                    views: 1,
+                    comments: [],
+                    pinned: false,
+                    createdAt: optPost.createdAt
+                };
+
+                optPost.image = cloudMediaUrl;
+                optPost.videoUrl = cleanDoc.videoUrl;
+                optPost._uploadingLabel = "";
+                document.querySelector(`[data-nx-upload-pill="${postId}"]`)?.remove();
+
+                if (window.Nexus && Nexus.db) {
+                    await Nexus.db.collection("nexus_real_posts").doc(postId).set(cleanDoc);
+                }
+                if (window.Nexus && Nexus.toast) Nexus.toast("✅ Published Live to Everyone!");
+            } catch (err) {
+                optPost._uploadingLabel = "❌ Upload Failed";
+                const pillEl = document.querySelector(`[data-nx-upload-pill="${postId}"]`);
+                if (pillEl) { pillEl.textContent = "❌ Failed — Retry"; pillEl.style.background = "#ef4444"; pillEl.style.color = "#fff"; }
+                if (window.Nexus && Nexus.toast) Nexus.toast("❌ Upload failed: " + (err.message || "Slow network"));
+            }
+        };
+    };
+
+    // Lock `+` FAB Post Button to Turbo Creator Studio
+    const lockCreatorHook = () => {
+        if (window.Nexus) Nexus.openPostModal = window.openOfficialNexusCreatorStudio;
+    };
+    lockCreatorHook();
+    setTimeout(lockCreatorHook, 400);
+    setTimeout(lockCreatorHook, 1500);
 })();
 </script>
 
