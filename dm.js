@@ -25,6 +25,14 @@
         return String(u || '').toLowerCase().replace(/^@/, '').trim();
     }
 
+    function getDmCurrentUser() {
+        let me = (window.Nexus && typeof Nexus.getCurrentUser === 'function') ? Nexus.getCurrentUser() : null;
+        if (!me || !me.username) {
+            try { me = JSON.parse(localStorage.getItem('nx_active_account') || 'null'); } catch (e) {}
+        }
+        return (me && me.username) ? me : null;
+    }
+
     function patchLiveMessageDOM(container, html) {
         if (!container) return;
         const oldTop = container.scrollTop;
@@ -306,7 +314,8 @@
 
     let _vpRaf = 0, _lastVpH = -1, _lastVpT = -1;
     function syncWhatsAppViewport(forceNow) {
-        if (!forceNow && _vpRaf) return;
+        const isForce = forceNow === true; // CRITICAL: Event objects from addEventListener must NOT bypass rAF throttle!
+        if (!isForce && _vpRaf) return;
         const run = () => {
             _vpRaf = 0;
             const root = document.getElementById('nx-dm-dedicated-root');
@@ -315,7 +324,7 @@
             const vv = window.visualViewport;
             const visibleHeight = Math.max(1, Math.round(vv ? vv.height : window.innerHeight));
             const visibleTop = Math.max(0, Math.round(vv ? vv.offsetTop : 0));
-            if (!forceNow && Math.abs(visibleHeight - _lastVpH) <= 2 && Math.abs(visibleTop - _lastVpT) <= 2) return;
+            if (!isForce && Math.abs(visibleHeight - _lastVpH) <= 3 && Math.abs(visibleTop - _lastVpT) <= 3) return;
             _lastVpH = visibleHeight;
             _lastVpT = visibleTop;
 
@@ -332,12 +341,12 @@
                 msgBox.style.minHeight = '0';
                 msgBox.style.flex = '1 1 0%';
                 msgBox.style.overflowY = 'auto';
-                if (forceNow) msgBox.scrollTop = msgBox.scrollHeight;
+                if (isForce) msgBox.scrollTop = msgBox.scrollHeight;
             }
             const composer = root.querySelector('#nx-dm-composer');
             if (composer) composer.style.flexShrink = '0';
         };
-        if (forceNow) run();
+        if (isForce) run();
         else _vpRaf = requestAnimationFrame(run);
     }
 
@@ -613,11 +622,12 @@
         return { key, label };
     }
 
+    const _onVpChange = () => syncWhatsAppViewport(false);
     if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', syncWhatsAppViewport);
-        window.visualViewport.addEventListener('scroll', syncWhatsAppViewport);
+        window.visualViewport.addEventListener('resize', _onVpChange, { passive: true });
+        window.visualViewport.addEventListener('scroll', _onVpChange, { passive: true });
     }
-    window.addEventListener('resize', syncWhatsAppViewport);
+    window.addEventListener('resize', _onVpChange, { passive: true });
 
     window.addEventListener('popstate', () => {
         if (activeDmPartner) {
@@ -1019,7 +1029,7 @@
                         <button type="button" onclick="document.getElementById('nx-dm-file-in').click()" style="background:none; border:none; font-size:18px; cursor:pointer; padding:2px; flex-shrink:0;">📷</button>
                         <button type="button" onclick="NexusDM.startVoiceDM()" style="background:none; border:none; font-size:17px; cursor:pointer; padding:2px; flex-shrink:0;">🎙️</button>
                     </div>
-                    <button type="button" id="nx-dm-send-btn" onclick="NexusDM.sendDM()" style="background:#00a884; color:#020617; border:none; width:42px; height:42px; border-radius:50%; font-size:18px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 2px 8px rgba(0,168,132,0.4);">➤</button>
+                    <button type="button" id="nx-dm-send-btn" onmousedown="event.preventDefault()" style="background:#00a884; color:#020617; border:none; width:42px; height:42px; border-radius:50%; font-size:18px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 2px 8px rgba(0,168,132,0.4); touch-action:manipulation;">➤</button>
                 </div>
             `;
 
@@ -1030,14 +1040,16 @@
 
             if (!window.__nxDmV55CaptureMenuBound) {
                 window.__nxDmV55CaptureMenuBound = true;
-                let lastTapMid = '', lastTapTs = 0;
+                let lastTapMid = '', lastTapTs = 0, singleTapTimer = null;
                 document.addEventListener('click', event => {
                     const msgBox = document.getElementById('nx-dm-msgs-box');
                     if (!msgBox || !msgBox.contains(event.target)) return;
 
-                    // 1. Explicit ⋯ (3-dot) button on any DM message -> ALWAYS opens action sheet!
+                    // 1. Explicit ⋯ (3-dot) button on any DM message -> opens Reaction + Action Sheet INSTANTLY!
                     const menuBtn = event.target.closest('[data-nx-dm-menu]');
                     if (menuBtn) {
+                        clearTimeout(singleTapTimer);
+                        lastTapMid = ''; lastTapTs = 0;
                         event.preventDefault();
                         event.stopPropagation();
                         event.stopImmediatePropagation();
@@ -1057,15 +1069,38 @@
                     event.stopImmediatePropagation();
 
                     const now = Date.now();
-                    if (lastTapMid === mid && (now - lastTapTs) < 320) {
+                    if (lastTapMid === mid && (now - lastTapTs) < 290) {
+                        clearTimeout(singleTapTimer);
                         lastTapMid = ''; lastTapTs = 0;
                         NexusDM.reactToDM(mid, '❤️');
                         return;
                     }
                     lastTapMid = mid;
                     lastTapTs = now;
-                    NexusDM.openMsgActionMenu(mid);
+                    clearTimeout(singleTapTimer);
+                    singleTapTimer = setTimeout(() => {
+                        if (lastTapMid === mid) {
+                            lastTapMid = ''; lastTapTs = 0;
+                            NexusDM.openMsgActionMenu(mid);
+                        }
+                    }, 240);
                 }, true);
+            }
+
+            // Explicit Send button tap handler (works on BOTH touchend & click without missing on Android keyboard!)
+            const sendBtn = document.getElementById('nx-dm-send-btn');
+            if (sendBtn) {
+                let lastSendTap = 0;
+                const fireSend = (ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    const now = Date.now();
+                    if (now - lastSendTap < 160) return;
+                    lastSendTap = now;
+                    NexusDM.sendDM();
+                };
+                sendBtn.addEventListener('touchend', fireSend, { passive: false });
+                sendBtn.addEventListener('click', fireSend);
             }
 
             // FIXED: Wire Sticker Search Input (previously had no oninput handler!)
@@ -1201,15 +1236,20 @@
                 }
 
                 const formattedTxt = isDeleted ? '' : formatDmTextLinks(m.text || '');
-                // Support BOTH standard likes/reaction AND legacy reactions object!
+                // Multi-Emoji Reaction Aggregation (shows every emoji reacted, e.g. ❤️ 1 😂 1)
                 let likes = Array.isArray(m.likes) ? m.likes : [];
                 let reactionEmoji = m.reaction || '❤️';
-                if (likes.length === 0 && m.reactions && typeof m.reactions === 'object') {
-                    const rKeys = Object.keys(m.reactions).filter(k => m.reactions[k]);
-                    if (rKeys.length) {
-                        likes = rKeys;
-                        reactionEmoji = String(m.reactions[rKeys[rKeys.length - 1]] || '❤️');
-                    }
+                const emojiCounts = {};
+                const rEntries = (m.reactions && typeof m.reactions === 'object') ? Object.entries(m.reactions).filter(([, em]) => Boolean(em)) : [];
+                if (rEntries.length > 0) {
+                    likes = rEntries.map(([u]) => u);
+                    rEntries.forEach(([, em]) => {
+                        const k = String(em);
+                        emojiCounts[k] = (emojiCounts[k] || 0) + 1;
+                    });
+                    reactionEmoji = Object.keys(emojiCounts).join('');
+                } else if (likes.length > 0) {
+                    emojiCounts[reactionEmoji] = likes.length;
                 }
                 const replyHTML = (!isDeleted && m.replyTo)
                     ? `<div data-nx-reply-quote="1" style="background:rgba(0,0,0,0.28); border-left:3px solid #00a884; padding:4px 8px; border-radius:6px; font-size:11.5px; color:#cbd5e1; margin-bottom:4px;"><b>${dmEscapeHTML(m.replyTo.sender || '')}:</b> ${dmEscapeHTML(m.replyTo.text || '')}</div>`
@@ -1222,8 +1262,9 @@
                     : '';
                 const safeId = dmEscapeHTML(msgId);
                 const reactionPeople = likes.map(name => '@' + String(name)).join(', ');
+                const reactionSummaryText = Object.entries(emojiCounts).map(([em, c]) => c > 1 ? `${em} ${c}` : em).join(' ');
                 const reactionBadge = likes.length > 0
-                    ? `<span data-nx-react-pill="1" onclick="event.stopPropagation(); Nexus.toast('${dmEscapeHTML(reactionEmoji)} Reacted by: ${dmEscapeHTML(reactionPeople)}')" style="background:#182229; border:1px solid #2a3942; padding:1px 7px; border-radius:10px; font-size:11.5px; margin-right:5px; cursor:pointer;">${dmEscapeHTML(reactionEmoji)} ${likes.length}</span>`
+                    ? `<span data-nx-react-pill="1" onclick="event.stopPropagation(); Nexus.toast('${dmEscapeHTML(reactionSummaryText)} by ${dmEscapeHTML(reactionPeople)}')" style="background:#182229; border:1px solid #00a884; padding:1px 7px; border-radius:10px; font-size:11.5px; margin-right:5px; cursor:pointer;">${dmEscapeHTML(reactionSummaryText)}${Object.keys(emojiCounts).length === 1 && likes.length === 1 ? ' 1' : ''}</span>`
                     : '';
 
                 const menuButton = !isDeleted
@@ -1282,7 +1323,7 @@
         },
 
         openMsgActionMenu: function(msgId) {
-            let me = Nexus.getCurrentUser();
+            let me = getDmCurrentUser();
             let m = dmMessagesCache.find(x => String(x.id) === String(msgId));
             if (!m || !me || m.deleted) return;
 
@@ -1429,31 +1470,39 @@
             document.getElementById('nx-v55-msg-sheet-overlay')?.remove();
             const actModal = document.getElementById('nx-msg-action-modal');
             if (actModal) actModal.style.display = 'none';
-            let me = Nexus.getCurrentUser();
+            let me = getDmCurrentUser();
             const cleanId = String(msgId || '').trim();
             if (!me || !cleanId) return;
             let m = dmMessagesCache.find(x => String(x.id) === cleanId);
             if (!m) return;
 
             const myNorm = normalizeUname(me.username);
-            let likes = Array.isArray(m.likes) ? m.likes.map(normalizeUname).filter(Boolean) : [];
             const nextReactions = Object.assign({}, (m.reactions && typeof m.reactions === 'object') ? m.reactions : {});
-            if (likes.includes(myNorm) && m.reaction === emoji) {
-                likes = likes.filter(u => u !== myNorm);
+            const prevMyEmoji = nextReactions[myNorm] || (Array.isArray(m.likes) && m.likes.map(normalizeUname).includes(myNorm) ? (m.reaction || '❤️') : '');
+
+            let removed = false;
+            if (prevMyEmoji === emoji) {
                 delete nextReactions[myNorm];
+                removed = true;
             } else {
-                if (!likes.includes(myNorm)) likes.push(myNorm);
                 nextReactions[myNorm] = emoji;
             }
-            // 0ms OPTIMISTIC UI: Always shows immediately even on slow 4G!
+
+            const likes = Object.keys(nextReactions).filter(k => nextReactions[k]);
+            const topEmoji = likes.length ? String(nextReactions[likes[likes.length - 1]]) : '';
+
+            // 0ms OPTIMISTIC UI: Always updates immediately even on slow 4G!
             m.likes = likes;
-            m.reaction = emoji;
+            m.reaction = topEmoji;
             m.reactions = nextReactions;
             this.renderMessagesList(dmMessagesCache, me.username);
-            if (Nexus.db) {
+            if (window.Nexus && Nexus.toast) {
+                Nexus.toast(removed ? 'Reaction removed' : `${emoji} Reacted!`);
+            }
+            if (window.Nexus && Nexus.db) {
                 Nexus.db.collection("nexus_private_dms").doc(cleanId).set({
                     likes: likes,
-                    reaction: emoji,
+                    reaction: topEmoji,
                     reactions: nextReactions
                 }, { merge: true }).catch(() => {});
             }
@@ -1851,12 +1900,14 @@
         }
     };
 
-    // LOCK unified action menu & instant reactions so legacy power.js / emojis.js can NEVER break them!
+    // LOCK unified send, action menu & instant reactions so legacy power.js / emojis.js can NEVER break them!
     try {
         const lockedMenu = window.NexusDM.openMsgActionMenu;
         const lockedReact = window.NexusDM.reactToDM;
+        const lockedSend = window.NexusDM.sendDM;
         Object.defineProperty(window.NexusDM, 'openMsgActionMenu', { value: lockedMenu, writable: false, configurable: true });
         Object.defineProperty(window.NexusDM, 'reactToDM', { value: lockedReact, writable: false, configurable: true });
+        Object.defineProperty(window.NexusDM, 'sendDM', { value: lockedSend, writable: false, configurable: true });
     } catch (e) {}
 })();
 // === END OF DM.JS ===
