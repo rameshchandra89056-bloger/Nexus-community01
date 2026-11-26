@@ -30,7 +30,8 @@
 
     let activeWpRoom = '', wpUnsub = null, wpParticipantUnsub = null;
     let currentMediaKey = '', currentMode = 'yt';
-    let isMainHidden = false, isRelHidden = false; // In-App Related / Up Next strip OPEN by default so users tap inside Nexus (zero YouTube redirect!)
+    let isMainHidden = false, isRelHidden = true; // Compact by default so Watch Party NEVER eats full screen; open Related only on tap!
+    let wpSizeMode = 0; // 0 = Compact 140px (Default), 1 = Big 225px, 2 = Mini 96px
     let searchResultsCache = [];
     let lastEmojiId = '';
     let activeDocData = null;
@@ -413,6 +414,7 @@
         const saavnOfficial = `${PROTO}www.jiosaavn.com/api.php?p=1&q=${encodeURIComponent(cleanQ)}&_format=json&_marker=0&api_version=4&ctx=web6dot0&n=12&__call=search.getResults`;
 
         await Promise.allSettled([
+            fetchFast(`${PROTO}saavn.sumit.co/api/search/songs?query=${encodeURIComponent(cleanQ)}&limit=12`, 4500).then(r => r.json()).then(parseSaavn),
             fetchFast(`${PROTO}api.allorigins.win/get?url=${encodeURIComponent(saavnOfficial)}`, 5000).then(r => r.json()).then(d => parseSaavn(JSON.parse(d.contents))),
             fetchFast(`${PROTO}saavn.dev/api/search/songs?query=${encodeURIComponent(cleanQ)}&limit=12`, 4500).then(r => r.json()).then(parseSaavn),
             fetchFast(`${PROTO}itunes.apple.com/search?term=${encodeURIComponent(cleanQ)}&country=IN&media=music&limit=12`, 4500).then(r => r.json()).then(d => {
@@ -505,8 +507,8 @@
                     </div>
                 </div>
             ` : `
-                <div id="nx-wp-video-frame-wrap" style="position:relative; width:100%; height:175px; background:#000; transition:height 0.2s ease;">
-                    <iframe id="nx-wp-yt-iframe" src="https://www.youtube.com/embed/${docData.videoId}?autoplay=1&playsinline=1&enablejsapi=1&rel=0&modestbranding=1&start=${targetSec}" style="width:100%; height:175px; border:none; background:#000; transition:height 0.2s ease;" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+                <div id="nx-wp-video-frame-wrap" style="position:relative; width:100%; height:140px; background:#000; transition:height 0.2s ease;">
+                    <iframe id="nx-wp-yt-iframe" src="https://www.youtube.com/embed/${docData.videoId}?autoplay=1&playsinline=1&enablejsapi=1&rel=0&modestbranding=1&start=${targetSec}" style="width:100%; height:100%; border:none; background:#000;" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
                 </div>
                 <!-- SINGLE COMPACT STRUCTURED CONTROL BAR (No 2-line wrapping!) -->
                 <div style="display:flex; align-items:center; justify-content:space-between; padding:5px 8px; background:#0f172a; border-top:1px solid #1e293b; gap:4px; overflow-x:auto; scrollbar-width:none;">
@@ -525,8 +527,9 @@
                 <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; background:#182229; border-bottom:1px solid #2a3942; gap:4px;">
                     <span style="font-size:11px; font-weight:900; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;">${isMp3 ? '🎵' : '▶️'} ${(docData.title || 'Live Media').replace(/</g, '&lt;')}</span>
                     <button type="button" class="nx-tw-pill" style="border-color:#38bdf8; color:#38bdf8;" onclick="NexusWatchParty.openModal(${isDm}, '${isMp3 ? 'mp3' : 'yt'}')">🔍 Search</button>
+                    <button type="button" id="nx-btn-wp-size" class="nx-tw-pill" style="border-color:#fbbf24; color:#fde047;" onclick="NexusWatchParty.cyclePlayerSize()">📐 Size</button>
                     <button type="button" id="nx-btn-toggle-main" class="nx-tw-pill" onclick="NexusWatchParty.toggleMainPlayer()">${isMainHidden ? '🔼 Show' : '🔽 Hide'}</button>
-                    <button type="button" id="nx-btn-toggle-rel" class="nx-tw-pill" style="border-color:#a78bfa; color:#d8b4fe;" onclick="NexusWatchParty.toggleRelatedStrip()">${isRelHidden ? '🔥 Next' : '🔥 Close'}</button>
+                    <button type="button" id="nx-btn-toggle-rel" class="nx-tw-pill" style="border-color:#a78bfa; color:#d8b4fe;" onclick="NexusWatchParty.toggleRelatedStrip()">${isRelHidden ? '🔥 Related' : '🔥 Close'}</button>
                     <button type="button" class="nx-tw-pill" style="background:#ef4444; border:none; color:white;" onclick="NexusWatchParty.stop()">✕</button>
                 </div>
                 <div id="nx-wp-main-stage" style="display:${isMainHidden ? 'none' : 'flex'}; flex-direction:column;">${stageHTML}</div>
@@ -729,7 +732,7 @@
             let me = getMeUser();
             let ctx = getChatCtx(isDm);
             isMainHidden = false;
-            isRelHidden = false; // Keep In-App Related strip visible so tapping related songs never leaves Nexus!
+            isRelHidden = true; // Keep Related closed until user taps 🔥 Related (never crowds chat screen!)
             currentMediaKey = '';
 
             // Include all participant username/name tokens so partner's phone receives it 100%!
@@ -841,6 +844,16 @@
             if (aud) aud.playbackRate = next;
             sendYouTubeCommand('setPlaybackRate', [next]);
             if (window.Nexus && Nexus.toast) Nexus.toast(`⚡ Playback Speed: ${next}x`);
+        },
+
+        cyclePlayerSize: function() {
+            wpSizeMode = (wpSizeMode + 1) % 3;
+            const heights = [140, 225, 96];
+            const labels = ['📐 Size', '📐 Big', '📐 Mini'];
+            const wrap = document.getElementById('nx-wp-video-frame-wrap');
+            const btn = document.getElementById('nx-btn-wp-size');
+            if (wrap) wrap.style.height = heights[wpSizeMode] + 'px';
+            if (btn) btn.innerText = labels[wpSizeMode];
         },
 
         toggleMainPlayer: function() {
