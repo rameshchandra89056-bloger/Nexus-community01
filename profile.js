@@ -49,10 +49,84 @@
         return __nxHlsLoadPromise;
     }
 
+    function getNexusMediaPrefs() {
+        try {
+            const p = JSON.parse(localStorage.getItem("nx_media_prefs_v1") || "{}");
+            return {
+                autoPlayVideos: p.autoPlayVideos !== false,
+                autoPlaySongs: p.autoPlaySongs !== false,
+                autoStopOnLeave: p.autoStopOnLeave !== false,
+                lowDataMode: Boolean(p.lowDataMode)
+            };
+        } catch (e) {
+            return { autoPlayVideos: true, autoPlaySongs: true, autoStopOnLeave: true, lowDataMode: false };
+        }
+    }
+
+
+    // =========================================================================
+    // EXACT-SECOND VIDEO RESUME MEMORY (v56):
+    // Saves exact watched timestamp per video post -> Resumes right where you
+    // left off after scroll, refresh, OR 4G network drop/reconnect!
+    // =========================================================================
+    const VIDEO_RESUME_KEY = "nx_video_resume_v1";
+    let videoResumeMem = null;
+    function readVideoResumeMap() {
+        if (videoResumeMem) return videoResumeMem;
+        try {
+            const parsed = JSON.parse(localStorage.getItem(VIDEO_RESUME_KEY) || "{}");
+            videoResumeMem = (parsed && typeof parsed === "object") ? parsed : {};
+        } catch (e) { videoResumeMem = {}; }
+        return videoResumeMem;
+    }
+    function getSavedVideoTime(vidKey) {
+        if (!vidKey) return 0;
+        const rec = readVideoResumeMap()[vidKey];
+        if (!rec || !Number.isFinite(rec.t)) return 0;
+        if (rec.dur && rec.t >= rec.dur - 1.5) return 0; // Completed -> replay from 0:00
+        return Math.max(0, Number(rec.t) || 0);
+    }
+    function saveVideoResumeTime(vidKey, curSec, durSec) {
+        if (!vidKey || !Number.isFinite(curSec) || curSec < 0.8) return;
+        const map = readVideoResumeMap();
+        if (durSec && curSec >= durSec - 1.5) {
+            delete map[vidKey];
+        } else {
+            map[vidKey] = { t: Math.round(curSec * 10) / 10, dur: Number.isFinite(durSec) ? Math.round(durSec) : 0, at: Date.now() };
+        }
+        // Keep latest 80 videos so storage stays tiny
+        const keys = Object.keys(map);
+        if (keys.length > 80) {
+            keys.sort((a, b) => (map[a].at || 0) - (map[b].at || 0)).slice(0, keys.length - 80).forEach((k) => delete map[k]);
+        }
+        try { localStorage.setItem(VIDEO_RESUME_KEY, JSON.stringify(map)); } catch (e) {}
+    }
+
+    // Auto-recover & resume any stalled video the millisecond 4G/Wi-Fi reconnects!
+    window.addEventListener("online", () => {
+        document.querySelectorAll("video.nx-official-video").forEach((v) => {
+            const rect = v.getBoundingClientRect();
+            const isVisible = rect.top < window.innerHeight * 0.85 && rect.bottom > window.innerHeight * 0.15;
+            if (!isVisible) return;
+            const rKey = v.getAttribute("data-resume-key") || "";
+            const savedT = getSavedVideoTime(rKey);
+            if (v.__nxHls) {
+                try { v.__nxHls.startLoad(); } catch (e) {}
+            }
+            if (savedT > 1 && Math.abs((v.currentTime || 0) - savedT) > 1.5) {
+                try { v.currentTime = savedT; } catch (e) {}
+            }
+            if (v.dataset.nxUserPaused !== "1" && getNexusMediaPrefs().autoPlayVideos) {
+                v.play().catch(() => {});
+            }
+        });
+    });
+
     async function attachVideoSourceSmart(video) {
         if (!video || video.dataset.nxSrcAttached === "1") return;
         const hlsUrl = video.getAttribute("data-hls-url") || "";
         const rawSrc = video.getAttribute("data-raw-src") || "";
+        const prefs = getNexusMediaPrefs();
 
         if (hlsUrl) {
             video.dataset.nxSrcAttached = "1";
@@ -63,17 +137,27 @@
             const HlsLib = await ensureHlsJsLoaded();
             if (HlsLib && HlsLib.isSupported()) {
                 try {
+                    // INSTAGRAM-STYLE ABR FAST-START:
+                    // startLevel: 0 downloads the lightest ~2s chunk FIRST so video starts instantly even on slow 4G,
+                    // then smoothly steps up to HD once network speed stabilizes!
                     const hls = new HlsLib({
-                        maxBufferLength: 3,
-                        maxMaxBufferLength: 5,
-                        startLevel: -1,
-                        capLevelToPlayerSize: true
+                        startLevel: 0,
+                        abrEwmaDefaultEstimate: prefs.lowDataMode ? 250000 : 450000,
+                        maxBufferLength: prefs.lowDataMode ? 4 : 7,
+                        maxMaxBufferLength: prefs.lowDataMode ? 8 : 16,
+                        maxBufferHole: 0.5,
+                        capLevelToPlayerSize: true,
+                        fragLoadingMaxRetry: 4,
+                        manifestLoadingMaxRetry: 3
                     });
                     hls.loadSource(hlsUrl);
                     hls.attachMedia(video);
                     video.__nxHls = hls;
                     hls.on(HlsLib.Events.ERROR, (_e, data) => {
                         if (data && data.fatal) {
+                            if (data.type === HlsLib.ErrorTypes.NETWORK_ERROR) {
+                                try { hls.startLoad(); return; } catch (e1) {}
+                            }
                             try { hls.destroy(); } catch (err) {}
                             if (rawSrc) video.src = rawSrc;
                         }
@@ -86,9 +170,11 @@
         }
         if (rawSrc && !video.getAttribute("src")) {
             video.dataset.nxSrcAttached = "1";
+            video.preload = "auto";
             video.src = rawSrc;
         } else {
             video.dataset.nxSrcAttached = "1";
+            video.preload = "auto";
         }
     }
     const backStackLayers = [];
@@ -2084,23 +2170,33 @@
                         const rawVidUrl = cachedBlob || (String(img).startsWith("NX_VIDEO_STREAM:") ? "" : img);
                         const cldMeta = deriveCloudinaryVideoAssets(rawVidUrl);
                         const finalPoster = p.posterUrl || cldMeta.posterUrl || videoPosterCache[img] || "";
-                        const previewSrc = rawVidUrl && /^https?:/i.test(rawVidUrl) && !rawVidUrl.includes("#") ? (rawVidUrl + "#t=0.15") : rawVidUrl;
+                        const resumeKey = String(p.id || rawVidUrl.slice(-48) || ("v_" + idx));
+                        const savedStartT = getSavedVideoTime(resumeKey);
+                        const previewSrc = rawVidUrl && /^https?:/i.test(rawVidUrl) && !rawVidUrl.includes("#")
+                            ? (rawVidUrl + "#t=" + (savedStartT > 1 ? savedStartT.toFixed(1) : "0.15"))
+                            : rawVidUrl;
                         const posterAttr = finalPoster ? `poster="${escAttr(finalPoster)}"` : "";
+                        const uploadPill = p._uploadingLabel
+                            ? `<div data-nx-upload-pill="${escAttr(p.id)}" style="position:absolute;top:10px;left:10px;z-index:7;background:rgba(16,185,129,0.92);color:#020617;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:900;box-shadow:0 4px 14px rgba(0,0,0,0.45);">${escAttr(p._uploadingLabel)}</div>`
+                            : "";
                         mediaHtml = `
                             <div class="nx-official-video-player" style="position:relative;width:100%;background:radial-gradient(circle at 50% 45%,#13203b 0%,#070c18 100%);border-top:1px solid #1e293b;border-bottom:1px solid #1e293b;overflow:hidden;">
-                                <video class="nx-official-video" data-stream-ref="${
+                                <video class="nx-official-video" data-resume-key="${escAttr(resumeKey)}" data-stream-ref="${
                                     String(img).startsWith("NX_VIDEO_STREAM:") ? escAttr(img) : ""
                                 }" data-hls-url="${escAttr(cldMeta.hlsUrl)}" data-raw-src="${escAttr(previewSrc)}" ${posterAttr} src="${
                                     cldMeta.hlsUrl ? "" : previewSrc
                                 }" playsinline webkit-playsinline muted preload="metadata" crossorigin="anonymous" disablepictureinpicture controlslist="nodownload noplaybackrate" style="width:100%;max-height:510px;min-height:260px;display:block;object-fit:cover;background:transparent;"></video>
+                                ${uploadPill}
+                                <span data-nx-video-resume-pill style="display:none;position:absolute;top:10px;left:10px;background:rgba(9,13,22,0.82);border:1px solid #10b981;color:#34d399;font-size:10.5px;font-weight:900;padding:3px 9px;border-radius:99px;z-index:6;pointer-events:none;backdrop-filter:blur(6px);">▶ Resumed</span>
                                 <div style="position:absolute;top:10px;right:10px;display:flex;align-items:center;gap:6px;z-index:5;">
                                     <button type="button" data-nx-video-mute aria-label="Sound toggle" style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.22);background:rgba(9,13,22,0.68);color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);cursor:pointer;">🔇</button>
                                     <button type="button" data-nx-video-fullscreen aria-label="Fullscreen" style="width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,0.22);background:rgba(9,13,22,0.68);color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);cursor:pointer;">⛶</button>
                                 </div>
-                                <span data-nx-video-time style="position:absolute;bottom:12px;right:10px;background:rgba(9,13,22,0.72);color:#e2e8f0;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:99px;z-index:5;pointer-events:none;backdrop-filter:blur(6px);display:none;">0:00</span>
+                                <span data-nx-video-time style="position:absolute;bottom:14px;right:10px;background:rgba(9,13,22,0.75);color:#e2e8f0;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:99px;z-index:5;pointer-events:none;backdrop-filter:blur(6px);display:none;">0:00</span>
+                                <div data-nx-video-buffering style="display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:6px 12px;border-radius:99px;background:rgba(9,13,22,0.84);border:1px solid #38bdf8;color:#7dd3fc;font-size:11px;font-weight:900;z-index:6;pointer-events:none;backdrop-filter:blur(6px);">⏳ Buffering...</div>
                                 <button type="button" data-nx-video-center-play aria-label="Play video" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:56px;height:56px;border:1.5px solid rgba(255,255,255,0.35);border-radius:50%;background:rgba(9,13,22,0.62);color:#fff;font-size:21px;font-weight:900;display:flex;align-items:center;justify-content:center;padding-left:3px;z-index:4;backdrop-filter:blur(8px);cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,0.5);">▶</button>
-                                <div style="position:absolute;left:0;right:0;bottom:0;height:14px;display:flex;align-items:flex-end;z-index:5;padding:0;">
-                                    <input data-nx-video-seek aria-label="Seek video" type="range" min="0" max="1000" value="0" style="width:100%;margin:0;accent-color:#10b981;height:3.5px;cursor:pointer;opacity:0.9;">
+                                <div style="position:absolute;left:0;right:0;bottom:0;height:18px;display:flex;align-items:flex-end;z-index:5;padding:0;background:linear-gradient(transparent,rgba(0,0,0,0.55));">
+                                    <input data-nx-video-seek aria-label="Seek video" type="range" min="0" max="1000" value="0" style="width:100%;margin:0;accent-color:#10b981;height:4px;cursor:pointer;opacity:0.95;">
                                 </div>
                             </div>
                         `;
@@ -2226,32 +2322,50 @@
             .join("");
     }
 
-    // INSTAGRAM-STYLE SMART 2.5s VIEWPORT PREVIEW + HLS CHUNKS (ZERO BLACK BOX + 90% LESS EGRESS!)
+    // Global Stop Hook (Called instantly when user leaves site / switches tabs / locks screen!)
+    window.__nxStopAllProfileMedia = function () {
+        if (activeSongAudio) {
+            try { activeSongAudio.pause(); } catch (e) {}
+            if (activeSongBtn) activeSongBtn.innerHTML = "▶ Play";
+        }
+        document.querySelectorAll("video.nx-official-video").forEach((v) => {
+            clearTimeout(v.__nxPreviewTimer);
+            try { if (!v.paused) v.pause(); } catch (e) {}
+        });
+    };
+
+    // INSTAGRAM-STYLE SMART PROGRESSIVE AUTO-PLAY + NEXT-1 PRE-WARMER + ZERO STALL FREEZE!
     const feedVideoViewportObserver = new IntersectionObserver((entries) => {
+        const prefs = getNexusMediaPrefs();
         entries.forEach((entry) => {
             const v = entry.target;
             if (entry.isIntersecting && entry.intersectionRatio >= 0.55) {
+                if (document.hidden) return;
                 attachVideoSourceSmart(v).then(() => {
-                    if (!v.dataset.nxUserControlled && !v.dataset.nxPreviewDone && (v.getAttribute("src") || v.__nxHls)) {
+                    // Pre-warm ONLY the very next video's metadata (Instagram Next-1 Queue!) when not in Low-Data mode
+                    if (!prefs.lowDataMode) {
+                        const allVids = Array.from(document.querySelectorAll("video.nx-official-video"));
+                        const myIdx = allVids.indexOf(v);
+                        const nextVid = myIdx >= 0 ? allVids[myIdx + 1] : null;
+                        if (nextVid && nextVid.preload === "none") nextVid.preload = "metadata";
+                    }
+                    if (!prefs.autoPlayVideos) return;
+                    if (v.dataset.nxUserPaused === "1") return;
+                    if (v.getAttribute("src") || v.__nxHls) {
                         document.querySelectorAll("video.nx-official-video").forEach((other) => {
                             if (other !== v && !other.paused) other.pause();
                         });
-                        v.muted = true;
-                        v.play().then(() => {
-                            clearTimeout(v.__nxPreviewTimer);
-                            v.__nxPreviewTimer = setTimeout(() => {
-                                if (!v.dataset.nxUserControlled && !v.paused) {
-                                    v.dataset.nxPreviewDone = "1";
-                                    v.pause();
-                                }
-                            }, 2500);
-                        }).catch(() => {
-                            // Autoplay blocked -> paint crisp first frame so video is NEVER black!
-                            try { if (v.readyState >= 1 && v.currentTime < 0.05) v.currentTime = 0.15; } catch (e) {}
+                        v.loop = true;
+                        v.muted = (v.dataset.nxUserUnmuted === "1") ? false : true;
+                        v.play().catch(() => {
+                            v.muted = true;
+                            v.play().catch(() => {
+                                try { if (v.readyState >= 1 && v.currentTime < 0.05) v.currentTime = 0.15; } catch (e) {}
+                            });
                         });
                     }
                 });
-            } else {
+            } else if (!entry.isIntersecting || entry.intersectionRatio < 0.22) {
                 clearTimeout(v.__nxPreviewTimer);
                 if (!v.paused) v.pause();
             }
@@ -2271,7 +2385,60 @@
             const timeLabel = player.querySelector("[data-nx-video-time]");
             const muteButton = player.querySelector("[data-nx-video-mute]");
             const fullscreenButton = player.querySelector("[data-nx-video-fullscreen]");
+            const bufBadge = player.querySelector("[data-nx-video-buffering]");
+            const resumePill = player.querySelector("[data-nx-video-resume-pill]");
             if (!video) return;
+            const resumeKey = video.getAttribute("data-resume-key") || "";
+            let lastSavedSec = 0;
+
+            const showTempPill = (txt) => {
+                if (!resumePill) return;
+                resumePill.textContent = txt;
+                resumePill.style.display = "inline-block";
+                clearTimeout(resumePill.__hidT);
+                resumePill.__hidT = setTimeout(() => { resumePill.style.display = "none"; }, 1800);
+            };
+
+            const restoreSavedPosition = () => {
+                if (video.dataset.nxResumedApplied === "1") return;
+                const savedT = getSavedVideoTime(resumeKey);
+                if (savedT > 1 && Number.isFinite(video.duration) && savedT < video.duration - 1.5) {
+                    video.dataset.nxResumedApplied = "1";
+                    try { video.currentTime = savedT; } catch (e) {}
+                    const mm = Math.floor(savedT / 60), ss = String(Math.floor(savedT % 60)).padStart(2, "0");
+                    showTempPill(`▶ Resumed ${mm}:${ss}`);
+                }
+            };
+
+            const showBuf = (on) => { if (bufBadge) bufBadge.style.display = on ? "block" : "none"; };
+            video.addEventListener("loadedmetadata", restoreSavedPosition);
+            video.addEventListener("waiting", () => {
+                saveVideoResumeTime(resumeKey, video.currentTime, video.duration);
+                showBuf(true);
+            });
+            video.addEventListener("stalled", () => {
+                saveVideoResumeTime(resumeKey, video.currentTime, video.duration);
+                showBuf(true);
+                if (video.__nxHls && navigator.onLine !== false) {
+                    try { video.__nxHls.startLoad(); } catch (e) {}
+                }
+            });
+            video.addEventListener("playing", () => {
+                restoreSavedPosition();
+                showBuf(false);
+            });
+            video.addEventListener("canplay", () => showBuf(false));
+            video.addEventListener("pause", () => {
+                saveVideoResumeTime(resumeKey, video.currentTime, video.duration);
+                showBuf(false);
+            });
+            video.addEventListener("timeupdate", () => {
+                if (Math.abs((video.currentTime || 0) - lastSavedSec) >= 1.0) {
+                    lastSavedSec = video.currentTime || 0;
+                    saveVideoResumeTime(resumeKey, lastSavedSec, video.duration);
+                }
+            });
+            video.addEventListener("ended", () => saveVideoResumeTime(resumeKey, video.duration || 0, video.duration || 0));
 
             feedVideoViewportObserver.observe(video);
 
@@ -2322,6 +2489,8 @@
                 video.dataset.nxUserControlled = "1";
                 await attachVideoSourceSmart(video);
                 if (video.paused) {
+                    video.dataset.nxUserPaused = "0";
+                    video.dataset.nxUserUnmuted = "1";
                     document.querySelectorAll("video.nx-official-video").forEach((other) => {
                         if (other !== video) other.pause();
                     });
@@ -2333,13 +2502,35 @@
                         try { await video.play(); } catch (e2) {}
                     }
                 } else {
+                    video.dataset.nxUserPaused = "1";
                     video.pause();
                 }
                 update();
             };
 
             playButtons.forEach((button) => button.addEventListener("click", togglePlay));
-            video.addEventListener("click", togglePlay);
+            let lastVidTapAt = 0;
+            let singleTapTimer = null;
+            video.addEventListener("click", (ev) => {
+                const now = Date.now();
+                if (now - lastVidTapAt < 290) {
+                    clearTimeout(singleTapTimer);
+                    lastVidTapAt = 0;
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    const rect = video.getBoundingClientRect();
+                    const isRight = (ev.clientX - rect.left) > (rect.width * 0.5);
+                    if (Number.isFinite(video.duration) && video.duration > 0) {
+                        const nextT = Math.max(0, Math.min(video.duration - 0.5, (video.currentTime || 0) + (isRight ? 5 : -5)));
+                        video.currentTime = nextT;
+                        saveVideoResumeTime(resumeKey, nextT, video.duration);
+                        showTempPill(isRight ? "⏩ +5s" : "⏪ -5s");
+                    }
+                    return;
+                }
+                lastVidTapAt = now;
+                singleTapTimer = setTimeout(() => togglePlay(ev), 210);
+            });
             video.addEventListener("play", update);
             video.addEventListener("pause", update);
             video.addEventListener("timeupdate", update);
@@ -2423,7 +2614,7 @@
 
                     if (entry.isIntersecting && entry.intersectionRatio >= 0.55) {
                         window.__nxAutoSongState.activeBar = bar;
-                        if (window.__nxAutoSongState.muted) return;
+                        if (document.hidden || window.__nxAutoSongState.muted || !getNexusMediaPrefs().autoPlaySongs) return;
                         if (activeSongAudio && activeSongAudio.src === sUrl && !activeSongAudio.paused) return;
                         // Stop previous post song cleanly & auto-play current post song!
                         if (activeSongAudio) {
