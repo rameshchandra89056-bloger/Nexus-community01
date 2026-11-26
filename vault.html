@@ -678,17 +678,48 @@
 
         // =========================================================================
         // 1. INSTANT 0.01s LIVE SYNC BROADCASTER (FIRE ON EVERY VAULT CHANGE!)
+        //    Matches index.html channel `nx_index_live_dual_v49` + `live_version`!
         // =========================================================================
-        async function pushInstantLiveChangeSignal(reason) {
+        async function pushInstantLiveChangeSignal(reason, deletedPostIds) {
+            const now = Date.now();
+            const delArr = Array.isArray(deletedPostIds)
+                ? deletedPostIds.map(String).filter(Boolean)
+                : (deletedPostIds ? [String(deletedPostIds)] : []);
             try {
-                await db.collection("nexus_config").doc("live_version").set({
-                    versionId: "live_" + Date.now(),
+                const payload = {
+                    versionId: "live_" + now,
                     reason: reason || "vault_update",
-                    updatedAt: Date.now()
-                }, { merge: true });
+                    wipePostCacheAt: now,
+                    updatedAt: now
+                };
+                if (delArr.length) {
+                    payload.lastDeletedPostId = delArr[delArr.length - 1];
+                    payload.deletedPostIds = firebase.firestore.FieldValue.arrayUnion(...delArr);
+                }
+                await db.collection("nexus_config").doc("live_version").set(payload, { merge: true });
             } catch (e) {}
+
+            // Broadcast on EXACT channel index.html listens on (`nx_index_live_dual_v49`)!
             if (sb && sbRealtimeChan) {
-                try { sbRealtimeChan.send({ type: "broadcast", event: "vault_sync", payload: { reason, ts: Date.now() } }); } catch (e) {}
+                try {
+                    await sbRealtimeChan.send({
+                        type: "broadcast",
+                        event: "vault_sync",
+                        payload: { reason: reason || "vault_update", deletedPostIds: delArr, ts: now }
+                    });
+                } catch (e) {}
+            }
+
+            // Immediately purge local browser caches on this device too!
+            ["nx_light_posts_v1", "nx_master_users_v1", "nx_v6_sb_posts", "nx_v6_sb_users"].forEach((k) => {
+                try { localStorage.removeItem(k); } catch (e) {}
+            });
+            if (delArr.length) {
+                try {
+                    const prev = JSON.parse(localStorage.getItem("nx_deleted_post_ids_v1") || "[]");
+                    const merged = Array.from(new Set([...(Array.isArray(prev) ? prev : []), ...delArr])).slice(-250);
+                    localStorage.setItem("nx_deleted_post_ids_v1", JSON.stringify(merged));
+                } catch (e) {}
             }
         }
 
@@ -836,13 +867,14 @@
             _sbVaultPullTimer = setTimeout(() => {
                 _sbVaultPullTimer = null;
                 pullSupabaseAllLive();
-            }, 8000);
+            }, 400);
         }
 
         function attachSupabaseRealtimeSubscriptions() {
             if (!sb || sbRealtimeChan) return;
             try {
-                sbRealtimeChan = sb.channel("nx_vault_live_master")
+                // EXACT MATCH with index.html (`nx_index_live_dual_v49`) so `vault_sync` hits every user in 0.01s!
+                sbRealtimeChan = sb.channel("nx_index_live_dual_v49")
                     .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => scheduleDebouncedSbVaultPull())
                     .on("postgres_changes", { event: "*", schema: "public", table: "posts" }, () => scheduleDebouncedSbVaultPull())
                     .subscribe();
@@ -1117,35 +1149,34 @@ Ab Nexus pehle se aur bhi fast, smooth aur secure ho gaya hai! ⚡
                 createdAt: Date.now()
             };
 
-            // 1. Write to Supabase FIRST (Primary Cloud for all new posts!)
-            let sbInserted = false;
+            // Write to BOTH Firebase & Supabase in parallel (index.html auto-deduplicates -> 0.01s guaranteed live!)
+            const pubOps = [
+                db.collection("nexus_real_posts").add(postPayload).catch(() => {})
+            ];
             if (sb) {
-                try {
-                    const { data: { session } } = await sb.auth.getSession();
-                    const founderProf = sbUsers.find((u) => ["mohiy", "mohit_01", "mohit"].includes(u.username));
-                    const authorId = (session && session.user && session.user.id) || (founderProf && founderProf.sbId) || (sbUsers[0] && sbUsers[0].sbId) || null;
-                    const { error: sbErr } = await sb.from("posts").insert({
-                        author_id: authorId,
-                        author_username: postPayload.username,
-                        author_name: postPayload.author,
-                        author_dp: postPayload.dp,
-                        bio: postPayload.bio,
-                        content: caption,
-                        image_url: pendingBroadcastMedia.ref || "",
-                        media_type: postPayload.mediaType,
-                        likes_list: ["mohiy"],
-                        comments_list: [],
-                        views_count: initLikes * 2,
-                        is_pinned: Boolean(isPinned)
-                    });
-                    if (!sbErr) sbInserted = true;
-                } catch (e) {}
+                pubOps.push((async () => {
+                    try {
+                        const { data: { session } } = await sb.auth.getSession();
+                        const founderProf = sbUsers.find((u) => ["mohiy", "mohit_01", "mohit"].includes(u.username));
+                        const authorId = (session && session.user && session.user.id) || (founderProf && founderProf.sbId) || (sbUsers[0] && sbUsers[0].sbId) || null;
+                        await sb.from("posts").insert({
+                            author_id: authorId,
+                            author_username: postPayload.username,
+                            author_name: postPayload.author,
+                            author_dp: postPayload.dp,
+                            bio: postPayload.bio,
+                            content: caption,
+                            image_url: pendingBroadcastMedia.ref || "",
+                            media_type: postPayload.mediaType,
+                            likes_list: ["mohiy"],
+                            comments_list: [],
+                            views_count: initLikes * 2,
+                            is_pinned: Boolean(isPinned)
+                        });
+                    } catch (e) {}
+                })());
             }
-
-            // 2. Also mirror to Firebase ONLY if Supabase insert was blocked by RLS (or for legacy backup)
-            if (!sbInserted) {
-                await db.collection("nexus_real_posts").add(postPayload).catch(() => {});
-            }
+            await Promise.allSettled(pubOps);
 
             await pushInstantLiveChangeSignal("official_post_published");
             document.getElementById("v-post-caption").value = "";
@@ -1629,7 +1660,8 @@ Ab Nexus pehle se aur bhi fast, smooth aur secure ho gaya hai! ⚡
                 b.onclick = async () => {
                     if (!confirm("Delete message permanently?")) return;
                     await db.collection(b.dataset.col).doc(b.dataset.id).delete().catch(() => {});
-                    vToast("🗑️ Message Deleted!");
+                    await pushInstantLiveChangeSignal("dm_deleted");
+                    vToast("🗑️ Message Permanently Deleted Live!");
                 };
             });
             if (autoScroll) stage.scrollTop = stage.scrollHeight;
@@ -1686,14 +1718,75 @@ Ab Nexus pehle se aur bhi fast, smooth aur secure ho gaya hai! ⚡
             box.querySelectorAll("[data-pd-idx]").forEach((b) => {
                 b.onclick = async () => {
                     const p = list[Number(b.dataset.pdIdx)]; if (!p) return;
-                    if (!confirm(`🗑️ Delete post by @${p.username} permanently from BOTH Clouds?`)) return;
-                    if (p.fbId) await db.collection("nexus_real_posts").doc(p.fbId).delete().catch(() => {});
-                    if (sb && p.sbRawId) {
-                        const { error } = await sb.from("posts").delete().eq("id", p.sbRawId);
-                        if (error) return alert("⚠️ Supabase RLS ne delete roka! Tab ⚙️ Cloud mein jaakar Founder Sign-In karein ya SQL Policy run karein.\nError: " + error.message);
+                    if (!confirm(`🗑️ PERMANENT DELETE post by @${p.username} from Firebase, Supabase, Video Chunks & ALL live devices?`)) return;
+
+                    const deletedIds = [];
+                    if (p.id) deletedIds.push(String(p.id));
+                    if (p.fbId) deletedIds.push(String(p.fbId));
+                    if (p.sbRawId) deletedIds.push("sb_" + p.sbRawId);
+
+                    const ops = [];
+                    // A. Delete exact Firebase doc + any duplicate Firebase copies matching author + caption/media
+                    if (p.fbId) ops.push(db.collection("nexus_real_posts").doc(p.fbId).delete().catch(() => {}));
+                    const pU = norm(p.username);
+                    const pTxt = String(p.content || p.text || "").trim();
+                    const pImg = String(p.image || p.videoUrl || "").trim();
+                    if (pU) {
+                        ops.push((async () => {
+                            try {
+                                const snap = await db.collection("nexus_real_posts").where("username", "==", pU).get();
+                                const dups = [];
+                                snap.forEach((doc) => {
+                                    const d = doc.data() || {};
+                                    const dTxt = String(d.content || d.text || "").trim();
+                                    const dImg = String(d.image || d.videoUrl || "").trim();
+                                    if (doc.id === p.fbId || (dTxt === pTxt && (dImg === pImg || !pImg))) {
+                                        deletedIds.push(doc.id);
+                                        dups.push(doc.ref.delete().catch(() => {}));
+                                    }
+                                });
+                                await Promise.allSettled(dups);
+                            } catch (e) {}
+                        })());
                     }
-                    await pushInstantLiveChangeSignal("post_deleted");
-                    vToast("🗑️ Post Permanently Deleted in 0.01s!");
+
+                    // B. Delete associated Video Chunks from `nexus_media_chunks`
+                    if (pImg.startsWith("NX_VIDEO_STREAM:")) {
+                        const parts = pImg.replace("NX_VIDEO_STREAM:", "").split(":");
+                        const sid = parts[0], total = parseInt(parts[1] || "0", 10);
+                        for (let i = 0; i < total; i++) {
+                            ops.push(db.collection("nexus_media_chunks").doc(`${sid}_${i}`).delete().catch(() => {}));
+                        }
+                    }
+
+                    // C. Delete from Supabase `posts` (with `.select()` to catch silent RLS 0-row blocks!)
+                    let sbBlockedMsg = "";
+                    if (sb && p.sbRawId) {
+                        ops.push((async () => {
+                            try {
+                                const res = await sb.from("posts").delete().eq("id", p.sbRawId).select("id");
+                                if (res.error) sbBlockedMsg = res.error.message;
+                                else if (!Array.isArray(res.data) || res.data.length === 0) sbBlockedMsg = "RLS silently blocked 0 rows";
+                            } catch (e) { sbBlockedMsg = e.message || "Delete error"; }
+                        })());
+                    } else if (sb && pU && pTxt) {
+                        ops.push(sb.from("posts").delete().eq("author_username", pU).eq("content", pTxt).catch(() => {}));
+                    }
+
+                    await Promise.allSettled(ops);
+
+                    // Instant 0ms local UI removal + 0.01s global live cache wipe on every user's phone!
+                    const delSet = new Set(deletedIds);
+                    fbPosts = fbPosts.filter((x) => x && !delSet.has(String(x.id)));
+                    sbPosts = sbPosts.filter((x) => x && !delSet.has(String(x.id)) && String(x.sbRawId) !== String(p.sbRawId));
+                    mergeAndRenderAllClouds();
+                    await pushInstantLiveChangeSignal("post_deleted", deletedIds);
+
+                    if (sbBlockedMsg) {
+                        alert(`⚠️ Firebase & Live Cache se post permanently gayab ho gayi, lekin Supabase RLS ne SQL row delete roka (${sbBlockedMsg}).\n\nFix: ⚙️ Cloud tab mein Founder Sign-In karein ya 1-Click SQL Policy run karein.`);
+                    } else {
+                        vToast("🔥 Post Permanently Deleted from Firebase + Supabase + All Devices!");
+                    }
                     pullSupabaseAllLive();
                 };
             });
@@ -1842,34 +1935,109 @@ Ab Nexus pehle se aur bhi fast, smooth aur secure ho gaya hai! ⚡
                 };
             });
 
-            // PERMANENT DUAL-CLOUD PROFILE + POSTS + SESSIONS DELETION!
+            // NUCLEAR PERMANENT DUAL-CLOUD PROFILE + POSTS + DMs + FOLLOWERS DELETION!
             box.querySelectorAll("[data-u-del]").forEach((b) => {
                 b.onclick = async () => {
                     const u = filtered[Number(b.dataset.uDel)]; if (!u) return;
-                    if (!confirm(`⚠️ PERMANENT DELETE @${u.username}?\n\nIs user ki Supabase profile, Firebase account, active sessions aur saari posts hamesha ke liye delete ho jayengi!`)) return;
+                    const uKey = norm(u.username);
+                    if (!confirm(`⚠️ NUCLEAR PERMANENT DELETE @${uKey}?\n\nHamesha ke liye wipe hoga:\n• Firebase & Supabase Profile\n• User ki SAARI Posts & Video Chunks\n• User ke SAARE 1:1 DMs & Chat Media\n• Sabhi Followers/Following lists se @${uKey}\n\nConfirm?`)) return;
 
+                    vToast(`⏳ Permanently wiping @${uKey} everywhere...`);
                     let sbErrMsg = "";
-                    // 1. Delete from Supabase (posts + profile safely with try/catch — zero 404/TypeError!)
-                    if (sb && u.sbId) {
-                        try { await sb.from("posts").delete().eq("author_id", u.sbId); } catch (e) {}
-                        try {
-                            const { error } = await sb.from("profiles").delete().eq("id", u.sbId);
-                            if (error) sbErrMsg = error.message;
-                        } catch (e) { sbErrMsg = e.message || "Delete failed"; }
-                    }
-                    // 2. Delete from Firebase (account + user posts)
-                    await db.collection("nexus_accounts").doc(u.username).delete().catch(() => {});
-                    try {
-                        const pSnap = await db.collection("nexus_real_posts").where("username", "==", u.username).get();
-                        const delOps = []; pSnap.forEach((d) => delOps.push(d.ref.delete()));
-                        await Promise.allSettled(delOps);
-                    } catch (e) {}
+                    const deletedPostIds = [];
+                    const ops = [];
 
-                    if (sbErrMsg) {
-                        alert(`⚠️ Firebase se delete ho gaya, lekin Supabase RLS ne profile delete roka!\n\nFix (30 second): ⚙️ Cloud tab mein jaakar "📋 Copy Founder SQL Policy" dabaiye aur Supabase SQL Editor mein 1 baar RUN kar dijiye, ya Founder Sign-In karein.\n\nError: ${sbErrMsg}`);
+                    // 1. Delete from Supabase (posts by author_id & author_username + profile hard-delete + is_banned failsafe!)
+                    if (sb) {
+                        if (u.sbId) ops.push(sb.from("posts").delete().eq("author_id", u.sbId).catch(() => {}));
+                        ops.push(sb.from("posts").delete().eq("author_username", uKey).catch(() => {}));
+                        ops.push((async () => {
+                            try {
+                                const delQ = u.sbId
+                                    ? sb.from("profiles").delete().eq("id", u.sbId).select("id")
+                                    : sb.from("profiles").delete().eq("username", uKey).select("id");
+                                const res = await delQ;
+                                if (res.error || !Array.isArray(res.data) || res.data.length === 0) {
+                                    sbErrMsg = (res.error && res.error.message) || "RLS silently blocked delete (0 rows)";
+                                    // Instant failsafe: set is_banned=true so index.html hides this profile immediately!
+                                    if (u.sbId) await sb.from("profiles").update({ is_banned: true }).eq("id", u.sbId).catch(() => {});
+                                    else await sb.from("profiles").update({ is_banned: true }).eq("username", uKey).catch(() => {});
+                                }
+                            } catch (e) { sbErrMsg = e.message || "Delete failed"; }
+                        })());
+                    }
+
+                    // 2. Delete ALL matching Firebase account docs (by doc ID AND by username field!)
+                    ops.push(db.collection("nexus_accounts").doc(uKey).delete().catch(() => {}));
+                    ops.push((async () => {
+                        try {
+                            const accS = await db.collection("nexus_accounts").where("username", "==", uKey).get();
+                            await Promise.allSettled(accS.docs.map((d) => d.ref.delete()));
+                        } catch (e) {}
+                    })());
+
+                    // 3. Delete ALL Firebase posts + video chunks by this user (prevents profile resurrection!)
+                    ops.push((async () => {
+                        try {
+                            const pSnap = await db.collection("nexus_real_posts").where("username", "==", uKey).get();
+                            const delOps = [];
+                            pSnap.forEach((d) => {
+                                deletedPostIds.push(d.id);
+                                const img = String((d.data() && d.data().image) || "");
+                                if (img.startsWith("NX_VIDEO_STREAM:")) {
+                                    const pts = img.replace("NX_VIDEO_STREAM:", "").split(":");
+                                    for (let i = 0; i < parseInt(pts[1] || "0", 10); i++) {
+                                        delOps.push(db.collection("nexus_media_chunks").doc(`${pts[0]}_${i}`).delete().catch(() => {}));
+                                    }
+                                }
+                                delOps.push(d.ref.delete().catch(() => {}));
+                            });
+                            await Promise.allSettled(delOps);
+                        } catch (e) {}
+                    })());
+
+                    // 4. Delete ALL 1:1 DMs & Chat Media involving this user
+                    ops.push((async () => {
+                        try {
+                            const [s1, s2, s3] = await Promise.all([
+                                db.collection("nexus_private_dms").where("fromUser", "==", uKey).get(),
+                                db.collection("nexus_private_dms").where("toUser", "==", uKey).get(),
+                                db.collection("nexus_chat_media_v6").where("sender", "==", uKey).get()
+                            ]);
+                            const dmDels = [];
+                            [s1, s2, s3].forEach((sn) => sn.forEach((d) => dmDels.push(d.ref.delete().catch(() => {}))));
+                            await Promise.allSettled(dmDels);
+                        } catch (e) {}
+                    })());
+
+                    // 5. Remove @uKey from every other user's followersList & followingList in Firebase
+                    ops.push((async () => {
+                        try {
+                            const [f1, f2] = await Promise.all([
+                                db.collection("nexus_accounts").where("followersList", "array-contains", uKey).get(),
+                                db.collection("nexus_accounts").where("followingList", "array-contains", uKey).get()
+                            ]);
+                            const fOps = [];
+                            f1.forEach((d) => fOps.push(d.ref.update({ followersList: firebase.firestore.FieldValue.arrayRemove(uKey) }).catch(() => {})));
+                            f2.forEach((d) => fOps.push(d.ref.update({ followingList: firebase.firestore.FieldValue.arrayRemove(uKey) }).catch(() => {})));
+                            await Promise.allSettled(fOps);
+                        } catch (e) {}
+                    })());
+
+                    await Promise.allSettled(ops);
+
+                    // Instant 0ms local UI removal + 0.01s broadcast to ALL connected devices!
+                    fbUsers = fbUsers.filter((x) => norm(x.username) !== uKey);
+                    sbUsers = sbUsers.filter((x) => norm(x.username) !== uKey);
+                    fbPosts = fbPosts.filter((x) => norm(x.username) !== uKey);
+                    sbPosts = sbPosts.filter((x) => norm(x.username) !== uKey);
+                    mergeAndRenderAllClouds();
+                    await pushInstantLiveChangeSignal("user_deleted_" + uKey, deletedPostIds);
+
+                    if (sbErrMsg && u._inSupabase) {
+                        alert(`✅ Firebase, Posts, DMs & Live Website se @${uKey} delete ho gaya!\n\n⚠️ Supabase SQL row delete ke liye ⚙️ Cloud tab mein Founder Sign-In karein ya "📋 Copy Founder SQL Policy" 1 baar SQL Editor mein run kar dein.\n(${sbErrMsg})`);
                     } else {
-                        await pushInstantLiveChangeSignal("user_deleted_" + u.username);
-                        vToast(`🗑️ @${u.username} Permanently Deleted from Both Clouds!`);
+                        vToast(`🔥 @${uKey} + All Posts & DMs Permanently Deleted Everywhere!`);
                     }
                     pullSupabaseAllLive();
                 };
