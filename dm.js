@@ -28,26 +28,33 @@
     function patchLiveMessageDOM(container, html) {
         if (!container) return;
         const oldTop = container.scrollTop;
-        const wasNearBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 96;
+        const wasNearBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 120;
         const temp = document.createElement('div');
         temp.innerHTML = html;
         const incoming = Array.from(temp.children);
         const existingByKey = new Map();
+        const mediaBubbles = [];
 
         Array.from(container.children).forEach(node => {
+            if (node.classList.contains('nx-ig-media-bubble')) {
+                mediaBubbles.push(node);
+                return;
+            }
             const key = node.getAttribute('data-render-key') ||
                 (node.getAttribute('data-message-id') ? `message:${node.getAttribute('data-message-id')}` : '');
             if (key) existingByKey.set(key, node);
         });
 
-        const finalNodes = [];
+        const finalDmNodes = [];
         incoming.forEach(nextNode => {
             const key = nextNode.getAttribute('data-render-key') ||
                 (nextNode.getAttribute('data-message-id') ? `message:${nextNode.getAttribute('data-message-id')}` : '');
             const oldNode = key ? existingByKey.get(key) : null;
             let useNode = nextNode;
 
-            if (oldNode && oldNode.outerHTML === nextNode.outerHTML) {
+            const oldSig = oldNode ? oldNode.getAttribute('data-sig') : null;
+            const newSig = nextNode.getAttribute('data-sig');
+            if (oldNode && ((oldSig && newSig && oldSig === newSig) || (!oldSig && !newSig && oldNode.outerHTML === nextNode.outerHTML))) {
                 useNode = oldNode;
             } else if (!oldNode && key && key.startsWith('message:')) {
                 useNode.classList.add('nx-live-message-enter');
@@ -55,17 +62,34 @@
                     useNode.classList.remove('nx-live-message-enter');
                 }, { once: true });
             }
-            finalNodes.push(useNode);
+            finalDmNodes.push(useNode);
         });
 
-        finalNodes.forEach((node, index) => {
+        // EXACT CHRONOLOGICAL MERGE: Sort DM rows + any legacy .nx-ig-media-bubble strictly by millisecond timestamp!
+        const combined = [
+            ...finalDmNodes.map((node, idx) => ({
+                node,
+                ts: Number(node.getAttribute('data-msg-ts') || 0),
+                order: idx
+            })),
+            ...mediaBubbles.map((node, idx) => ({
+                node,
+                ts: Number(node.dataset.msgTs || 0),
+                order: 10000 + idx
+            }))
+        ];
+        if (mediaBubbles.length > 0) {
+            combined.sort((a, b) => (a.ts - b.ts) || (a.order - b.order));
+        }
+
+        const mergedNodes = combined.map(x => x.node);
+        mergedNodes.forEach((node, index) => {
             const current = container.children[index];
             if (current !== node) container.insertBefore(node, current || null);
         });
-        const keep = new Set(finalNodes);
+        const keep = new Set(mergedNodes);
         Array.from(container.children).forEach(node => {
-            // Preserve chat media bubbles (.nx-ig-media-bubble) so they never flash or jump on text/reaction updates!
-            if (!keep.has(node) && !node.classList.contains('nx-ig-media-bubble')) node.remove();
+            if (!keep.has(node)) node.remove();
         });
 
         if (wasNearBottom) container.scrollTop = container.scrollHeight;
@@ -638,14 +662,16 @@
     function pingDmTyping(roomKey) {
         let me = Nexus.getCurrentUser();
         if (!me || !Nexus.db) return;
+        const myNorm = normalizeUname(me.username);
+        if (activeDmPartner && normalizeUname(activeDmPartner.username) === myNorm) return; // Never ping typing in Saved Messages!
         const prefs = getDmPrivacyPrefs();
         if (roomKey && prefs.typingIndicator === false) return;
-        Nexus.db.collection("nexus_accounts").doc(normalizeUname(me.username)).set({
+        Nexus.db.collection("nexus_accounts").doc(myNorm).set({
             isOnlineNow: true,
             lastOnline: Date.now(),
             dmTypingRoom: roomKey || '',
             dmTypingAt: Date.now()
-        }, { merge: true });
+        }, { merge: true }).catch(() => {});
     }
 
     window.NexusDM = {
@@ -830,6 +856,8 @@
                     <button onclick="NexusDM.closeDM()" style="background:#2a3942; border:none; color:#e9edef; width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:14px; flex-shrink:0;">✕</button>
                 </div>
 
+                <div id="nx-dm-pinned-bar" style="display:none; padding:7px 12px; background:#15202b; border-bottom:1px solid #00a884; align-items:center; justify-content:space-between; gap:8px; font-size:12px; color:#e9edef; flex-shrink:0; cursor:pointer;"></div>
+
                 <div id="nx-dm-msgs-box" style="flex:1 1 0%; min-height:0; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; background:#0b141a; position:relative;"></div>
 
                 <div id="nx-dm-typing-bar" style="display:none; padding:5px 14px; background:#111b21; font-size:11.5px; color:#00a884; font-weight:700; align-items:center; gap:6px; flex-shrink:0;">
@@ -932,7 +960,7 @@
                         else localStorage.removeItem(dmDraftKey(cleanPartnerUname));
                     } catch (e) {}
                     let now = Date.now();
-                    if (now - lastDmTypingPing > 2000) {
+                    if (cleanPartnerUname !== normalizeUname(me.username) && now - lastDmTypingPing > 4000) {
                         lastDmTypingPing = now;
                         pingDmTyping(getRoomKey(me.username, cleanPartnerUname));
                     }
@@ -980,11 +1008,31 @@
             const hiddenForMe = dmGetHiddenForMe(myUname);
             let previousDateKey = '';
 
+            // Update Pinned Message Bar at top of DM if any message is pinned!
+            const pinBar = document.getElementById('nx-dm-pinned-bar');
+            if (pinBar) {
+                const pinnedMsg = [...list].reverse().find(x => x && x.pinned && !x.deleted);
+                if (pinnedMsg) {
+                    const pSnip = pinnedMsg.text || ((pinnedMsg.imgUrl || (pinnedMsg.imgUrls && pinnedMsg.imgUrls.length)) ? '📷 Pinned Photo' : '✨ Pinned Message');
+                    pinBar.innerHTML = `
+                        <div onclick="const el=document.querySelector('[data-message-id=\'${dmEscapeHTML(pinnedMsg.id)}\']'); if(el) el.scrollIntoView({behavior:'smooth',block:'center'});" style="min-width:0; flex:1; display:flex; align-items:center; gap:7px;">
+                            <span style="color:#00a884; font-weight:900;">📌</span>
+                            <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:700;">${dmEscapeHTML(pSnip.slice(0, 70))}</span>
+                        </div>
+                        <button type="button" onclick="event.stopPropagation(); NexusDM.togglePinDM('${dmEscapeHTML(pinnedMsg.id)}')" style="background:#202c33; border:none; color:#94a3b8; border-radius:8px; padding:3px 7px; font-size:10.5px; font-weight:800; cursor:pointer; flex-shrink:0;">Unpin ✕</button>
+                    `;
+                    pinBar.style.display = 'flex';
+                } else {
+                    pinBar.style.display = 'none';
+                }
+            }
+
             const renderedHTML = list.map(m => {
                 const msgId = String(m.id || '');
+                const msgTs = dmMessageTimestamp(m) || Date.now();
                 const dateInfo = dmDateGroupInfo(dmMessageDate(m));
                 const dateDivider = dateInfo.label && dateInfo.key !== previousDateKey
-                    ? `<div class="nx-dm-date-divider" data-render-key="date:${dateInfo.key}" data-date-key="${dateInfo.key}">${dateInfo.label}</div>`
+                    ? `<div class="nx-dm-date-divider" data-render-key="date:${dateInfo.key}" data-date-key="${dateInfo.key}" data-msg-ts="${msgTs - 1}" data-sig="date:${dateInfo.key}">${dateInfo.label}</div>`
                     : '';
                 if (dateInfo.key) previousDateKey = dateInfo.key;
 
@@ -993,36 +1041,47 @@
                 const isHiddenForMe = !isDeleted && hiddenForMe.has(msgId);
 
                 if (isHiddenForMe) {
-                    return `${dateDivider}<div class="nx-dm-local-deleted" data-message-id="${dmEscapeHTML(msgId)}" data-render-key="message:${dmEscapeHTML(msgId)}">You deleted this message</div>`;
+                    return `${dateDivider}<div class="nx-dm-local-deleted" data-message-id="${dmEscapeHTML(msgId)}" data-render-key="message:${dmEscapeHTML(msgId)}" data-msg-ts="${msgTs}" data-sig="hid:${dmEscapeHTML(msgId)}">You deleted this message</div>`;
                 }
 
                 const formattedTxt = isDeleted ? '' : formatDmTextLinks(m.text || '');
-                const likes = Array.isArray(m.likes) ? m.likes : [];
-                const reactionEmoji = m.reaction || '❤️';
+                // Support BOTH standard likes/reaction AND legacy reactions object!
+                let likes = Array.isArray(m.likes) ? m.likes : [];
+                let reactionEmoji = m.reaction || '❤️';
+                if (likes.length === 0 && m.reactions && typeof m.reactions === 'object') {
+                    const rKeys = Object.keys(m.reactions).filter(k => m.reactions[k]);
+                    if (rKeys.length) {
+                        likes = rKeys;
+                        reactionEmoji = String(m.reactions[rKeys[rKeys.length - 1]] || '❤️');
+                    }
+                }
                 const replyHTML = (!isDeleted && m.replyTo)
                     ? `<div style="background:rgba(0,0,0,0.28); border-left:3px solid #00a884; padding:4px 8px; border-radius:6px; font-size:11.5px; color:#cbd5e1; margin-bottom:4px;"><b>${dmEscapeHTML(m.replyTo.sender || '')}:</b> ${dmEscapeHTML(m.replyTo.text || '')}</div>`
                     : '';
+                const pinBadge = (!isDeleted && m.pinned) ? `<span style="font-size:10px; color:#fbbf24; margin-right:4px;">📌</span>` : '';
                 const tickHTML = isMine
                     ? `<span style="color:${m.seen ? '#53bdeb' : '#8696a0'}; font-weight:900; margin-left:3px; font-size:11px;">${m.seen ? '✓✓' : '✓'}</span>`
                     : '';
                 const safeId = dmEscapeHTML(msgId);
                 const reactionPeople = likes.map(name => '@' + String(name)).join(', ');
                 const reactionBadge = likes.length > 0
-                    ? `<span onclick="event.stopPropagation(); Nexus.toast('${dmEscapeHTML(reactionEmoji)} Reacted by: ${dmEscapeHTML(reactionPeople)}')" style="background:#182229; border:1px solid #2a3942; padding:1px 6px; border-radius:10px; font-size:11px; margin-right:5px; cursor:pointer;">${dmEscapeHTML(reactionEmoji)} ${likes.length}</span>`
+                    ? `<span onclick="event.stopPropagation(); Nexus.toast('${dmEscapeHTML(reactionEmoji)} Reacted by: ${dmEscapeHTML(reactionPeople)}')" style="background:#182229; border:1px solid #2a3942; padding:1px 7px; border-radius:10px; font-size:11.5px; margin-right:5px; cursor:pointer;">${dmEscapeHTML(reactionEmoji)} ${likes.length}</span>`
                     : '';
 
                 const menuButton = !isDeleted
                     ? `<button type="button" class="nx-dm-message-menu-btn" data-nx-dm-menu="${safeId}" aria-label="Message options" title="Message options" style="${isMine ? 'right:6px;' : 'left:6px;'}">⋯</button>`
                     : '';
 
+                const msgSig = `${msgId}|${isDeleted?1:0}|${m.seen?1:0}|${m.edited?1:0}|${m.pinned?1:0}|${reactionEmoji}:${likes.length}|${(m.text||'').length}|${(m.imgUrls?m.imgUrls.length:(m.imgUrl?1:0))}`;
+
                 if (!isDeleted && m.sticker && m.sticker.url && !formattedTxt) {
                     return `${dateDivider}
-                        <div class="nx-dm-bubble-anim" data-message-id="${safeId}" data-render-key="message:${safeId}" style="position:relative; width:100%; display:flex; flex-direction:column; align-items:${isMine ? 'flex-end' : 'flex-start'};">
+                        <div class="nx-dm-bubble-anim" data-message-id="${safeId}" data-render-key="message:${safeId}" data-msg-ts="${msgTs}" data-sig="${dmEscapeHTML(msgSig)}" style="position:relative; width:100%; display:flex; flex-direction:column; align-items:${isMine ? 'flex-end' : 'flex-start'};">
                             <div onclick="NexusDM.openMsgActionMenu('${safeId}')" style="cursor:pointer; user-select:none; display:inline-flex; flex-direction:column; align-items:${isMine ? 'flex-end' : 'flex-start'}; padding-bottom:23px;">
                                 ${replyHTML}
                                 <img src="${dmEscapeHTML(m.sticker.url)}" loading="lazy" decoding="async" style="width:112px; height:112px; object-fit:contain; display:block;">
                                 <div style="background:#182229; border:1px solid #233138; padding:2px 8px; border-radius:10px; font-size:10px; color:#cbd5e1; margin-top:2px; display:inline-flex; align-items:center; gap:3px;">
-                                    ${reactionBadge}
+                                    ${pinBadge}${reactionBadge}
                                     <span>${dmEscapeHTML(m.time || '')}</span>
                                     ${tickHTML}
                                 </div>
@@ -1035,26 +1094,25 @@
                 const messageImages = Array.isArray(m.imgUrls) && m.imgUrls.length
                     ? m.imgUrls.filter(url => typeof url === 'string' && (/^data:image\//i.test(url) || /^https?:\/\//i.test(url)))
                     : (typeof m.imgUrl === 'string' && m.imgUrl ? [m.imgUrl] : []);
-                const imgHTML = (!isDeleted && messageImages.length)
-                    ? `<div data-nx-dm-gallery="1" style="display:grid; grid-auto-flow:column; grid-auto-columns:180px; grid-template-rows:180px; gap:7px; width:min(100%, 260px); max-width:100%; overflow-x:auto; overflow-y:hidden; padding:4px 1px 8px; margin-bottom:4px;">${messageImages.map(url => `<img src="${url}" onclick="event.stopPropagation(); NexusDM.openPhotoPreview(this.src)" loading="lazy" style="display:block; width:180px; height:180px; object-fit:contain; border-radius:9px; background:#111b21; cursor:zoom-in;">`).join('')}</div>`
+                const imgInsideHTML = (!isDeleted && messageImages.length)
+                    ? `<div data-nx-dm-gallery="1" style="display:flex; gap:6px; overflow-x:auto; max-width:240px; margin-bottom:5px;">${messageImages.map(url => `<img src="${url}" onclick="event.stopPropagation(); NexusDM.openPhotoPreview(this.src)" loading="lazy" style="display:block; width:${messageImages.length === 1 ? '220px' : '165px'}; max-height:240px; object-fit:cover; border-radius:10px; background:#111b21; cursor:zoom-in; flex-shrink:0;">`).join('')}</div>`
                     : '';
 
                 const messageBodyHTML = isDeleted
                     ? dmDeletedInfo(m)
-                    : `${replyHTML}
+                    : `${replyHTML}${imgInsideHTML}
                         <div style="display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:8px; padding-right:25px;">
                             ${formattedTxt ? `<span class="nx-dm-msg-text" style="padding-right:4px;">${formattedTxt}</span>` : '<span></span>'}
                             <span style="font-size:10.5px; color:rgba(233,237,239,0.72); white-space:nowrap; margin-left:auto; display:inline-flex; align-items:center;">
-                                ${reactionBadge}
+                                ${pinBadge}${reactionBadge}
                                 <span>${dmEscapeHTML(m.time || '')} ${m.edited ? '(edited)' : ''}</span>
                                 ${tickHTML}
                             </span>
                         </div>`;
 
                 return `${dateDivider}
-                    <div class="nx-dm-bubble-anim" data-message-id="${safeId}" data-render-key="message:${safeId}" style="position:relative; width:100%; display:flex; flex-direction:column; align-items:${isMine ? 'flex-end' : 'flex-start'};">
-                        ${imgHTML}
-                        <div ${isDeleted ? '' : `onclick="NexusDM.openMsgActionMenu('${safeId}')"`} style="max-width:82%; min-width:95px; background:${isMine ? '#005c4b' : '#202c33'}; color:#e9edef; padding:7px 11px; padding-bottom:${isDeleted ? '7px' : '25px'}; border-radius:12px; border-${isMine ? 'top-right' : 'top-left'}-radius:2px; font-size:14.5px; line-height:1.38; word-break:break-word; cursor:${isDeleted ? 'default' : 'pointer'}; user-select:none; position:relative;">
+                    <div class="nx-dm-bubble-anim" data-message-id="${safeId}" data-render-key="message:${safeId}" data-msg-ts="${msgTs}" data-sig="${dmEscapeHTML(msgSig)}" style="position:relative; width:100%; display:flex; flex-direction:column; align-items:${isMine ? 'flex-end' : 'flex-start'};">
+                        <div ${isDeleted ? '' : `onclick="NexusDM.openMsgActionMenu('${safeId}')"`} style="max-width:82%; min-width:95px; background:${isMine ? '#005c4b' : '#202c33'}; color:#e9edef; padding:7px 10px; padding-bottom:${isDeleted ? '7px' : '25px'}; border-radius:14px; border-${isMine ? 'top-right' : 'top-left'}-radius:3px; font-size:14.5px; line-height:1.38; word-break:break-word; cursor:${isDeleted ? 'default' : 'pointer'}; user-select:none; position:relative;">
                             ${messageBodyHTML}
                         </div>
                         ${menuButton}
@@ -1068,48 +1126,65 @@
         openMsgActionMenu: function(msgId) {
             ensureMessageActionSheet();
             let me = Nexus.getCurrentUser();
-            let m = dmMessagesCache.find(x => x.id === msgId);
+            let m = dmMessagesCache.find(x => String(x.id) === String(msgId));
             if (!m || !me || m.deleted) return;
 
             let isMine = normalizeUname(m.fromUser) === normalizeUname(me.username);
             const modal = document.getElementById('nx-msg-action-modal');
             const emojis = ['❤️', '😂', '🔥', '👍', '🙏', '💯'];
+            const extraEmojis = ['😍', '😮', '😢', '😡', '👏', '🎉', '🤝', '👀', '💀', '🫡'];
+            const firstImg = (Array.isArray(m.imgUrls) && m.imgUrls[0]) || m.imgUrl || '';
+            const safeMid = dmEscapeHTML(m.id);
 
             modal.innerHTML = `
                 <div class="nx-msg-action-sheet">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                         <span style="font-size:11.5px; color:#8696a0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:240px;">
-                            "${dmEscapeHTML(m.text || (m.sticker ? '✨ Sticker' : '📷 Photo'))}"
+                            ${dmEscapeHTML(m.fromName || m.fromUser || 'User')}: "${dmEscapeHTML(m.text || (m.sticker ? '✨ Sticker' : '📷 Photo'))}"
                         </span>
                         <button onclick="document.getElementById('nx-msg-action-modal').style.display='none'" style="background:none; border:none; color:#94a3b8; font-size:16px; cursor:pointer;">✕</button>
                     </div>
 
                     <div class="nx-emoji-bar">
-                        ${emojis.map(em => `<button type="button" class="nx-emoji-btn" onclick="NexusDM.reactToDM('${m.id}', '${em}')">${em}</button>`).join('')}
+                        ${emojis.map(em => `<button type="button" class="nx-emoji-btn" onclick="NexusDM.reactToDM('${safeMid}', '${em}')">${em}</button>`).join('')}
+                        <button type="button" class="nx-emoji-btn" style="font-size:18px; background:#202c33; border-radius:50%; width:30px; height:30px; color:#34d399; font-weight:900;" onclick="const x=document.getElementById('nx-more-emojis-row'); if(x) x.style.display=x.style.display==='none'?'flex':'none';">＋</button>
+                    </div>
+                    <div id="nx-more-emojis-row" style="display:none; flex-wrap:wrap; justify-content:space-between; gap:4px; background:#111b21; padding:7px 10px; border-radius:16px; margin-bottom:10px; border:1px solid #233138;">
+                        ${extraEmojis.map(em => `<button type="button" class="nx-emoji-btn" style="font-size:20px;" onclick="NexusDM.reactToDM('${safeMid}', '${em}')">${em}</button>`).join('')}
                     </div>
 
-                    <button type="button" class="nx-menu-opt-btn" onclick="NexusDM.triggerMenuAction('reply', '${m.id}')">
+                    <button type="button" class="nx-menu-opt-btn" onclick="NexusDM.triggerMenuAction('reply', '${safeMid}')">
                         <span>↩️</span> <span>Reply to Message</span>
                     </button>
 
+                    <button type="button" class="nx-menu-opt-btn" style="color:#fbbf24;" onclick="NexusDM.triggerMenuAction('pin', '${safeMid}')">
+                        <span>📌</span> <span>${m.pinned ? 'Unpin Message' : 'Pin Message to Top'}</span>
+                    </button>
+
                     ${m.text ? `
-                        <button type="button" class="nx-menu-opt-btn" onclick="NexusDM.triggerMenuAction('copy', '${m.id}')">
+                        <button type="button" class="nx-menu-opt-btn" onclick="NexusDM.triggerMenuAction('copy', '${safeMid}')">
                             <span>📋</span> <span>Copy Message Text</span>
                         </button>
                     ` : ''}
 
+                    ${firstImg ? `
+                        <a href="${dmEscapeHTML(firstImg)}" download="Nexus_Photo_${Date.now()}.jpg" onclick="document.getElementById('nx-msg-action-modal').style.display='none'" class="nx-menu-opt-btn" style="color:#38bdf8; text-decoration:none;">
+                            <span>⬇️</span> <span>View / Save Photo</span>
+                        </a>
+                    ` : ''}
+
                     ${isMine && m.text ? `
-                        <button type="button" class="nx-menu-opt-btn" style="color:#38bdf8;" onclick="NexusDM.triggerMenuAction('edit', '${m.id}')">
+                        <button type="button" class="nx-menu-opt-btn" style="color:#38bdf8;" onclick="NexusDM.triggerMenuAction('edit', '${safeMid}')">
                             <span>✏️</span> <span>Edit Message</span>
                         </button>
                     ` : ''}
 
-                    <button type="button" class="nx-menu-opt-btn" style="color:#cbd5e1;" onclick="NexusDM.triggerMenuAction('deleteForMe', '${m.id}')">
+                    <button type="button" class="nx-menu-opt-btn" style="color:#cbd5e1;" onclick="NexusDM.triggerMenuAction('deleteForMe', '${safeMid}')">
                         <span>🧹</span> <span>Delete for Me</span>
                     </button>
 
                     ${isMine ? `
-                        <button type="button" class="nx-menu-opt-btn" style="color:#f87171; border-color:rgba(239,68,68,0.35);" onclick="NexusDM.triggerMenuAction('deleteForEveryone', '${m.id}')">
+                        <button type="button" class="nx-menu-opt-btn" style="color:#f87171; border-color:rgba(239,68,68,0.35);" onclick="NexusDM.triggerMenuAction('deleteForEveryone', '${safeMid}')">
                             <span>🗑️</span> <span>Delete for Everyone</span>
                         </button>
                     ` : ''}
@@ -1123,18 +1198,33 @@
         },
 
         triggerMenuAction: function(action, msgId) {
-            document.getElementById('nx-msg-action-modal').style.display = 'none';
-            let m = dmMessagesCache.find(x => x.id === msgId);
+            const actModal = document.getElementById('nx-msg-action-modal');
+            if (actModal) actModal.style.display = 'none';
+            let m = dmMessagesCache.find(x => String(x.id) === String(msgId));
             if (!m) return;
 
             let sender = m.fromName || m.fromUser || 'User';
             let snippet = m.text || (m.sticker ? '✨ Sticker' : '📷 Photo');
 
             if (action === 'reply') this.startReply(sender, snippet);
+            else if (action === 'pin') this.togglePinDM(m.id);
             else if (action === 'copy') copyTextSafe(m.text || '');
             else if (action === 'edit') this.startEdit(m.id, m.text || '');
             else if (action === 'deleteForMe') this.deleteDMForMe(m.id);
             else if (action === 'deleteForEveryone') this.deleteDMForEveryone(m.id);
+        },
+
+        togglePinDM: function(msgId) {
+            let me = Nexus.getCurrentUser();
+            const cleanId = String(msgId || '').trim();
+            if (!me || !Nexus.db || !cleanId || cleanId.startsWith('opt_')) return;
+            let m = dmMessagesCache.find(x => String(x.id) === cleanId);
+            if (!m) return;
+            const nextPin = !m.pinned;
+            m.pinned = nextPin;
+            this.renderMessagesList(dmMessagesCache, me.username);
+            Nexus.toast(nextPin ? '📌 Message Pinned to Top!' : '📌 Message Unpinned');
+            Nexus.db.collection("nexus_private_dms").doc(cleanId).set({ pinned: nextPin }, { merge: true }).catch(() => {});
         },
 
         reactToDM: function(msgId, emoji) {
@@ -1157,7 +1247,7 @@
             m.likes = likes;
             m.reaction = emoji;
             this.renderMessagesList(dmMessagesCache, me.username);
-            Nexus.db.collection("nexus_private_dms").doc(cleanId).update({ likes: likes, reaction: emoji }).catch(() => {});
+            Nexus.db.collection("nexus_private_dms").doc(cleanId).set({ likes: likes, reaction: emoji }, { merge: true }).catch(() => {});
         },
 
         toggleStickerDrawer: function() {
@@ -1340,19 +1430,21 @@
             const cleanPartner = normalizeUname(partnerUname);
             let roomKey = getRoomKey(cleanMy, cleanPartner);
 
-            dmPartnerUnsub = Nexus.db.collection("nexus_accounts").doc(cleanPartner).onSnapshot(doc => {
-                if (!doc.exists) return;
-                let p = doc.data();
-                let isTyping = p.dmTypingRoom === roomKey && p.dmTypingAt && (Date.now() - p.dmTypingAt < 4000);
-                const tBar = document.getElementById('nx-dm-typing-bar');
-                if (tBar) tBar.style.display = isTyping ? 'flex' : 'none';
-                const statusEl = document.getElementById('nx-dm-partner-status');
-                if (statusEl) {
-                    let online = isUserTrulyOnline(p);
-                    statusEl.style.color = online ? '#00a884' : '#8696a0';
-                    statusEl.innerText = formatLastSeen(p);
-                }
-            });
+            if (cleanPartner !== cleanMy) {
+                dmPartnerUnsub = Nexus.db.collection("nexus_accounts").doc(cleanPartner).onSnapshot(doc => {
+                    if (!doc.exists) return;
+                    let p = doc.data();
+                    let isTyping = p.dmTypingRoom === roomKey && p.dmTypingAt && (Date.now() - p.dmTypingAt < 4000);
+                    const tBar = document.getElementById('nx-dm-typing-bar');
+                    if (tBar) tBar.style.display = isTyping ? 'flex' : 'none';
+                    const statusEl = document.getElementById('nx-dm-partner-status');
+                    if (statusEl) {
+                        let online = isUserTrulyOnline(p);
+                        statusEl.style.color = online ? '#00a884' : '#8696a0';
+                        statusEl.innerText = formatLastSeen(p);
+                    }
+                });
+            }
 
             dmUnsubscribe = Nexus.db.collection("nexus_private_dms")
                 .where("roomKey", "==", roomKey)
@@ -1477,5 +1569,13 @@
             this.closeDM();
         }
     };
+
+    // LOCK unified action menu & instant reactions so legacy power.js / emojis.js can NEVER break them!
+    try {
+        const lockedMenu = window.NexusDM.openMsgActionMenu;
+        const lockedReact = window.NexusDM.reactToDM;
+        Object.defineProperty(window.NexusDM, 'openMsgActionMenu', { value: lockedMenu, writable: false, configurable: true });
+        Object.defineProperty(window.NexusDM, 'reactToDM', { value: lockedReact, writable: false, configurable: true });
+    } catch (e) {}
 })();
 // === END OF DM.JS ===
