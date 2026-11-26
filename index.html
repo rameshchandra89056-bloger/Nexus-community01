@@ -1540,34 +1540,34 @@
         }
     </script>
 
-    <!-- ================= CORE NEXUS MODULES (ALL CACHE-BUSTED TO ?v=52 • 3 CONFIRMED DUPLICATES DISABLED SAFELY) ================= -->
-    <script src="about.js?v=52" charset="UTF-8"></script>
-    <script src="advance.js?v=52" charset="UTF-8"></script>
-    <script src="board.js?v=52" charset="UTF-8"></script>
-    <script src="cards.js?v=52" charset="UTF-8"></script>
-    <script src="chat.js?v=52" charset="UTF-8"></script>
+    <!-- ================= CORE NEXUS MODULES (ALL CACHE-BUSTED TO ?v=53 • 3 CONFIRMED DUPLICATES DISABLED SAFELY) ================= -->
+    <script src="about.js?v=53" charset="UTF-8"></script>
+    <script src="advance.js?v=53" charset="UTF-8"></script>
+    <script src="board.js?v=53" charset="UTF-8"></script>
+    <script src="cards.js?v=53" charset="UTF-8"></script>
+    <script src="chat.js?v=53" charset="UTF-8"></script>
     <script src="core.js?v=86" charset="UTF-8"></script>
-    <script src="dm.js?v=52" charset="UTF-8"></script>
-    <!-- Disabled safe duplicate (already built into dm.js): <script src="dminbox.js?v=52" charset="UTF-8"></script> -->
-    <script src="dmtools.js?v=52" charset="UTF-8"></script>
-    <script src="dotsmenu.js?v=52" charset="UTF-8"></script>
-    <script src="emojis.js?v=52" charset="UTF-8"></script>
-    <script src="home.js?v=52" charset="UTF-8"></script>
-    <script src="live.js?v=52" charset="UTF-8"></script>
-    <!-- Disabled safe duplicate (already built into live.js): <script src="mp3dj.js?v=52" charset="UTF-8"></script> -->
-    <script src="notify.js?v=52" charset="UTF-8"></script>
-    <script src="power.js?v=52" charset="UTF-8"></script>
-    <script src="pro.js?v=52" charset="UTF-8"></script>
-    <script src="pwa.js?v=52" charset="UTF-8"></script>
-    <!-- Disabled safe duplicate (already built into live.js): <script src="screen.js?v=52" charset="UTF-8"></script> -->
-    <script src="superchat.js?v=52" charset="UTF-8"></script>
-    <script src="ultra.js?v=52" charset="UTF-8"></script>
-    <script src="voice.js?v=52" charset="UTF-8"></script>
+    <!-- dm.js?v=53 moved below power.js/emojis.js so unified reactions & action sheet are never hijacked -->
+    <script src="dmtools.js?v=53" charset="UTF-8"></script>
+    <script src="dotsmenu.js?v=53" charset="UTF-8"></script>
+    <script src="emojis.js?v=53" charset="UTF-8"></script>
+    <script src="home.js?v=53" charset="UTF-8"></script>
+    <script src="live.js?v=53" charset="UTF-8"></script>
+    <!-- Disabled safe duplicate (already built into live.js): <script src="mp3dj.js?v=53" charset="UTF-8"></script> -->
+    <script src="notify.js?v=53" charset="UTF-8"></script>
+    <script src="power.js?v=53" charset="UTF-8"></script>
+    <script src="pro.js?v=53" charset="UTF-8"></script>
+    <script src="pwa.js?v=53" charset="UTF-8"></script>
+    <!-- Disabled safe duplicate (already built into live.js): <script src="screen.js?v=53" charset="UTF-8"></script> -->
+    <script src="superchat.js?v=53" charset="UTF-8"></script>
+    <script src="ultra.js?v=53" charset="UTF-8"></script>
+    <script src="voice.js?v=53" charset="UTF-8"></script>
 
-    <!-- MASTER UPGRADED MODULES LOADED LAST WITH ?v=52 CACHE-BUSTER -->
-    <script src="settings.js?v=52" charset="UTF-8"></script>
-    <script src="profile.js?v=52" charset="UTF-8"></script>
-    <script src="post.js?v=52" charset="UTF-8"></script>
+    <!-- MASTER UPGRADED MODULES LOADED LAST WITH ?v=53 CACHE-BUSTER -->
+    <script src="dm.js?v=53" charset="UTF-8"></script>
+    <script src="settings.js?v=53" charset="UTF-8"></script>
+    <script src="profile.js?v=53" charset="UTF-8"></script>
+    <script src="post.js?v=53" charset="UTF-8"></script>
     <!-- ============================================================================
          NEXUS V33 COMPLETE UNCUT MASTER ENGINE (PART 2 OF index.html):
          1. Instant Profile Tab Opener (Zero Blank Profile Screen!)
@@ -2549,21 +2549,27 @@
             });
 
             const mediaBubbles = Array.from(chatBox.querySelectorAll(".nx-ig-media-bubble"));
-            mediaBubbles.sort((a, b) => Number(a.dataset.msgTs || 0) - Number(b.dataset.msgTs || 0));
+            if (!mediaBubbles.length) return;
 
-            mediaBubbles.forEach((mb) => {
-                if (mb.dataset.nativeAnchorCount) {
-                    const anchorIdx = parseInt(mb.dataset.nativeAnchorCount, 10);
-                    if (!isNaN(anchorIdx)) {
-                        if (anchorIdx < nativeKids.length) {
-                            chatBox.insertBefore(mb, nativeKids[anchorIdx]);
-                        } else {
-                            chatBox.appendChild(mb);
-                        }
-                        return;
+            // FAST EXACT TIMESTAMP SORT when DM rows carry data-msg-ts (fixes "Hi" jumping above older photos!)
+            const hasExactDmTs = nativeKids.some((el) => Number(el.getAttribute("data-msg-ts") || 0) > 1000000000000);
+            if (hasExactDmTs) {
+                const allItems = Array.from(chatBox.children).map((el, idx) => ({
+                    el,
+                    ts: Number(el.getAttribute("data-msg-ts") || el.dataset.msgTs || 0),
+                    idx
+                }));
+                allItems.sort((a, b) => (a.ts - b.ts) || (a.idx - b.idx));
+                allItems.forEach((item, pos) => {
+                    if (chatBox.children[pos] !== item.el) {
+                        chatBox.insertBefore(item.el, chatBox.children[pos] || null);
                     }
-                }
+                });
+                return;
+            }
 
+            mediaBubbles.sort((a, b) => Number(a.dataset.msgTs || 0) - Number(b.dataset.msgTs || 0));
+            mediaBubbles.forEach((mb) => {
                 const mTs = Number(mb.dataset.msgTs || Date.now());
                 const isFromToday = new Date(mTs).toDateString() === new Date().toDateString();
 
@@ -2751,44 +2757,77 @@
             const mediaUrl = bubble.dataset.rawUrl || "";
             const sender = bubble.dataset.sender || "Member";
             const mType = bubble.dataset.mtype || "image";
-            const rect = btnEl.getBoundingClientRect();
+            const typeLbl = isViewOnce ? "1️⃣ View Once" : mType === "video" ? "🎬 Video" : mType === "audio" ? "🎤 Voice Note" : mType === "pdf" ? "📄 PDF" : "📷 Photo";
 
+            // UNIFIED CENTERED ACTION SHEET (100% identical to DM text message options!)
             const popup = document.createElement("div");
             popup.id = "nx-media-3dot-popup";
-            popup.style.cssText = `position:fixed; top:${Math.max(
-                60,
-                rect.top - 135
-            )}px; right:18px; background:#0f172a; border:1px solid #334155; border-radius:16px; padding:8px 10px; z-index:200010; box-shadow:0 12px 32px rgba(0,0,0,0.9); color:#fff; min-width:200px;`;
+            popup.style.cssText = "position:fixed; inset:0; background:rgba(2,6,23,0.82); z-index:275500; display:flex; align-items:center; justify-content:center; padding:18px;";
+
+            const emojis = ["❤️", "😂", "🔥", "👍", "🙏", "💯"];
+            const extraEmojis = ["😍", "😮", "😢", "😡", "👏", "🎉", "🤝", "👀", "💀", "🫡"];
 
             popup.innerHTML = `
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; padding-bottom:6px; border-bottom:1px solid #1e293b; margin-bottom:6px;">
-                    ${["❤️", "🔥", "😂", "👍", "😮", "🙏"]
-                        .map(
-                            (em) =>
-                                `<button type="button" data-em="${em}" style="background:none; border:none; font-size:18px; cursor:pointer; padding:2px;">${em}</button>`
-                        )
-                        .join("")}
+                <div class="nx-msg-action-sheet" style="width:100%; max-width:325px; background:#182229; border:1px solid #2a3942; border-radius:20px; padding:15px; box-shadow:0 18px 45px rgba(0,0,0,0.85);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <span style="font-size:11.5px; color:#8696a0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:240px;">
+                            ${sender}: "${typeLbl}"
+                        </span>
+                        <button type="button" id="nx-act-close-x" style="background:none; border:none; color:#94a3b8; font-size:16px; cursor:pointer;">✕</button>
+                    </div>
+
+                    <div class="nx-emoji-bar" style="display:flex; justify-content:space-between; background:#111b21; padding:8px 12px; border-radius:30px; margin-bottom:10px; border:1px solid #233138;">
+                        ${emojis.map((em) => `<button type="button" data-em="${em}" style="font-size:22px; background:none; border:none; cursor:pointer; padding:2px;">${em}</button>`).join("")}
+                        <button type="button" id="nx-act-more-em-btn" style="font-size:17px; background:#202c33; border:none; border-radius:50%; width:30px; height:30px; color:#34d399; font-weight:900; cursor:pointer;">＋</button>
+                    </div>
+                    <div id="nx-act-more-em-row" style="display:none; flex-wrap:wrap; justify-content:space-between; gap:4px; background:#111b21; padding:7px 10px; border-radius:16px; margin-bottom:10px; border:1px solid #233138;">
+                        ${extraEmojis.map((em) => `<button type="button" data-em="${em}" style="font-size:20px; background:none; border:none; cursor:pointer; padding:2px;">${em}</button>`).join("")}
+                    </div>
+
+                    <button type="button" id="nx-act-reply-media" class="nx-menu-opt-btn">
+                        <span>↩️</span> <span>Reply to Message</span>
+                    </button>
+
+                    ${
+                        !isViewOnce && mediaUrl
+                            ? `<a href="${mediaUrl}" download="Nexus_Media_${Date.now()}" target="_blank" class="nx-menu-opt-btn" style="color:#38bdf8; text-decoration:none;"><span>⬇️</span> <span>View / Save Media</span></a>`
+                            : `<div class="nx-menu-opt-btn" style="color:#64748b; cursor:default;"><span>🔒</span> <span>View-Once Download Blocked</span></div>`
+                    }
+
+                    <button type="button" id="nx-act-del-me-media" class="nx-menu-opt-btn" style="color:#cbd5e1;">
+                        <span>🧹</span> <span>Delete for Me</span>
+                    </button>
+
+                    ${
+                        isMine
+                            ? `<button type="button" id="nx-act-del-media" class="nx-menu-opt-btn" style="color:#f87171; border-color:rgba(239,68,68,0.35);"><span>🗑️</span> <span>Delete for Everyone</span></button>`
+                            : ""
+                    }
+
+                    <button type="button" id="nx-act-cancel-media" class="nx-menu-opt-btn" style="justify-content:center; background:transparent; border:none; color:#8696a0; margin-bottom:0;">
+                        Cancel
+                    </button>
                 </div>
-                <button type="button" id="nx-act-reply-media" style="width:100%; text-align:left; display:flex; align-items:center; gap:8px; padding:6px 8px; background:none; border:none; color:#34d399; font-size:12px; font-weight:800; cursor:pointer; border-radius:8px;">↩️ <span>Reply to Media</span></button>
-                ${
-                    !isViewOnce && mediaUrl
-                        ? `<a href="${mediaUrl}" download="nexus_media" target="_blank" style="display:flex; align-items:center; gap:8px; padding:6px 8px; color:#38bdf8; font-size:12px; font-weight:700; text-decoration:none; border-radius:8px;">⬇️ <span>View / Save Media</span></a>`
-                        : `<div style="padding:4px 8px; color:#64748b; font-size:11px; font-weight:700;">🔒 View-Once Download Disabled</div>`
-                }
-                <button type="button" id="nx-act-block-partner" style="width:100%; text-align:left; display:flex; align-items:center; gap:8px; padding:6px 8px; background:none; border:none; color:#fbbf24; font-size:12px; font-weight:800; cursor:pointer; border-radius:8px;">🚫 <span>Block / Unblock Partner</span></button>
-                ${
-                    isMine
-                        ? `<button type="button" id="nx-act-del-media" style="width:100%; text-align:left; display:flex; align-items:center; gap:8px; padding:6px 8px; background:none; border:none; color:#f43f5e; font-size:12px; font-weight:800; cursor:pointer; border-radius:8px;">🗑️ <span>Delete for Everyone</span></button>`
-                        : ""
-                }
             `;
 
             document.body.appendChild(popup);
+            popup.onclick = (ev) => { if (ev.target === popup) popup.remove(); };
+            popup.querySelector("#nx-act-close-x").onclick = () => popup.remove();
+            popup.querySelector("#nx-act-cancel-media").onclick = () => popup.remove();
+            popup.querySelector("#nx-act-more-em-btn").onclick = (ev) => {
+                ev.stopPropagation();
+                const row = popup.querySelector("#nx-act-more-em-row");
+                if (row) row.style.display = row.style.display === "none" ? "flex" : "none";
+            };
 
             popup.querySelector("#nx-act-reply-media").onclick = (ev) => {
                 ev.stopPropagation();
                 popup.remove();
-                triggerMediaReplyBanner({ sender, mediaType: mType, viewOnce: isViewOnce });
+                if (window.NexusDM && typeof NexusDM.startReply === "function") {
+                    NexusDM.startReply(sender, typeLbl);
+                } else {
+                    triggerMediaReplyBanner({ sender, mediaType: mType, viewOnce: isViewOnce });
+                }
             };
 
             popup.querySelectorAll("button[data-em]").forEach((b) => {
@@ -2807,10 +2846,12 @@
                 };
             });
 
-            popup.querySelector("#nx-act-block-partner").onclick = (ev) => {
+            popup.querySelector("#nx-act-del-me-media").onclick = (ev) => {
                 ev.stopPropagation();
                 popup.remove();
-                window.toggleBlockCurrentChatPartner();
+                bubble.remove();
+                allCloudMediaList = allCloudMediaList.filter((x) => x.id !== msgId);
+                if (window.Nexus && Nexus.toast) Nexus.toast("🧹 Deleted for you.");
             };
 
             const delBtn = popup.querySelector("#nx-act-del-media");
@@ -3197,6 +3238,32 @@
         async function sendSingleOrMultipleFiles(fileList, forcedType, isViewOnce) {
             if (!fileList || !fileList.length) return;
             const files = Array.from(fileList);
+
+            // UNIFIED 1:1 DM PHOTO PIPELINE: Normal photos go straight into NexusDM (same collection, exact chronological order, 0ms instant, NEVER stuck at 1%!)
+            const dmRootEl = document.getElementById("nx-dm-dedicated-root");
+            const isNormalDmPhoto =
+                !isViewOnce &&
+                dmRootEl &&
+                dmRootEl.style.display !== "none" &&
+                window.NexusDM &&
+                typeof NexusDM.sendDM === "function" &&
+                files.every((f) => (forcedType === "image" || (f.type || "").toLowerCase().startsWith("image/")));
+
+            if (isNormalDmPhoto) {
+                try {
+                    const compressedUrls = [];
+                    for (const f of files.slice(0, 5)) {
+                        compressedUrls.push(await compressImageToFastWebP(f));
+                    }
+                    if (compressedUrls.length) {
+                        await NexusDM.sendDM(compressedUrls);
+                        if (window.Nexus && Nexus.toast) {
+                            Nexus.toast(compressedUrls.length > 1 ? `✅ ${compressedUrls.length} Photos Sent!` : "✅ Photo Sent!");
+                        }
+                        return;
+                    }
+                } catch (err) {}
+            }
             const chatBox = getStrictOpenChatMessagesBox();
             const currentNativeCount = chatBox
                 ? Array.from(chatBox.children).filter((el) => !el.classList.contains("nx-ig-media-bubble")).length
