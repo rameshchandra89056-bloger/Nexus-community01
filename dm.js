@@ -304,42 +304,68 @@
         return root;
     }
 
-    function syncWhatsAppViewport() {
-        const root = document.getElementById('nx-dm-dedicated-root');
-        if (!root || root.style.display === 'none') return;
+    let _vpRaf = 0, _lastVpH = -1, _lastVpT = -1;
+    function syncWhatsAppViewport(forceNow) {
+        if (!forceNow && _vpRaf) return;
+        const run = () => {
+            _vpRaf = 0;
+            const root = document.getElementById('nx-dm-dedicated-root');
+            if (!root || root.style.display === 'none') return;
 
-        const vv = window.visualViewport;
-        const visibleHeight = Math.max(1, Math.round(vv ? vv.height : window.innerHeight));
-        const visibleTop = Math.max(0, Math.round(vv ? vv.offsetTop : 0));
+            const vv = window.visualViewport;
+            const visibleHeight = Math.max(1, Math.round(vv ? vv.height : window.innerHeight));
+            const visibleTop = Math.max(0, Math.round(vv ? vv.offsetTop : 0));
+            if (!forceNow && Math.abs(visibleHeight - _lastVpH) <= 2 && Math.abs(visibleTop - _lastVpT) <= 2) return;
+            _lastVpH = visibleHeight;
+            _lastVpT = visibleTop;
 
-        root.style.setProperty('position', 'fixed', 'important');
-        root.style.setProperty('height', visibleHeight + 'px', 'important');
-        root.style.setProperty('max-height', visibleHeight + 'px', 'important');
-        root.style.setProperty('top', visibleTop + 'px', 'important');
-        root.style.setProperty('bottom', 'auto', 'important');
-        root.style.setProperty('display', 'flex', 'important');
-        root.style.setProperty('overflow', 'hidden', 'important');
+            root.style.setProperty('position', 'fixed', 'important');
+            root.style.setProperty('height', visibleHeight + 'px', 'important');
+            root.style.setProperty('max-height', visibleHeight + 'px', 'important');
+            root.style.setProperty('top', visibleTop + 'px', 'important');
+            root.style.setProperty('bottom', 'auto', 'important');
+            root.style.setProperty('display', 'flex', 'important');
+            root.style.setProperty('overflow', 'hidden', 'important');
 
-        const msgBox = root.querySelector('#nx-dm-msgs-box');
-        if (msgBox) {
-            msgBox.style.minHeight = '0';
-            msgBox.style.flex = '1 1 0%';
-            msgBox.style.overflowY = 'auto';
-            msgBox.scrollTop = msgBox.scrollHeight;
-        }
-
-        const composer = root.querySelector('#nx-dm-composer');
-        if (composer) composer.style.flexShrink = '0';
+            const msgBox = root.querySelector('#nx-dm-msgs-box');
+            if (msgBox) {
+                msgBox.style.minHeight = '0';
+                msgBox.style.flex = '1 1 0%';
+                msgBox.style.overflowY = 'auto';
+                if (forceNow) msgBox.scrollTop = msgBox.scrollHeight;
+            }
+            const composer = root.querySelector('#nx-dm-composer');
+            if (composer) composer.style.flexShrink = '0';
+        };
+        if (forceNow) run();
+        else _vpRaf = requestAnimationFrame(run);
     }
 
-    function resizeDmComposer() {
+    let _resizeRaf = 0, _lastInpH = 36;
+    function resizeDmComposer(forceReset) {
         const inp = document.getElementById('nx-dm-input');
         if (!inp) return;
-        inp.style.height = '36px';
-        const maxHeight = 105;
-        const nextHeight = Math.min(inp.scrollHeight, maxHeight);
-        inp.style.height = nextHeight + 'px';
-        inp.style.overflowY = inp.scrollHeight > maxHeight ? 'auto' : 'hidden';
+        const val = inp.value || '';
+        // ZERO-REFLOW FAST PATH: Short single-line text NEVER touches layout on mobile keystrokes!
+        if (forceReset || (!val.includes('\n') && val.length < 28)) {
+            if (_lastInpH !== 36) {
+                _lastInpH = 36;
+                inp.style.height = '36px';
+                inp.style.overflowY = 'hidden';
+            }
+            return;
+        }
+        if (_resizeRaf) return;
+        _resizeRaf = requestAnimationFrame(() => {
+            _resizeRaf = 0;
+            inp.style.height = '36px';
+            const maxHeight = 105;
+            const sh = inp.scrollHeight;
+            const nextHeight = Math.max(36, Math.min(sh, maxHeight));
+            if (nextHeight !== _lastInpH) _lastInpH = nextHeight;
+            inp.style.height = nextHeight + 'px';
+            inp.style.overflowY = sh > maxHeight ? 'auto' : 'hidden';
+        });
     }
 
     function isLikelyImageFile(file) {
@@ -439,19 +465,26 @@
     // =========================================================================
     const DM_OUTBOX_KEY = 'nx_dm_local_outbox_v1';
     let outboxFlushing = false;
+    let outboxHasItems = true; // Checked once, then cached in RAM so idle/typing never hits localStorage!
 
     function readLocalOutbox() {
         try {
-            const arr = JSON.parse(localStorage.getItem(DM_OUTBOX_KEY) || '[]');
-            return Array.isArray(arr) ? arr : [];
-        } catch (e) { return []; }
+            const raw = localStorage.getItem(DM_OUTBOX_KEY);
+            if (!raw || raw === '[]') { outboxHasItems = false; return []; }
+            const arr = JSON.parse(raw);
+            const list = Array.isArray(arr) ? arr : [];
+            outboxHasItems = list.length > 0;
+            return list;
+        } catch (e) { outboxHasItems = false; return []; }
     }
     function writeLocalOutbox(arr) {
+        const clean = (arr || []).slice(-25);
+        outboxHasItems = clean.length > 0;
         try {
-            localStorage.setItem(DM_OUTBOX_KEY, JSON.stringify((arr || []).slice(-25)));
+            if (!clean.length) localStorage.removeItem(DM_OUTBOX_KEY);
+            else localStorage.setItem(DM_OUTBOX_KEY, JSON.stringify(clean));
         } catch (e) {
-            // If quota tight due to heavy photos, keep latest 6 queued items
-            try { localStorage.setItem(DM_OUTBOX_KEY, JSON.stringify((arr || []).slice(-6))); } catch (e2) {}
+            try { localStorage.setItem(DM_OUTBOX_KEY, JSON.stringify(clean.slice(-6))); } catch (e2) {}
         }
     }
     function enqueueOutboxMsg(localId, payload) {
@@ -464,7 +497,8 @@
         writeLocalOutbox(list);
     }
     async function flushDmLocalOutbox() {
-        if (outboxFlushing || !window.Nexus || !Nexus.db) return;
+        if (!outboxHasItems || outboxFlushing || !window.Nexus || !Nexus.db) return;
+        if (document.visibilityState === 'hidden') return;
         if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
         const queue = readLocalOutbox();
         if (!queue.length) return;
@@ -903,6 +937,10 @@
 
             dmReplyingTo = null;
             dmEditingId = null;
+            dmMessagesCache = [];
+            _lastVpH = -1;
+            _lastVpT = -1;
+            _lastInpH = 36;
 
             let partnerObj = (Nexus.users || []).find(u =>
                 u && u.username && normalizeUname(u.username) === cleanPartnerUname
@@ -946,7 +984,7 @@
 
                 <div id="nx-dm-pinned-bar" style="display:none; padding:7px 12px; background:#15202b; border-bottom:1px solid #00a884; align-items:center; justify-content:space-between; gap:8px; font-size:12px; color:#e9edef; flex-shrink:0; cursor:pointer;"></div>
 
-                <div id="nx-dm-msgs-box" style="flex:1 1 0%; min-height:0; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; background:#0b141a; position:relative;"></div>
+                <div id="nx-dm-msgs-box" style="flex:1 1 0%; min-height:0; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; background:#0b141a; position:relative; contain:layout style; -webkit-overflow-scrolling:touch;"></div>
 
                 <div id="nx-dm-typing-bar" style="display:none; padding:5px 14px; background:#111b21; font-size:11.5px; color:#00a884; font-weight:700; align-items:center; gap:6px; flex-shrink:0;">
                     <span>${dmEscapeHTML(displayPartnerName)} is typing</span>
@@ -981,13 +1019,14 @@
                         <button type="button" onclick="document.getElementById('nx-dm-file-in').click()" style="background:none; border:none; font-size:18px; cursor:pointer; padding:2px; flex-shrink:0;">📷</button>
                         <button type="button" onclick="NexusDM.startVoiceDM()" style="background:none; border:none; font-size:17px; cursor:pointer; padding:2px; flex-shrink:0;">🎙️</button>
                     </div>
-                    <button type="button" onclick="NexusDM.sendDM()" style="background:#00a884; color:#020617; border:none; width:42px; height:42px; border-radius:50%; font-size:18px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 2px 8px rgba(0,168,132,0.4);">➤</button>
+                    <button type="button" id="nx-dm-send-btn" onclick="NexusDM.sendDM()" style="background:#00a884; color:#020617; border:none; width:42px; height:42px; border-radius:50%; font-size:18px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 2px 8px rgba(0,168,132,0.4);">➤</button>
                 </div>
             `;
 
             root.style.display = 'flex';
-            resizeDmComposer();
-            syncWhatsAppViewport();
+            const dmMessageBox = document.getElementById('nx-dm-msgs-box');
+            resizeDmComposer(true);
+            syncWhatsAppViewport(true);
 
             if (!window.__nxDmV55CaptureMenuBound) {
                 window.__nxDmV55CaptureMenuBound = true;
@@ -1058,11 +1097,12 @@
                     if (savedD) { inp.value = savedD; resizeDmComposer(); }
                 } catch (e) {}
 
+                let draftSaveTimer = null;
                 inp.addEventListener('focus', () => {
                     const dr = document.getElementById('nx-dm-sticker-drawer');
-                    if (dr) dr.style.display = 'none';
-                    [80, 180, 350, 600].forEach(delay => setTimeout(syncWhatsAppViewport, delay));
-                });
+                    if (dr && dr.style.display !== 'none') dr.style.display = 'none';
+                    setTimeout(() => syncWhatsAppViewport(false), 180);
+                }, { passive: true });
                 inp.addEventListener('keydown', e => {
                     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
                         e.preventDefault();
@@ -1070,17 +1110,21 @@
                     }
                 });
                 inp.addEventListener('input', () => {
-                    resizeDmComposer();
-                    try {
-                        if (inp.value.trim()) localStorage.setItem(dmDraftKey(cleanPartnerUname), inp.value);
-                        else localStorage.removeItem(dmDraftKey(cleanPartnerUname));
-                    } catch (e) {}
+                    resizeDmComposer(false);
+                    // Debounced draft save (900ms) -> ZERO synchronous localStorage blocking while typing on mobile!
+                    clearTimeout(draftSaveTimer);
+                    draftSaveTimer = setTimeout(() => {
+                        try {
+                            if (inp.value.trim()) localStorage.setItem(dmDraftKey(cleanPartnerUname), inp.value);
+                            else localStorage.removeItem(dmDraftKey(cleanPartnerUname));
+                        } catch (e) {}
+                    }, 900);
                     let now = Date.now();
-                    if (cleanPartnerUname !== normalizeUname(me.username) && now - lastDmTypingPing > 4000) {
+                    if (cleanPartnerUname !== normalizeUname(me.username) && now - lastDmTypingPing > 4500) {
                         lastDmTypingPing = now;
                         pingDmTyping(getRoomKey(me.username, cleanPartnerUname));
                     }
-                });
+                }, { passive: true });
             }
 
             const fileIn = document.getElementById('nx-dm-file-in');
@@ -1672,10 +1716,17 @@
         },
 
         sendDM: async function(customImgData, customStickerObj, explicitTargetUsername) {
-            let me = Nexus.getCurrentUser();
+            let me = (window.Nexus && Nexus.getCurrentUser && Nexus.getCurrentUser()) || null;
+            if (!me) {
+                try { me = JSON.parse(localStorage.getItem('nx_active_account') || 'null'); } catch (e) {}
+            }
             const inp = document.getElementById('nx-dm-input');
-            const fallbackPartner = explicitTargetUsername || (activeDmPartner && activeDmPartner.username) || window.currentChatUser;
-            if (!me || !fallbackPartner) return;
+            const nameEl = document.getElementById('nx-dm-partner-name');
+            const fallbackPartner = explicitTargetUsername || (activeDmPartner && activeDmPartner.username) || (nameEl && nameEl.getAttribute('data-partner-username')) || window.currentChatUser;
+            if (!me || !me.username || !fallbackPartner) {
+                if (window.Nexus && Nexus.toast) Nexus.toast('⚠️ Please login or re-open chat to send.');
+                return;
+            }
 
             const cleanMyUname = normalizeUname(me.username);
             const cleanTargetUname = normalizeUname(fallbackPartner);
@@ -1732,7 +1783,7 @@
             enqueueOutboxMsg(localId, msgPayload);
             if (inp && !customStickerObj) {
                 inp.value = '';
-                resizeDmComposer();
+                resizeDmComposer(true);
                 try { localStorage.removeItem(dmDraftKey(cleanTargetUname)); } catch (e) {}
             }
             this.cancelReply();
