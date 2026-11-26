@@ -138,16 +138,42 @@
             if (window.Nexus && Array.isArray(Nexus._fbPosts)) Nexus._fbPosts = Nexus._fbPosts.filter((x) => x && x.id !== pid);
         }
     }
+    window.__nxFollowWriteLock = window.__nxFollowWriteLock || {};
+    function applyLocalFollowMutationEverywhere(actorU, actorFollowing, targetU, targetFollowers) {
+        const now = Date.now();
+        window.__nxFollowWriteLock[actorU] = { followingList: [...actorFollowing], until: now + 12000 };
+        window.__nxFollowWriteLock[targetU] = { followersList: [...targetFollowers], until: now + 12000 };
+        const pools = [
+            window.Nexus && Nexus._fbUsers,
+            window.Nexus && Nexus._sbUsers,
+            window.Nexus && Nexus.cloudAccounts,
+            window.Nexus && Nexus.users
+        ];
+        pools.forEach((arr) => {
+            if (!Array.isArray(arr)) return;
+            arr.forEach((u) => {
+                if (!u || !u.username) return;
+                const uk = String(u.username).toLowerCase().trim();
+                if (uk === actorU) u.followingList = [...actorFollowing];
+                if (uk === targetU) u.followersList = [...targetFollowers];
+            });
+        });
+    }
+
     async function syncFollowListsDualCloud(myU, myFollowing, targetU, targetFollowers) {
+        const cleanMyF = cleanUniqueList(myFollowing).filter((x) => x !== myU);
+        const cleanTargetF = cleanUniqueList(targetFollowers).filter((x) => x !== targetU);
+        applyLocalFollowMutationEverywhere(myU, cleanMyF, targetU, cleanTargetF);
+
         const ops = [];
         const sbC = getDualSbClient();
         if (sbC) {
-            ops.push((async () => { try { await sbC.from("profiles").update({ following_list: myFollowing }).eq("username", myU); } catch (e) {} })());
-            ops.push((async () => { try { await sbC.from("profiles").update({ followers_list: targetFollowers }).eq("username", targetU); } catch (e) {} })());
+            ops.push((async () => { try { await sbC.from("profiles").update({ following_list: cleanMyF }).eq("username", myU); } catch (e) {} })());
+            ops.push((async () => { try { await sbC.from("profiles").update({ followers_list: cleanTargetF }).eq("username", targetU); } catch (e) {} })());
         }
         if (window.Nexus && Nexus.db) {
-            ops.push((async () => { try { await Nexus.db.collection("nexus_accounts").doc(targetU).set({ followersList: targetFollowers }, { merge: true }); } catch (e) {} })());
-            ops.push((async () => { try { await Nexus.db.collection("nexus_accounts").doc(myU).set({ followingList: myFollowing }, { merge: true }); } catch (e) {} })());
+            ops.push((async () => { try { await Nexus.db.collection("nexus_accounts").doc(myU).set({ followingList: cleanMyF, followUpdatedAt: Date.now() }, { merge: true }); } catch (e) {} })());
+            ops.push((async () => { try { await Nexus.db.collection("nexus_accounts").doc(targetU).set({ followersList: cleanTargetF, followUpdatedAt: Date.now() }, { merge: true }); } catch (e) {} })());
         }
         await Promise.allSettled(ops);
     }
@@ -633,65 +659,73 @@
     // =========================================================================
     // 4. FOLLOWERS / FOLLOWING AUTO-CROSS-SYNC ENGINE
     // =========================================================================
+    // AUTHORITATIVE ONE-WAY FOLLOW GRAPH (v54):
+    // - Each user's own `followingList` is the SINGLE SOURCE OF TRUTH.
+    // - NEVER resurrects unfollowed users from stale caches or bidirectional unions!
+    // - Every user (including main user) ALWAYS sees 100% real followers who currently follow them!
     function crossSyncAllFollowersAndSongs() {
         if (!window.Nexus || !Array.isArray(Nexus.users)) return;
+        const now = Date.now();
+        const locks = window.__nxFollowWriteLock || {};
         const userMap = {};
 
         Nexus.users = Nexus.users.filter((u) => u && u.username && u.username.toLowerCase() !== "member");
 
         Nexus.users.forEach((u) => {
             const k = u.username.toLowerCase().trim();
-            u.followersList = cleanUniqueList(u.followersList);
-            u.followingList = cleanUniqueList(u.followingList);
+            const lk = locks[k] && locks[k].until > now ? locks[k] : null;
+            u.followingList = cleanUniqueList(lk && lk.followingList ? lk.followingList : u.followingList).filter((x) => x !== k);
+            u.followersList = cleanUniqueList(lk && lk.followersList ? lk.followersList : u.followersList).filter((x) => x !== k);
             const song = getNormalizedProfileSong(u);
             if (song) u.profileSong = song;
             else delete u.profileSong;
             userMap[k] = u;
         });
 
+        // Step 1: Compute exact followers from everyone's authoritative `followingList`!
+        const knownUserKeys = new Set(Object.keys(userMap));
+        const derivedFollowers = {};
+        knownUserKeys.forEach((k) => { derivedFollowers[k] = new Set(); });
+
         Object.values(userMap).forEach((uA) => {
             const keyA = uA.username.toLowerCase().trim();
             (uA.followingList || []).forEach((targetRaw) => {
                 const keyB = String(targetRaw || "").toLowerCase().trim();
-                if (userMap[keyB] && !userMap[keyB].followersList.includes(keyA)) {
-                    userMap[keyB].followersList.push(keyA);
-                }
-            });
-            (uA.followersList || []).forEach((followerRaw) => {
-                const keyF = String(followerRaw || "").toLowerCase().trim();
-                if (userMap[keyF] && !userMap[keyF].followingList.includes(keyA)) {
-                    userMap[keyF].followingList.push(keyA);
+                if (keyB && keyB !== keyA && derivedFollowers[keyB]) {
+                    derivedFollowers[keyB].add(keyA);
                 }
             });
         });
 
+        // Step 2: Update each user's followersList cleanly:
+        //   - Include everyone in knownUserKeys whose `followingList` contains them
+        //   - REMOVE anyone in knownUserKeys who does NOT have them in `followingList` (fixes unfollow sticking!)
+        //   - Keep external/unloaded handles only if not contradicted by known users
+        Object.values(userMap).forEach((uB) => {
+            const keyB = uB.username.toLowerCase().trim();
+            const lk = locks[keyB] && locks[keyB].until > now ? locks[keyB] : null;
+            if (lk && lk.followersList) {
+                uB.followersList = cleanUniqueList(lk.followersList).filter((x) => x !== keyB);
+                return;
+            }
+            const externalOnly = (uB.followersList || []).filter((f) => f && f !== keyB && !knownUserKeys.has(f));
+            uB.followersList = cleanUniqueList([...Array.from(derivedFollowers[keyB]), ...externalOnly]).filter((x) => x !== keyB);
+        });
+
+        // Step 3: Sync active account cleanly WITHOUT resurrecting removed items from stale localStorage!
         const me = getActiveUser();
         if (me && me.username) {
             const myK = me.username.toLowerCase().trim();
             if (userMap[myK]) {
-                const prevFolLen = Array.isArray(me.followersList) ? me.followersList.length : 0;
-                const restoredFollowers = cleanUniqueList([...(me.followersList || []), ...(userMap[myK].followersList || [])]);
-                const restoredFollowing = cleanUniqueList([...(me.followingList || []), ...(userMap[myK].followingList || [])]);
-                me.followersList = restoredFollowers;
-                me.followingList = restoredFollowing;
-                userMap[myK].followersList = restoredFollowers;
-                userMap[myK].followingList = restoredFollowing;
+                const myLock = locks[myK] && locks[myK].until > now ? locks[myK] : null;
+                me.followingList = myLock && myLock.followingList ? [...myLock.followingList] : [...userMap[myK].followingList];
+                me.followersList = myLock && myLock.followersList ? [...myLock.followersList] : [...userMap[myK].followersList];
+                userMap[myK].followingList = [...me.followingList];
+                userMap[myK].followersList = [...me.followersList];
                 if (!me.profileSong && userMap[myK].profileSong) {
                     me.profileSong = userMap[myK].profileSong;
                 }
-                if (restoredFollowers.length > prevFolLen) {
-                    try { localStorage.setItem("nx_active_account", JSON.stringify(me)); } catch (e) {}
-                    if (!window.__nxFollowersHealedOnce) {
-                        window.__nxFollowersHealedOnce = true;
-                        const sbC = getDualSbClient();
-                        if (sbC) {
-                            (async () => { try { await sbC.from("profiles").update({ followers_list: restoredFollowers }).eq("username", myK); } catch (e) {} })();
-                        }
-                        if (window.Nexus && Nexus.db) {
-                            Nexus.db.collection("nexus_accounts").doc(myK).set({ followersList: restoredFollowers }, { merge: true }).catch(() => {});
-                        }
-                    }
-                }
+                try { localStorage.setItem("nx_active_account", JSON.stringify(me)); } catch (e) {}
             }
         }
     }
@@ -1182,6 +1216,11 @@
                                       }; font-size:12px; font-weight:900; cursor:pointer;">
                                           ${iFollowThem ? "Following ✓" : "Follow"}
                                       </button>
+                                      ${
+                                          activeTab === "followers" && String(userObj.username || "").toLowerCase() === myKey
+                                              ? `<button type="button" data-rem-follower="${uKey}" style="padding:7px 9px; border-radius:10px; background:rgba(244,63,94,0.16); border:1px solid rgba(244,63,94,0.4); color:#fb7185; font-size:11px; font-weight:900; cursor:pointer;" title="Remove Follower">Remove</button>`
+                                              : ""
+                                      }
                                       <button type="button" data-dm-u="${uKey}" style="padding:7px 10px; border-radius:10px; background:#1e293b; border:1px solid #334155; color:#38bdf8; font-size:12px; cursor:pointer;" title="Direct Message">
                                           💬
                                       </button>`
@@ -1275,6 +1314,27 @@
                     const targetU = row.getAttribute("data-view-u");
                     modal.remove();
                     window.openPublicUserProfileModal(targetU);
+                };
+            });
+
+            modal.querySelectorAll("[data-rem-follower]").forEach((btn) => {
+                btn.onclick = async (e) => {
+                    e.stopPropagation();
+                    const folU = btn.getAttribute("data-rem-follower");
+                    const curMe = getActiveUser();
+                    if (!curMe || !curMe.username || !folU) return;
+                    const myK = curMe.username.toLowerCase().trim();
+                    const fObj = findUserObjectByAnyIdentifier(folU) || { username: folU, followingList: [] };
+                    const nextMyFollowers = cleanUniqueList(curMe.followersList || []).filter((x) => x !== folU);
+                    const nextTheirFollowing = cleanUniqueList(fObj.followingList || []).filter((x) => x !== myK);
+                    curMe.followersList = nextMyFollowers;
+                    userObj.followersList = nextMyFollowers;
+                    fObj.followingList = nextTheirFollowing;
+                    localStorage.setItem("nx_active_account", JSON.stringify(curMe));
+                    await syncFollowListsDualCloud(folU, nextTheirFollowing, myK, nextMyFollowers);
+                    crossSyncAllFollowersAndSongs();
+                    renderConnectionsUI(sInp ? sInp.value : "");
+                    if (window.Nexus && Nexus.toast) Nexus.toast(`🧹 Removed @${folU} from followers`);
                 };
             });
 
@@ -1650,12 +1710,69 @@
         const executeSongSearch = async () => {
             const q = (searchInp.value || "").trim();
             if (!q) return;
-            resBox.innerHTML = `<div style="text-align:center; padding:24px; color:#38bdf8; font-weight:800; font-size:13px;">⏳ Searching "${q}"...</div>`;
+            resBox.innerHTML = `<div style="text-align:center; padding:24px; color:#38bdf8; font-weight:800; font-size:13px;">⏳ Searching Full MP3 Songs for "${q}"...</div>`;
+
+            const tracks = [];
+            const seenUrls = new Set();
+            const addTrack = (tr) => {
+                if (!tr || !tr.previewUrl || seenUrls.has(tr.previewUrl)) return;
+                seenUrls.add(tr.previewUrl);
+                tracks.push(tr);
+            };
+            const fetchT = (url, ms = 4800) => {
+                const ctrl = new AbortController();
+                const tid = setTimeout(() => ctrl.abort(), ms);
+                return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(tid));
+            };
+            const parseSaavn = (d) => {
+                const arr = (d && d.data && Array.isArray(d.data.results)) ? d.data.results : (d && Array.isArray(d.results) ? d.results : []);
+                arr.forEach((s) => {
+                    const dl = s.downloadUrl || [];
+                    let best = dl.length ? (dl[dl.length - 1].url || dl[dl.length - 1].link) : "";
+                    if (!best && s.more_info && s.more_info.media_preview_url) {
+                        best = s.more_info.media_preview_url.replace("preview.saavncdn.com", "aac.saavncdn.com").replace("_96_p.mp4", "_160.mp4");
+                    }
+                    const im = s.image || [];
+                    const cover = Array.isArray(im) && im.length ? (im[im.length - 1].url || im[im.length - 1].link) : (typeof im === "string" ? im : "");
+                    const dur = Number(s.duration || (s.more_info && s.more_info.duration) || 240);
+                    if (best) {
+                        const mm = Math.floor(dur / 60), ss = String(dur % 60).padStart(2, "0");
+                        addTrack({
+                            trackName: String(s.name || s.title || "Song").replace(/&quot;/g, '"').replace(/&#039;/g, "'"),
+                            artistName: `${s.primaryArtists || (s.artists && s.artists.primary && s.artists.primary[0] && s.artists.primary[0].name) || "Artist"} • 🎵 Full (${mm}:${ss})`,
+                            artworkUrl100: cover || "",
+                            previewUrl: best,
+                            isFull: true
+                        });
+                    }
+                });
+            };
 
             try {
-                const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&limit=14`);
-                const data = await res.json();
-                const tracks = (data && data.results) || [];
+                const cleanQ = q.replace(/\b(song|songs|mp3|full|audio)\b/gi, "").trim() || q;
+                const saavnOfficial = `https://www.jiosaavn.com/api.php?p=1&q=${encodeURIComponent(cleanQ)}&_format=json&_marker=0&api_version=4&ctx=web6dot0&n=10&__call=search.getResults`;
+                await Promise.allSettled([
+                    fetchT(`https://saavn.sumit.co/api/search/songs?query=${encodeURIComponent(cleanQ)}&limit=10`, 4500).then((r) => r.json()).then(parseSaavn),
+                    fetchT(`https://saavn.dev/api/search/songs?query=${encodeURIComponent(cleanQ)}&limit=10`, 4500).then((r) => r.json()).then(parseSaavn),
+                    fetchT(`https://api.allorigins.win/get?url=${encodeURIComponent(saavnOfficial)}`, 5000).then((r) => r.json()).then((d) => parseSaavn(JSON.parse(d.contents)))
+                ]);
+
+                // Fallback to iTunes 30s preview ONLY if JioSaavn returns < 3 full songs
+                if (tracks.length < 3) {
+                    const res = await fetchT(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&country=IN&media=music&limit=10`, 4500);
+                    const data = await res.json();
+                    ((data && data.results) || []).forEach((t) => {
+                        if (t && t.previewUrl) {
+                            addTrack({
+                                trackName: t.trackName || "Song",
+                                artistName: `${t.artistName || "Artist"} • ⏱️ 30s Preview`,
+                                artworkUrl100: t.artworkUrl100 || "",
+                                previewUrl: t.previewUrl,
+                                isFull: false
+                            });
+                        }
+                    });
+                }
 
                 if (!tracks.length) {
                     resBox.innerHTML = `<div style="text-align:center; padding:24px; color:#f43f5e; font-size:12.5px;">No songs found for "${q}".</div>`;
@@ -1663,15 +1780,14 @@
                 }
 
                 resBox.innerHTML = tracks
-                    .filter((t) => t && t.previewUrl)
                     .map(
                         (t, idx) => `
-                        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 11px; border-radius:14px; background:#090d16; border:1px solid #1e293b;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 11px; border-radius:14px; background:#090d16; border:1px solid ${t.isFull ? "#10b981" : "#1e293b"};">
                             <div style="display:flex; align-items:center; gap:10px; min-width:0; flex:1;">
                                 <img src="${t.artworkUrl100 || ""}" loading="lazy" style="width:42px; height:42px; border-radius:10px; object-fit:cover; flex-shrink:0;" />
                                 <div style="min-width:0; flex:1;">
                                     <div style="font-size:13px; font-weight:800; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${t.trackName || "Song"}</div>
-                                    <div style="font-size:11px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${t.artistName || "Artist"}</div>
+                                    <div style="font-size:11px; color:${t.isFull ? "#34d399" : "#94a3b8"}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${t.artistName || "Artist"}</div>
                                 </div>
                             </div>
                             <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
@@ -1724,7 +1840,7 @@
                         if (activeSongAudio) activeSongAudio.pause();
                         modal.remove();
                         renderMyInstagramProfileTab();
-                        if (window.Nexus && Nexus.toast) Nexus.toast("🎵 Song Added & Synced for All Users!");
+                        if (window.Nexus && Nexus.toast) Nexus.toast(track.isFull ? "🎵 Full Song Added to Profile!" : "🎵 Song Added to Profile!");
                     };
                 });
             } catch (err) {
@@ -2280,12 +2396,80 @@
             }
         });
 
+        // INSTAGRAM-STYLE AUTO-PLAY POST SONG ON SCROLL (Auto-Play when centered -> Auto-Pause when scrolled away!)
+        if (!window.__nxAutoSongState) {
+            window.__nxAutoSongState = { muted: false, unlocked: false, activeBar: null };
+            const unlockAudioOnce = () => {
+                window.__nxAutoSongState.unlocked = true;
+                // If a song bar is already centered on screen, start it immediately on first tap!
+                const cur = window.__nxAutoSongState.activeBar;
+                if (cur && !window.__nxAutoSongState.muted && (!activeSongAudio || activeSongAudio.paused)) {
+                    const u = cur.getAttribute("data-song-url");
+                    const pill = cur.querySelector(".nx-ps-state");
+                    if (u) window.togglePlayProfileSong(u, pill);
+                }
+            };
+            document.addEventListener("pointerdown", unlockAudioOnce, { passive: true, once: true });
+            document.addEventListener("touchstart", unlockAudioOnce, { passive: true, once: true });
+
+            window.__nxFeedSongObserver = new IntersectionObserver((entries) => {
+                entries.forEach((entry) => {
+                    const card = entry.target;
+                    const bar = card.querySelector(".nx-real-post-song-bar");
+                    if (!bar) return;
+                    const sUrl = bar.getAttribute("data-song-url");
+                    const pill = bar.querySelector(".nx-ps-state");
+                    if (!sUrl) return;
+
+                    if (entry.isIntersecting && entry.intersectionRatio >= 0.55) {
+                        window.__nxAutoSongState.activeBar = bar;
+                        if (window.__nxAutoSongState.muted) return;
+                        if (activeSongAudio && activeSongAudio.src === sUrl && !activeSongAudio.paused) return;
+                        // Stop previous post song cleanly & auto-play current post song!
+                        if (activeSongAudio) {
+                            try { activeSongAudio.pause(); } catch (e) {}
+                            if (activeSongBtn) activeSongBtn.innerHTML = "▶ Play";
+                        }
+                        activeSongAudio = new Audio(sUrl);
+                        activeSongBtn = pill;
+                        activeSongAudio.play().then(() => {
+                            if (pill) pill.innerHTML = "🔊 Playing";
+                        }).catch(() => {
+                            if (pill) pill.innerHTML = "▶ Tap Sound";
+                        });
+                        activeSongAudio.onended = () => { if (pill) pill.innerHTML = "▶ Play"; };
+                    } else if (!entry.isIntersecting || entry.intersectionRatio < 0.25) {
+                        if (window.__nxAutoSongState.activeBar === bar) {
+                            window.__nxAutoSongState.activeBar = null;
+                        }
+                        if (activeSongAudio && activeSongAudio.src === sUrl && !activeSongAudio.paused) {
+                            try { activeSongAudio.pause(); } catch (e) {}
+                            if (pill) pill.innerHTML = "▶ Play";
+                        }
+                    }
+                });
+            }, { threshold: [0.2, 0.55] });
+        }
+
         containerEl.querySelectorAll(".nx-real-post-song-bar").forEach((bar) => {
+            const card = bar.closest(".nx-v31-post-card") || bar;
+            if (window.__nxFeedSongObserver && !card.dataset.nxSongObsBound) {
+                card.dataset.nxSongObsBound = "1";
+                window.__nxFeedSongObserver.observe(card);
+            }
             bar.onclick = (e) => {
                 e.stopPropagation();
+                window.__nxAutoSongState.unlocked = true;
                 const sUrl = bar.getAttribute("data-song-url");
                 const pill = bar.querySelector(".nx-ps-state");
-                window.togglePlayProfileSong(sUrl, pill);
+                if (activeSongAudio && activeSongAudio.src === sUrl && !activeSongAudio.paused) {
+                    window.__nxAutoSongState.muted = true;
+                    activeSongAudio.pause();
+                    if (pill) pill.innerHTML = "🔇 Muted";
+                } else {
+                    window.__nxAutoSongState.muted = false;
+                    window.togglePlayProfileSong(sUrl, pill);
+                }
             };
         });
 
