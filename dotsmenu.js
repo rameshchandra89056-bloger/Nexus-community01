@@ -40,7 +40,93 @@
     let pomoInterval = null;
     let gameUnsub = null;
     let activeGameRoomId = '';
+    let gameClockInterval = null;
+    let lastCelebratedRoundKey = '';
     const liveGamesMemoryCache = {};
+    const usedMathQuestions = new Set();
+    const usedQuizIndices = new Set();
+
+    // Confetti & Victory Popup Styles
+    const victoryStyle = document.createElement('style');
+    victoryStyle.textContent = `
+        @keyframes nxWinPop { 0%{transform:scale(0.6);opacity:0} 70%{transform:scale(1.06);opacity:1} 100%{transform:scale(1);opacity:1} }
+        @keyframes nxConfettiFall { 0%{transform:translateY(-20px) rotate(0deg);opacity:1} 100%{transform:translateY(260px) rotate(540deg);opacity:0} }
+        .nx-win-pop-card { animation: nxWinPop 0.35s cubic-bezier(.22,1,.36,1) both; }
+        .nx-confetti-bit { position:absolute; top:0; width:8px; height:8px; border-radius:2px; animation: nxConfettiFall 1.6s ease-out forwards; pointer-events:none; }
+    `;
+    document.head.appendChild(victoryStyle);
+
+    function getMyGameXp() {
+        try { return JSON.parse(localStorage.getItem('nx_game_rewards_v1') || '{"xp":0,"wins":0,"streak":0}'); }
+        catch (e) { return { xp: 0, wins: 0, streak: 0 }; }
+    }
+    function awardGameReward(didIWin) {
+        const stats = getMyGameXp();
+        if (didIWin) {
+            stats.xp = (Number(stats.xp) || 0) + 50;
+            stats.wins = (Number(stats.wins) || 0) + 1;
+            stats.streak = (Number(stats.streak) || 0) + 1;
+        } else {
+            stats.xp = (Number(stats.xp) || 0) + 10; // Participation XP
+            stats.streak = 0;
+        }
+        try { localStorage.setItem('nx_game_rewards_v1', JSON.stringify(stats)); } catch (e) {}
+        return stats;
+    }
+
+    function showWinnerCelebrationPopup(g, ctx) {
+        if (!g || !g.winner) return;
+        const roundSig = `${g.docId}|${g.roundId || g.updatedAt}|${g.winner}`;
+        if (lastCelebratedRoundKey === roundSig) return;
+        lastCelebratedRoundKey = roundSig;
+
+        document.getElementById('nx-game-victory-overlay')?.remove();
+        const wLower = String(g.winner || '').toLowerCase();
+        const isDraw = wLower.includes('draw');
+        const didIWin = !isDraw && (wLower.includes(ctx.myU) || (ctx.myName && wLower.includes(ctx.myName)));
+        const stats = awardGameReward(didIWin);
+
+        const colors = ['#10b981', '#38bdf8', '#fbbf24', '#f43f5e', '#a78bfa', '#34d399'];
+        const confettiHtml = Array.from({ length: 24 }, (_, i) => {
+            const left = Math.floor((i / 24) * 96) + 2;
+            const delay = (Math.random() * 0.45).toFixed(2);
+            const col = colors[i % colors.length];
+            return `<span class="nx-confetti-bit" style="left:${left}%;background:${col};animation-delay:${delay}s;"></span>`;
+        }).join('');
+
+        const ov = document.createElement('div');
+        ov.id = 'nx-game-victory-overlay';
+        ov.style.cssText = 'position:fixed;inset:0;background:rgba(2,6,23,0.86);z-index:285000;display:flex;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(6px);';
+        ov.innerHTML = `
+            <div class="nx-win-pop-card" style="position:relative;overflow:hidden;width:100%;max-width:330px;background:linear-gradient(155deg,#0f172a,#064e3b);border:2px solid ${isDraw ? '#38bdf8' : (didIWin ? '#fbbf24' : '#f43f5e')};border-radius:24px;padding:22px 18px;text-align:center;color:#fff;box-shadow:0 22px 55px rgba(0,0,0,0.92);">
+                ${didIWin ? confettiHtml : ''}
+                <div style="font-size:46px;margin-bottom:6px;">${isDraw ? '🤝' : (didIWin ? '🏆' : '🎯')}</div>
+                <div style="font-size:11px;font-weight:900;letter-spacing:1px;color:${didIWin ? '#fbbf24' : '#38bdf8'};text-transform:uppercase;">
+                    ${isDraw ? 'CLOSE MATCH!' : (didIWin ? 'VICTORY REWARD UNLOCKED!' : 'ROUND COMPLETE')}
+                </div>
+                <h3 style="font-size:20px;font-weight:900;color:#f8fafc;margin:4px 0 8px;">${escHtml(g.winner)}</h3>
+                <div style="display:flex;justify-content:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+                    <span style="background:rgba(251,191,36,0.18);border:1px solid #fbbf24;color:#fde047;padding:4px 10px;border-radius:99px;font-size:11.5px;font-weight:900;">⚡ +${didIWin ? 50 : 10} XP</span>
+                    <span style="background:rgba(16,185,129,0.2);border:1px solid #10b981;color:#34d399;padding:4px 10px;border-radius:99px;font-size:11.5px;font-weight:900;">🔥 Streak: ${stats.streak}</span>
+                    <span style="background:rgba(56,189,248,0.18);border:1px solid #38bdf8;color:#7dd3fc;padding:4px 10px;border-radius:99px;font-size:11.5px;font-weight:900;">🏅 Total XP: ${stats.xp}</span>
+                </div>
+                <div style="font-size:12px;color:#cbd5e1;margin-bottom:14px;">
+                    Scoreboard: <b style="color:#34d399;">@${escHtml(g.playerX)} (${g.scoreX || 0})</b> — <b style="color:#fb7185;">@${escHtml(g.playerO)} (${g.scoreO || 0})</b>
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button type="button" id="nx-win-next-btn" style="flex:1;padding:11px;border-radius:12px;background:linear-gradient(90deg,#10b981,#06b6d4);color:#020617;border:none;font-weight:900;font-size:13px;cursor:pointer;">🔄 Next Round</button>
+                    <button type="button" id="nx-win-close-btn" style="padding:11px 14px;border-radius:12px;background:#1e293b;color:#cbd5e1;border:1px solid #334155;font-weight:800;font-size:12.5px;cursor:pointer;">Close</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(ov);
+        ov.onclick = (ev) => { if (ev.target === ov) ov.remove(); };
+        ov.querySelector('#nx-win-close-btn').onclick = () => ov.remove();
+        ov.querySelector('#nx-win-next-btn').onclick = () => {
+            ov.remove();
+            window.startNew1v1LiveGame(g.gameType || 'ttt', g.timerSec || 30);
+        };
+    }
 
     function normU(u) {
         return String(u || '').toLowerCase().replace(/^@/, '').trim();
@@ -95,7 +181,6 @@
         const msgBox = (dmBox && dmBox.contains(e.target)) ? dmBox : ((grpBox && grpBox.contains(e.target)) ? grpBox : null);
         if (!msgBox) return;
 
-        // Detect if user tapped on a quoted reply block inside a message bubble
         const replyBlock = e.target.closest('div[style*="border-left"]');
         if (!replyBlock || replyBlock.id === 'nx-dm-reply-bar') return;
 
@@ -110,7 +195,6 @@
         const quotedSnippet = (colonIdx !== -1 ? quotedRaw.slice(colonIdx + 1) : quotedRaw).trim().toLowerCase();
         if (!quotedSnippet) return;
 
-        // Search backwards starting right ABOVE the current message bubble so it finds the exact recent message replied to!
         const allRows = Array.from(msgBox.querySelectorAll('[data-message-id], .nx-dm-bubble-anim'));
         const currentIdx = allRows.indexOf(parentBubbleRow);
         const searchStart = currentIdx > 0 ? currentIdx - 1 : allRows.length - 1;
@@ -119,7 +203,6 @@
         for (let i = searchStart; i >= 0; i--) {
             const candidate = allRows[i];
             if (candidate === parentBubbleRow) continue;
-            // Get bubble text excluding its own quoted reply block
             const clone = candidate.cloneNode(true);
             clone.querySelectorAll('div[style*="border-left"]').forEach(q => q.remove());
             const candidateText = (clone.innerText || '').toLowerCase();
@@ -138,11 +221,104 @@
     }, true);
 
     // =========================================================================
-    // 2. LIVE MULTIPLAYER 1v1 GAME ARCADE (AUTO-INVITE BANNER ON PARTNER PHONE!)
-    //    - Game 1: ❌⭕ Live 1v1 Tic-Tac-Toe (Strict Turn Lock + Scoreboard)
-    //    - Game 2: 🪨📄✂️ Stone-Paper-Scissors Showdown
-    //    - Game 3: ⚡ Fast Math / JEE Calculation Duel
+    // 2. LIVE MULTIPLAYER 1v1 GAME ARCADE v54 (5 GAMES + SYNCED TIMER + REWARDS)
+    //    1. ❌⭕ Tic-Tac-Toe | 2. 🪨📄✂️ Stone-Paper-Scissors | 3. ⚡ Math Duel (12 Types)
+    //    4. 🧠 GK/Science Quiz (25+ Qs) | 5. 🎯 Rapid Reflex Tap Battle
     // =========================================================================
+    const GK_QUIZ_BANK = [
+        { q: "SI unit of Electric Charge is?", opts: ["Volt", "Coulomb", "Ampere", "Ohm"], ans: 1 },
+        { q: "Speed of light in vacuum (approx)?", opts: ["3×10⁶ m/s", "3×10⁸ m/s", "3×10⁵ m/s", "1.5×10⁸ m/s"], ans: 1 },
+        { q: "Which gas is known as Laughing Gas?", opts: ["NO₂", "N₂O", "CO₂", "CH₄"], ans: 1 },
+        { q: "Value of sin(30°) + cos(60°) = ?", opts: ["0.5", "1", "√3/2", "2"], ans: 1 },
+        { q: "Chemical formula of Heavy Water?", opts: ["H₂O₂", "D₂O", "T₂O", "H₃O"], ans: 1 },
+        { q: "Powerhouse of the Cell is?", opts: ["Nucleus", "Ribosome", "Mitochondria", "Golgi Body"], ans: 2 },
+        { q: "Atomic number of Carbon is?", opts: ["4", "6", "8", "12"], ans: 1 },
+        { q: "In JavaScript, typeof null returns?", opts: ["null", "undefined", "object", "boolean"], ans: 2 },
+        { q: "Newton's 2nd Law formula?", opts: ["F = mv", "F = ma", "F = m/a", "F = mv²"], ans: 1 },
+        { q: "log₁₀(10000) = ?", opts: ["2", "3", "4", "5"], ans: 2 },
+        { q: "Hardest natural substance on Earth?", opts: ["Iron", "Quartz", "Diamond", "Titanium"], ans: 2 },
+        { q: "HTTP status code for 'Not Found'?", opts: ["200", "301", "403", "404"], ans: 3 },
+        { q: "pH value of pure neutral water at 25°C?", opts: ["5", "6", "7", "8"], ans: 2 },
+        { q: "Planet known as the Red Planet?", opts: ["Venus", "Mars", "Jupiter", "Saturn"], ans: 1 },
+        { q: "Derivative of sin(x) with respect to x?", opts: ["-cos(x)", "cos(x)", "tan(x)", "-sin(x)"], ans: 1 },
+        { q: "Most abundant gas in Earth's atmosphere?", opts: ["Oxygen", "Carbon Dioxide", "Nitrogen", "Argon"], ans: 2 },
+        { q: "HTML stands for HyperText ___ Language?", opts: ["Machine", "Markup", "Modern", "Module"], ans: 1 },
+        { q: "Avogadro's number is approx 6.022 × ?", opts: ["10²¹", "10²²", "10²³", "10²⁴"], ans: 2 },
+        { q: "SI unit of Force is?", opts: ["Joule", "Watt", "Pascal", "Newton"], ans: 3 },
+        { q: "Binary representation of decimal 10?", opts: ["1001", "1010", "1100", "1011"], ans: 1 },
+        { q: "Value of tan(45°) × sec(0°) = ?", opts: ["0", "1", "√2", "2"], ans: 1 },
+        { q: "Which vitamin is produced by sunlight?", opts: ["Vitamin A", "Vitamin C", "Vitamin D", "Vitamin K"], ans: 2 },
+        { q: "Capital city of Japan?", opts: ["Kyoto", "Osaka", "Tokyo", "Seoul"], ans: 2 },
+        { q: "Escape velocity on Earth (approx)?", opts: ["7.9 km/s", "9.8 km/s", "11.2 km/s", "15.0 km/s"], ans: 2 },
+        { q: "Smallest prime number is?", opts: ["0", "1", "2", "3"], ans: 2 }
+    ];
+
+    function generateNonRepeatingQuiz() {
+        if (usedQuizIndices.size >= GK_QUIZ_BANK.length) usedQuizIndices.clear();
+        const avail = [];
+        for (let i = 0; i < GK_QUIZ_BANK.length; i++) {
+            if (!usedQuizIndices.has(i)) avail.push(i);
+        }
+        const pick = avail[Math.floor(Math.random() * avail.length)];
+        usedQuizIndices.add(pick);
+        return Object.assign({ idx: pick }, GK_QUIZ_BANK[pick]);
+    }
+
+    function generateFastMathDuelProblem() {
+        if (usedMathQuestions.size > 40) usedMathQuestions.clear();
+        let q = '', ans = 0;
+        for (let attempt = 0; attempt < 12; attempt++) {
+            const kind = Math.floor(Math.random() * 12);
+            if (kind === 0) {
+                const a = 18 + Math.floor(Math.random() * 75), b = 15 + Math.floor(Math.random() * 75);
+                q = `${a} + ${b} = ?`; ans = a + b;
+            } else if (kind === 1) {
+                const a = 55 + Math.floor(Math.random() * 90), b = 14 + Math.floor(Math.random() * 40);
+                q = `${a} − ${b} = ?`; ans = a - b;
+            } else if (kind === 2) {
+                const a = 7 + Math.floor(Math.random() * 18), b = 5 + Math.floor(Math.random() * 14);
+                q = `${a} × ${b} = ?`; ans = a * b;
+            } else if (kind === 3) {
+                const b = 3 + Math.floor(Math.random() * 11), ansTmp = 6 + Math.floor(Math.random() * 18);
+                q = `${b * ansTmp} ÷ ${b} = ?`; ans = ansTmp;
+            } else if (kind === 4) {
+                const n = 9 + Math.floor(Math.random() * 17);
+                q = `${n}² − ${n} = ?`; ans = n * n - n;
+            } else if (kind === 5) {
+                const n = 3 + Math.floor(Math.random() * 7), b = 5 + Math.floor(Math.random() * 25);
+                q = `${n}³ + ${b} = ?`; ans = n * n * n + b;
+            } else if (kind === 6) {
+                const r = 6 + Math.floor(Math.random() * 19), b = 4 + Math.floor(Math.random() * 20);
+                q = `√${r * r} + ${b} = ?`; ans = r + b;
+            } else if (kind === 7) {
+                const pct = [10, 15, 20, 25, 30, 40, 50][Math.floor(Math.random() * 7)];
+                const base = (2 + Math.floor(Math.random() * 14)) * 20;
+                q = `${pct}% of ${base} = ?`; ans = Math.round((pct * base) / 100);
+            } else if (kind === 8) {
+                const a = 2 + Math.floor(Math.random() * 6), x = 3 + Math.floor(Math.random() * 11), b = 4 + Math.floor(Math.random() * 18);
+                q = `If ${a}x + ${b} = ${a * x + b}, find x`; ans = x;
+            } else if (kind === 9) {
+                const a = 2 + Math.floor(Math.random() * 8), b = 3 + Math.floor(Math.random() * 16), xv = 1 + Math.floor(Math.random() * 4);
+                q = `d/dx (${a}x² + ${b}x) at x=${xv}`; ans = 2 * a * xv + b;
+            } else if (kind === 10) {
+                const a = 4 + Math.floor(Math.random() * 15), b = 2 + Math.floor(Math.random() * 9), c = 3 + Math.floor(Math.random() * 12);
+                q = `(${a} + ${b}) × ${c} = ?`; ans = (a + b) * c;
+            } else {
+                const p = 2 + Math.floor(Math.random() * 5), a = 3 + Math.floor(Math.random() * 20);
+                q = `2^${p} + ${a} = ?`; ans = Math.pow(2, p) + a;
+            }
+            if (!usedMathQuestions.has(q)) { usedMathQuestions.add(q); break; }
+        }
+        const opts = new Set([ans]);
+        let guard = 0;
+        while (opts.size < 4 && guard < 30) {
+            guard++;
+            const delta = (Math.floor(Math.random() * 11) + 1) * (Math.random() > 0.5 ? 1 : -1);
+            if (ans + delta >= 0) opts.add(ans + delta);
+        }
+        return { q, ans, options: Array.from(opts).sort(() => Math.random() - 0.5) };
+    }
+
     function watchIncomingGameBannerInChat() {
         if (!window.Nexus || !Nexus.db) return;
         const dmRoot = document.getElementById('nx-dm-dedicated-root');
@@ -173,8 +349,13 @@
                 renderInChatLiveGameBanner(activeGame, ctx);
                 if (activeGame && document.getElementById('nx-live-game-modal-stage')) {
                     renderActiveGameModalContent(activeGame, ctx);
+                    if (activeGame.winner) showWinnerCelebrationPopup(activeGame, ctx);
                 }
             }, () => {});
+    }
+
+    function getGameLabel(t) {
+        return ({ ttt: 'Tic-Tac-Toe', rps: 'Stone-Paper-Scissors', math: '⚡ Math Duel', quiz: '🧠 GK/JEE Quiz', tap: '🎯 Reflex Tap' }[t] || 'Tic-Tac-Toe');
     }
 
     function renderInChatLiveGameBanner(gameData, ctx) {
@@ -196,13 +377,15 @@
 
         const isMyTurn = normU(gameData.currentTurnUser) === ctx.myU || normU(gameData.currentTurnUser) === ctx.myName;
         const statusText = gameData.winner
-            ? `🏆 Winner: @${gameData.winner}!`
-            : (isMyTurn ? `🟢 YOUR TURN! Tap to Play` : `⏳ Waiting for @${gameData.currentTurnUser}'s move...`);
+            ? `🏆 ${gameData.winner}`
+            : (gameData.gameType === 'ttt'
+                ? (isMyTurn ? `🟢 YOUR TURN! Tap Play` : `⏳ Waiting for @${gameData.currentTurnUser}...`)
+                : `⏱️ Live Round (${gameData.timerSec || 30}s) — Tap Play!`);
 
         banner.innerHTML = `
             <div style="min-width:0;flex:1;">
-                <div style="font-weight:900;color:#34d399;">🎮 Live 1v1 Game (${gameData.gameType === 'rps' ? 'Stone-Paper-Scissors' : (gameData.gameType === 'math' ? '⚡ Math Duel' : 'Tic-Tac-Toe')})</div>
-                <div style="font-size:11px;color:#fde047;font-weight:800;">${statusText} • Score: ${gameData.scoreX || 0} - ${gameData.scoreO || 0}</div>
+                <div style="font-weight:900;color:#34d399;">🎮 Live 1v1: ${getGameLabel(gameData.gameType)}</div>
+                <div style="font-size:11px;color:#fde047;font-weight:800;">${escHtml(statusText)} • Score: ${gameData.scoreX || 0} - ${gameData.scoreO || 0}</div>
             </div>
             <div style="display:flex;gap:5px;flex-shrink:0;">
                 <button type="button" onclick="window.openLive1v1GameModal()" style="background:#10b981;color:#020617;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:900;cursor:pointer;">Play 🎮</button>
@@ -211,41 +394,74 @@
         `;
     }
 
-    function generateFastMathDuelProblem() {
-        const kind = Math.floor(Math.random() * 4);
-        let q = '', ans = 0;
-        if (kind === 0) {
-            const a = 12 + Math.floor(Math.random() * 38), b = 11 + Math.floor(Math.random() * 39);
-            q = `${a} + ${b} = ?`; ans = a + b;
-        } else if (kind === 1) {
-            const a = 6 + Math.floor(Math.random() * 14), b = 4 + Math.floor(Math.random() * 12);
-            q = `${a} × ${b} = ?`; ans = a * b;
-        } else if (kind === 2) {
-            const n = 7 + Math.floor(Math.random() * 16);
-            q = `${n}² − ${n} = ?`; ans = n * n - n;
+    function startSyncedGameCountdownLoop(docId, ctx) {
+        clearInterval(gameClockInterval);
+        gameClockInterval = setInterval(() => {
+            const stage = document.getElementById('nx-live-game-modal-stage');
+            const g = liveGamesMemoryCache[docId];
+            if (!stage || !g || !g.active || g.winner) {
+                clearInterval(gameClockInterval);
+                return;
+            }
+            const limitSec = Number(g.timerSec || 30);
+            const started = Number(g.roundStartedAt || g.updatedAt || Date.now());
+            const left = Math.max(0, Math.ceil(limitSec - (Date.now() - started) / 1000));
+            const clockEl = document.getElementById('nx-game-sync-clock');
+            if (clockEl) {
+                clockEl.textContent = `⏱️ ${String(left).padStart(2, '0')}s`;
+                clockEl.style.color = left <= 7 ? '#fb7185' : '#fde047';
+            }
+            if (left <= 0 && !g.winner) {
+                clearInterval(gameClockInterval);
+                handleSyncedRoundTimeout(g, ctx);
+            }
+        }, 250);
+    }
+
+    function handleSyncedRoundTimeout(g, ctx) {
+        if (!g || g.winner) return;
+        let winnerTxt = 'Time Up! Draw';
+        let sX = Number(g.scoreX || 0), sO = Number(g.scoreO || 0);
+
+        if (g.gameType === 'ttt') {
+            const loserIsX = normU(g.currentTurnUser) === normU(g.playerX);
+            winnerTxt = loserIsX ? `@${g.playerO} Wins (Timeout)` : `@${g.playerX} Wins (Timeout)`;
+            if (loserIsX) sO++; else sX++;
+        } else if (g.gameType === 'tap') {
+            const tX = Number((g.tapCounts && g.tapCounts[normU(g.playerX)]) || 0);
+            const tO = Number((g.tapCounts && g.tapCounts[normU(g.playerO)]) || 0);
+            if (tX > tO) { winnerTxt = `@${g.playerX} Wins (${tX} vs ${tO} taps)!`; sX++; }
+            else if (tO > tX) { winnerTxt = `@${g.playerO} Wins (${tO} vs ${tX} taps)!`; sO++; }
+            else winnerTxt = `Draw (${tX} - ${tO} taps)!`;
         } else {
-            const a = 2 + Math.floor(Math.random() * 7), b = 3 + Math.floor(Math.random() * 15);
-            q = `d/dx (${a}x² + ${b}x) at x=2 ?`; ans = 2 * a * 2 + b;
+            winnerTxt = '⏱️ Time Up — Draw!';
         }
-        const opts = new Set([ans]);
-        while (opts.size < 4) {
-            const delta = (Math.floor(Math.random() * 9) + 1) * (Math.random() > 0.5 ? 1 : -1);
-            opts.add(ans + delta);
+
+        const patch = { winner: winnerTxt, scoreX: sX, scoreO: sO, updatedAt: Date.now() };
+        liveGamesMemoryCache[g.docId] = Object.assign({}, g, patch);
+        renderActiveGameModalContent(liveGamesMemoryCache[g.docId], ctx);
+        showWinnerCelebrationPopup(liveGamesMemoryCache[g.docId], ctx);
+        if (window.Nexus && Nexus.db) {
+            Nexus.db.collection("nexus_live_games").doc(g.docId).set(patch, { merge: true }).catch(() => {});
         }
-        return { q, ans, options: Array.from(opts).sort(() => Math.random() - 0.5) };
     }
 
     // 0.01s INSTANT GAME LAUNCH (ZERO Firestore blocking wait — opens immediately on tap!)
-    window.startNew1v1LiveGame = function(gameType = 'ttt') {
+    window.startNew1v1LiveGame = function(gameType = 'ttt', timerSecOpt) {
+        document.getElementById('nx-game-victory-overlay')?.remove();
         const modal = document.getElementById('nx-global-modal');
         const ctx = getPartnerContext();
         const prev = liveGamesMemoryCache[ctx.roomKey] || {};
-        const mathQ = gameType === 'math' ? generateFastMathDuelProblem() : null;
+        const timerSec = Number(timerSecOpt || prev.timerSec || (gameType === 'tap' ? 15 : 30));
+        const now = Date.now();
 
         const payload = {
             docId: ctx.roomKey,
+            roundId: 'r_' + now + '_' + Math.random().toString(36).slice(2, 5),
             active: true,
             gameType: gameType,
+            timerSec: timerSec,
+            roundStartedAt: now,
             roomKey: ctx.roomKey,
             participants: ctx.participants,
             playerX: ctx.myU,
@@ -256,18 +472,20 @@
             currentTurnUser: ctx.myU,
             board: ['', '', '', '', '', '', '', '', ''],
             rpsMoves: {},
-            mathQuestion: mathQ,
+            mathQuestion: gameType === 'math' ? generateFastMathDuelProblem() : null,
+            quizQuestion: gameType === 'quiz' ? generateNonRepeatingQuiz() : null,
+            tapCounts: { [ctx.myU]: 0, [ctx.pU]: 0 },
             winner: '',
             winningLine: [],
             scoreX: Number(prev.scoreX || 0),
             scoreO: Number(prev.scoreO || 0),
-            updatedAt: Date.now()
+            updatedAt: now
         };
 
-        // 1. Render board in 0ms immediately!
+        // 1. Render in 0.001s immediately!
         liveGamesMemoryCache[ctx.roomKey] = payload;
         if (modal) {
-            modal.innerHTML = `<div id="nx-live-game-modal-stage" class="nx-modal-box" style="border:2px solid #10b981;background:#090d16;padding:15px;max-width:365px;text-align:center;"></div>`;
+            modal.innerHTML = `<div id="nx-live-game-modal-stage" class="nx-modal-box" style="border:2px solid #10b981;background:#090d16;padding:14px;max-width:380px;text-align:center;"></div>`;
             modal.style.zIndex = '272000';
             modal.style.display = 'flex';
             renderActiveGameModalContent(payload, ctx);
@@ -280,7 +498,6 @@
             delete dbPayload.docId;
             Nexus.db.collection("nexus_live_games").doc(ctx.roomKey).set(dbPayload).catch(() => {});
         }
-        if (window.Nexus && Nexus.toast) Nexus.toast(`🎮 Game Live with ${ctx.pDisplay}!`);
     };
 
     window.openLive1v1GameModal = function() {
@@ -290,13 +507,13 @@
         const cached = liveGamesMemoryCache[ctx.roomKey];
 
         if (cached && cached.active) {
-            modal.innerHTML = `<div id="nx-live-game-modal-stage" class="nx-modal-box" style="border:2px solid #10b981;background:#090d16;padding:15px;max-width:365px;text-align:center;"></div>`;
+            modal.innerHTML = `<div id="nx-live-game-modal-stage" class="nx-modal-box" style="border:2px solid #10b981;background:#090d16;padding:14px;max-width:380px;text-align:center;"></div>`;
             modal.style.zIndex = '272000';
             modal.style.display = 'flex';
             renderActiveGameModalContent(cached, ctx);
             return;
         }
-        window.startNew1v1LiveGame('ttt');
+        window.startNew1v1LiveGame('ttt', 30);
     };
 
     function renderActiveGameModalContent(g, ctx) {
@@ -306,19 +523,54 @@
         const isPlayerX = ctx.myU === normU(g.playerX) || ctx.myName === normU(g.playerX);
         const mySymbol = isPlayerX ? 'X' : 'O';
         const isMyTurn = normU(g.currentTurnUser) === ctx.myU || normU(g.currentTurnUser) === ctx.myName;
+        const tLimit = Number(g.timerSec || 30);
+        const leftNow = g.winner ? 0 : Math.max(0, Math.ceil(tLimit - (Date.now() - Number(g.roundStartedAt || g.updatedAt || Date.now())) / 1000));
+        const myStats = getMyGameXp();
 
         let bodyHTML = '';
         if (g.gameType === 'math') {
-            const mq = g.mathQuestion || { q: '12 × 8 = ?', ans: 96, options: [84, 96, 104, 88] };
+            const mq = g.mathQuestion || generateFastMathDuelProblem();
             bodyHTML = `
-                <div style="margin:10px 0 12px;padding:14px;border-radius:14px;background:#111827;border:1.5px solid #fbbf24;">
-                    <div style="font-size:11px;font-weight:900;color:#fbbf24;margin-bottom:6px;">⚡ FASTEST CORRECT ANSWER WINS +1 POINT!</div>
+                <div style="margin:8px 0 11px;padding:13px;border-radius:14px;background:#111827;border:1.5px solid #fbbf24;">
+                    <div style="font-size:10.5px;font-weight:900;color:#fbbf24;margin-bottom:5px;">⚡ FASTEST CORRECT ANSWER WINS +50 XP!</div>
                     <div style="font-size:21px;font-weight:900;color:#fff;margin-bottom:12px;">${escHtml(mq.q)}</div>
                     ${g.winner
-                        ? `<div style="padding:10px;border-radius:11px;background:rgba(16,185,129,0.2);border:1px solid #10b981;color:#34d399;font-weight:900;font-size:13.5px;">🏆 ${escHtml(g.winner)} (Ans: ${mq.ans})</div>`
+                        ? `<div style="padding:10px;border-radius:11px;background:rgba(16,185,129,0.2);border:1px solid #10b981;color:#34d399;font-weight:900;font-size:13px;">🏆 ${escHtml(g.winner)} (Ans: ${mq.ans})</div>`
                         : `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                             ${(mq.options || []).map(opt => `<button type="button" onclick="window.answerMathDuel('${g.docId}', ${Number(opt)})" style="padding:12px;border-radius:11px;background:#1e293b;border:1.5px solid #38bdf8;color:#fff;font-size:16px;font-weight:900;cursor:pointer;">${opt}</button>`).join('')}
                            </div>`}
+                </div>
+            `;
+        } else if (g.gameType === 'quiz') {
+            const qz = g.quizQuestion || GK_QUIZ_BANK[0];
+            bodyHTML = `
+                <div style="margin:8px 0 11px;padding:13px;border-radius:14px;background:#111827;border:1.5px solid #a78bfa;">
+                    <div style="font-size:10.5px;font-weight:900;color:#d8b4fe;margin-bottom:5px;">🧠 SCIENCE / JEE / GK SPEED BATTLE (+50 XP)</div>
+                    <div style="font-size:15px;font-weight:900;color:#fff;margin-bottom:11px;line-height:1.35;">${escHtml(qz.q)}</div>
+                    ${g.winner
+                        ? `<div style="padding:10px;border-radius:11px;background:rgba(16,185,129,0.2);border:1px solid #10b981;color:#34d399;font-weight:900;font-size:12.5px;">🏆 ${escHtml(g.winner)}<br><span style="color:#fde047;">Correct: ${escHtml(qz.opts[qz.ans])}</span></div>`
+                        : `<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;">
+                            ${(qz.opts || []).map((opt, idx) => `<button type="button" onclick="window.answerQuizDuel('${g.docId}', ${idx})" style="padding:10px 8px;border-radius:11px;background:#1e293b;border:1.5px solid #a78bfa;color:#fff;font-size:12.5px;font-weight:800;cursor:pointer;">${escHtml(opt)}</button>`).join('')}
+                           </div>`}
+                </div>
+            `;
+        } else if (g.gameType === 'tap') {
+            const tc = g.tapCounts || {};
+            const cX = Number(tc[normU(g.playerX)] || 0);
+            const cO = Number(tc[normU(g.playerO)] || 0);
+            const maxT = Math.max(15, cX, cO);
+            bodyHTML = `
+                <div style="margin:8px 0 11px;padding:13px;border-radius:14px;background:#111827;border:1.5px solid #38bdf8;">
+                    <div style="font-size:11px;font-weight:900;color:#38bdf8;margin-bottom:8px;">🎯 TAP FAST BEFORE TIMER HITS 0s!</div>
+                    <div style="text-align:left;font-size:11.5px;margin-bottom:6px;">
+                        <div style="display:flex;justify-content:space-between;color:#34d399;font-weight:800;"><span>@${escHtml(g.playerX)}</span><span>${cX} taps</span></div>
+                        <div style="height:8px;background:#1e293b;border-radius:99px;overflow:hidden;margin:3px 0 7px;"><div style="height:100%;width:${Math.min(100, (cX/maxT)*100)}%;background:#10b981;transition:width 0.1s;"></div></div>
+                        <div style="display:flex;justify-content:space-between;color:#fb7185;font-weight:800;"><span>@${escHtml(g.playerO)}</span><span>${cO} taps</span></div>
+                        <div style="height:8px;background:#1e293b;border-radius:99px;overflow:hidden;margin-top:3px;"><div style="height:100%;width:${Math.min(100, (cO/maxT)*100)}%;background:#f43f5e;transition:width 0.1s;"></div></div>
+                    </div>
+                    ${g.winner
+                        ? `<div style="padding:10px;border-radius:11px;background:rgba(16,185,129,0.2);border:1px solid #10b981;color:#34d399;font-weight:900;font-size:13px;">🏆 ${escHtml(g.winner)}</div>`
+                        : `<button type="button" onclick="window.registerReflexTap('${g.docId}')" style="width:100%;padding:16px;border-radius:16px;background:linear-gradient(135deg,#10b981,#06b6d4);color:#020617;border:none;font-size:18px;font-weight:900;cursor:pointer;margin-top:6px;box-shadow:0 6px 20px rgba(16,185,129,0.4);">⚡ TAP FAST! (+1)</button>`}
                 </div>
             `;
         } else if (g.gameType === 'rps') {
@@ -328,25 +580,25 @@
             const bothMoved = Boolean(myMove && partnerMove);
 
             bodyHTML = `
-                <div style="margin:12px 0;padding:12px;border-radius:14px;background:#111827;border:1px solid #1e293b;">
-                    <div style="font-size:12.5px;font-weight:800;color:#fde047;margin-bottom:10px;">
-                        ${bothMoved ? `🏆 Result: ${g.winner || 'Round Complete!'}` : (myMove ? `⏳ Waiting for ${ctx.pDisplay} to pick...` : `👉 Pick your move below!`)}
+                <div style="margin:8px 0 11px;padding:12px;border-radius:14px;background:#111827;border:1px solid #1e293b;">
+                    <div style="font-size:12px;font-weight:800;color:#fde047;margin-bottom:8px;">
+                        ${bothMoved ? `🏆 ${escHtml(g.winner || 'Round Complete!')}` : (myMove ? `⏳ Locked! Waiting for ${escHtml(ctx.pDisplay)}...` : `👉 Tap Stone, Paper or Scissor!`)}
                     </div>
-                    <div style="display:flex;justify-content:space-around;font-size:34px;margin:10px 0;">
+                    <div style="display:flex;justify-content:space-around;font-size:34px;margin:8px 0;">
                         <div>
                             <div>${bothMoved ? (myMove === 'R' ? '🪨' : myMove === 'P' ? '📄' : '✂️') : (myMove ? '✅' : '❓')}</div>
-                            <div style="font-size:11px;color:#34d399;font-weight:800;margin-top:4px;">You</div>
+                            <div style="font-size:11px;color:#34d399;font-weight:800;margin-top:3px;">You</div>
                         </div>
-                        <div style="font-size:18px;align-self:center;color:#94a3b8;font-weight:900;">VS</div>
+                        <div style="font-size:17px;align-self:center;color:#94a3b8;font-weight:900;">VS</div>
                         <div>
                             <div>${bothMoved ? (partnerMove === 'R' ? '🪨' : partnerMove === 'P' ? '📄' : '✂️') : (partnerMove ? '✅' : '❓')}</div>
-                            <div style="font-size:11px;color:#38bdf8;font-weight:800;margin-top:4px;">${ctx.pDisplay}</div>
+                            <div style="font-size:11px;color:#38bdf8;font-weight:800;margin-top:3px;">${escHtml(ctx.pDisplay)}</div>
                         </div>
                     </div>
-                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;">
-                        <button type="button" onclick="window.makeRpsMove('${g.docId}','R')" style="padding:10px;border-radius:12px;background:#1e293b;border:1.5px solid #38bdf8;color:#fff;font-size:13px;font-weight:900;cursor:pointer;">🪨 Stone</button>
-                        <button type="button" onclick="window.makeRpsMove('${g.docId}','P')" style="padding:10px;border-radius:12px;background:#1e293b;border:1.5px solid #10b981;color:#fff;font-size:13px;font-weight:900;cursor:pointer;">📄 Paper</button>
-                        <button type="button" onclick="window.makeRpsMove('${g.docId}','S')" style="padding:10px;border-radius:12px;background:#1e293b;border:1.5px solid #f43f5e;color:#fff;font-size:13px;font-weight:900;cursor:pointer;">✂️ Scissor</button>
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;">
+                        <button type="button" onclick="window.makeRpsMove('${g.docId}','R')" style="padding:10px;border-radius:12px;background:${myMove==='R'?'#064e3b':'#1e293b'};border:1.5px solid #38bdf8;color:#fff;font-size:12.5px;font-weight:900;cursor:pointer;">🪨 Stone</button>
+                        <button type="button" onclick="window.makeRpsMove('${g.docId}','P')" style="padding:10px;border-radius:12px;background:${myMove==='P'?'#064e3b':'#1e293b'};border:1.5px solid #10b981;color:#fff;font-size:12.5px;font-weight:900;cursor:pointer;">📄 Paper</button>
+                        <button type="button" onclick="window.makeRpsMove('${g.docId}','S')" style="padding:10px;border-radius:12px;background:${myMove==='S'?'#064e3b':'#1e293b'};border:1.5px solid #f43f5e;color:#fff;font-size:12.5px;font-weight:900;cursor:pointer;">✂️ Scissor</button>
                     </div>
                 </div>
             `;
@@ -354,17 +606,17 @@
             const b = Array.isArray(g.board) ? g.board : ['', '', '', '', '', '', '', '', ''];
             const winLine = Array.isArray(g.winningLine) ? g.winningLine : [];
             bodyHTML = `
-                <div style="padding:8px 12px;border-radius:12px;background:${g.winner ? 'rgba(16,185,129,0.2)' : (isMyTurn ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)')};border:1px solid ${g.winner ? '#10b981' : (isMyTurn ? '#10b981' : '#f59e0b')};margin-bottom:12px;font-size:12.5px;font-weight:900;color:${g.winner ? '#34d399' : (isMyTurn ? '#34d399' : '#fde047')};">
+                <div style="padding:7px 10px;border-radius:11px;background:${g.winner ? 'rgba(16,185,129,0.2)' : (isMyTurn ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)')};border:1px solid ${g.winner ? '#10b981' : (isMyTurn ? '#10b981' : '#f59e0b')};margin-bottom:10px;font-size:12px;font-weight:900;color:${g.winner ? '#34d399' : (isMyTurn ? '#34d399' : '#fde047')};">
                     ${g.winner
-                        ? (g.winner === 'Draw' ? '🤝 Match Draw! Tap Next Round' : `🏆 WINNER: @${g.winner} 🎉`)
-                        : (isMyTurn ? `🟢 YOUR TURN (Tap any box to place ${mySymbol})` : `⏳ Waiting for @${g.currentTurnUser} (${g.currentTurnSymbol})...`)}
+                        ? (String(g.winner).includes('Draw') ? '🤝 Match Draw! Tap Next Round' : `🏆 ${escHtml(g.winner)} 🎉`)
+                        : (isMyTurn ? `🟢 YOUR TURN (Place ${mySymbol})` : `⏳ Waiting for @${escHtml(g.currentTurnUser)} (${g.currentTurnSymbol})...`)}
                 </div>
 
-                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:246px;margin:0 auto 14px;">
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;max-width:236px;margin:0 auto 12px;">
                     ${b.map((cell, idx) => {
                         const isWinCell = winLine.includes(idx);
                         return `
-                            <button type="button" onclick="window.playStrictTicTacToeMove('${g.docId}', ${idx})" style="height:74px;border-radius:14px;background:${isWinCell ? '#064e3b' : '#161f33'};border:2px solid ${isWinCell ? '#10b981' : '#26334d'};color:${cell === 'X' ? '#10b981' : '#f43f5e'};font-size:30px;font-weight:900;cursor:${(!g.winner && isMyTurn && !cell) ? 'pointer' : 'not-allowed'};">
+                            <button type="button" onclick="window.playStrictTicTacToeMove('${g.docId}', ${idx})" style="height:70px;border-radius:13px;background:${isWinCell ? '#064e3b' : '#161f33'};border:2px solid ${isWinCell ? '#10b981' : '#26334d'};color:${cell === 'X' ? '#10b981' : '#f43f5e'};font-size:29px;font-weight:900;cursor:${(!g.winner && isMyTurn && !cell) ? 'pointer' : 'not-allowed'};">
                                 ${cell}
                             </button>
                         `;
@@ -374,56 +626,71 @@
         }
 
         stage.innerHTML = `
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                <strong style="color:#34d399;font-size:15px;">🎮 1v1 Live Multiplayer Arcade</strong>
-                <button type="button" onclick="document.getElementById('nx-global-modal').style.display='none'" style="background:none;border:none;color:#94a3b8;font-size:18px;cursor:pointer;">✕</button>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <div style="text-align:left;">
+                    <strong style="color:#34d399;font-size:14.5px;">🎮 1v1 Live Arcade</strong>
+                    <div style="font-size:10px;color:#fbbf24;font-weight:800;">🏅 Your XP: ${myStats.xp} • 🔥 Streak: ${myStats.streak}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span id="nx-game-sync-clock" style="background:#111827;border:1px solid #334155;padding:4px 9px;border-radius:99px;font-family:monospace;font-size:12px;font-weight:900;color:${leftNow<=7?'#fb7185':'#fde047'};">⏱️ ${String(leftNow).padStart(2,'0')}s</span>
+                    <button type="button" onclick="clearInterval(window.__nxGameClk); document.getElementById('nx-global-modal').style.display='none'" style="background:none;border:none;color:#94a3b8;font-size:18px;cursor:pointer;">✕</button>
+                </div>
             </div>
 
-            <!-- Switch Game Mode Tabs (3 Real Live Games!) -->
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:10px;">
-                <button type="button" onclick="window.startNew1v1LiveGame('ttt')" style="padding:7px 4px;border-radius:9px;border:none;background:${(!g.gameType || g.gameType === 'ttt') ? '#10b981' : '#1e293b'};color:${(!g.gameType || g.gameType === 'ttt') ? '#020617' : '#fff'};font-weight:900;font-size:11px;cursor:pointer;">❌⭕ TTT</button>
-                <button type="button" onclick="window.startNew1v1LiveGame('rps')" style="padding:7px 4px;border-radius:9px;border:none;background:${g.gameType === 'rps' ? '#10b981' : '#1e293b'};color:${g.gameType === 'rps' ? '#020617' : '#fff'};font-weight:900;font-size:11px;cursor:pointer;">🪨📄 RPS</button>
-                <button type="button" onclick="window.startNew1v1LiveGame('math')" style="padding:7px 4px;border-radius:9px;border:none;background:${g.gameType === 'math' ? '#fbbf24' : '#1e293b'};color:${g.gameType === 'math' ? '#020617' : '#fff'};font-weight:900;font-size:11px;cursor:pointer;">⚡ Math Duel</button>
+            <!-- 5 Live Multiplayer Games Selector -->
+            <div style="display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;margin-bottom:7px;padding-bottom:2px;">
+                ${[
+                    ['ttt', '❌⭕ TTT'],
+                    ['rps', '🪨📄 RPS'],
+                    ['math', '⚡ Math'],
+                    ['quiz', '🧠 Quiz'],
+                    ['tap', '🎯 Tap Race']
+                ].map(([k, lbl]) => `<button type="button" onclick="window.startNew1v1LiveGame('${k}', ${tLimit})" style="padding:6px 10px;border-radius:9px;border:none;white-space:nowrap;flex-shrink:0;background:${(g.gameType||'ttt')===k ? '#10b981' : '#1e293b'};color:${(g.gameType||'ttt')===k ? '#020617' : '#fff'};font-weight:900;font-size:11px;cursor:pointer;">${lbl}</button>`).join('')}
+            </div>
+
+            <!-- Selectable Synced Timer Bar (15s / 30s / 45s / 60s) -->
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:5px;background:#111827;border:1px solid #1e293b;border-radius:10px;padding:5px 8px;margin-bottom:8px;font-size:10.5px;">
+                <span style="color:#94a3b8;font-weight:800;">⏱️ Timer:</span>
+                <div style="display:flex;gap:4px;">
+                    ${[15, 30, 45, 60].map(sec => `<button type="button" onclick="window.startNew1v1LiveGame('${g.gameType||'ttt'}', ${sec})" style="padding:3px 7px;border-radius:7px;border:none;background:${tLimit===sec?'#38bdf8':'#1e293b'};color:${tLimit===sec?'#020617':'#cbd5e1'};font-weight:900;font-size:10px;cursor:pointer;">${sec}s</button>`).join('')}
+                </div>
             </div>
 
             <!-- Live Player vs Player Scoreboard -->
-            <div style="display:flex;justify-content:space-between;align-items:center;background:#111827;border:1px solid #1e293b;border-radius:12px;padding:8px 12px;margin-bottom:10px;font-size:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;background:#111827;border:1px solid #1e293b;border-radius:11px;padding:7px 12px;margin-bottom:9px;font-size:11.5px;">
                 <div style="text-align:left;">
-                    <div style="color:#10b981;font-weight:900;">❌ @${g.playerX}</div>
-                    <div style="font-size:11px;color:#94a3b8;">Wins: <b style="color:#fff;">${g.scoreX || 0}</b></div>
+                    <div style="color:#10b981;font-weight:900;">❌ @${escHtml(g.playerX)}</div>
+                    <div style="font-size:10.5px;color:#94a3b8;">Wins: <b style="color:#fff;">${g.scoreX || 0}</b></div>
                 </div>
-                <div style="font-weight:900;color:#38bdf8;font-size:13px;">VS</div>
+                <div style="font-weight:900;color:#38bdf8;font-size:12.5px;">VS</div>
                 <div style="text-align:right;">
-                    <div style="color:#f43f5e;font-weight:900;">⭕ @${g.playerO}</div>
-                    <div style="font-size:11px;color:#94a3b8;">Wins: <b style="color:#fff;">${g.scoreO || 0}</b></div>
+                    <div style="color:#f43f5e;font-weight:900;">⭕ @${escHtml(g.playerO)}</div>
+                    <div style="font-size:10.5px;color:#94a3b8;">Wins: <b style="color:#fff;">${g.scoreO || 0}</b></div>
                 </div>
             </div>
 
             ${bodyHTML}
 
             <div style="display:flex;gap:8px;">
-                <button type="button" onclick="window.startNew1v1LiveGame('${g.gameType || 'ttt'}')" style="flex:1;padding:10px;border-radius:11px;background:#10b981;color:#020617;border:none;font-weight:900;font-size:12px;cursor:pointer;">🔄 Next Round</button>
+                <button type="button" onclick="window.startNew1v1LiveGame('${g.gameType || 'ttt'}', ${tLimit})" style="flex:1;padding:10px;border-radius:11px;background:#10b981;color:#020617;border:none;font-weight:900;font-size:12px;cursor:pointer;">🔄 Next Round</button>
                 <button type="button" onclick="window.endLive1v1Game('${g.docId}')" style="padding:10px 14px;border-radius:11px;background:#ef4444;color:#fff;border:none;font-weight:900;font-size:12px;cursor:pointer;">End Game</button>
             </div>
         `;
+
+        if (!g.winner) {
+            startSyncedGameCountdownLoop(g.docId, ctx);
+            window.__nxGameClk = gameClockInterval;
+        }
     }
 
-    window.playStrictTicTacToeMove = async function(docId, idx) {
-        if (!window.Nexus || !Nexus.db) return;
+    window.playStrictTicTacToeMove = function(docId, idx) {
         const ctx = getPartnerContext();
-        const ref = Nexus.db.collection("nexus_live_games").doc(docId);
-        let g = liveGamesMemoryCache[docId];
-        if (!g) {
-            const doc = await ref.get();
-            if (!doc.exists) return;
-            g = Object.assign({}, doc.data(), { docId });
-        }
-        if (g.winner || g.board[idx]) return;
+        const g = liveGamesMemoryCache[docId];
+        if (!g || g.winner || g.board[idx]) return;
 
-        // STRICT TURN CHECK: Only the player whose turn it is can make a move!
         const isMyTurn = normU(g.currentTurnUser) === ctx.myU || normU(g.currentTurnUser) === ctx.myName;
         if (!isMyTurn) {
-            if (Nexus.toast) Nexus.toast(`⏳ Wait! Abhi @${g.currentTurnUser} ki turn hai!`);
+            if (window.Nexus && Nexus.toast) Nexus.toast(`⏳ Wait! Abhi @${g.currentTurnUser} ki turn hai!`);
             return;
         }
 
@@ -436,14 +703,12 @@
         let winningLine = [];
         for (const [a, b, c] of wins) {
             if (nextBoard[a] && nextBoard[a] === nextBoard[b] && nextBoard[a] === nextBoard[c]) {
-                winnerUser = sym === 'X' ? g.playerX : g.playerO;
+                winnerUser = `@${sym === 'X' ? g.playerX : g.playerO} Wins!`;
                 winningLine = [a, b, c];
                 break;
             }
         }
-        if (!winnerUser && nextBoard.every(Boolean)) {
-            winnerUser = 'Draw';
-        }
+        if (!winnerUser && nextBoard.every(Boolean)) winnerUser = 'Match Draw!';
 
         const nextSymbol = sym === 'X' ? 'O' : 'X';
         const nextUser = nextSymbol === 'X' ? g.playerX : g.playerO;
@@ -454,27 +719,28 @@
             currentTurnUser: nextUser,
             winner: winnerUser,
             winningLine: winningLine,
+            roundStartedAt: Date.now(), // Reset synced turn timer cleanly on each move!
             updatedAt: Date.now()
         };
 
-        if (winnerUser && winnerUser !== 'Draw') {
+        if (winnerUser && !winnerUser.includes('Draw')) {
             if (sym === 'X') updatePayload.scoreX = Number(g.scoreX || 0) + 1;
             else updatePayload.scoreO = Number(g.scoreO || 0) + 1;
         }
 
-        // 0ms Optimistic Board Update!
+        // 0.001s Instant Optimistic UI Update!
         liveGamesMemoryCache[docId] = Object.assign({}, g, updatePayload, { docId });
         renderActiveGameModalContent(liveGamesMemoryCache[docId], ctx);
-        ref.set(updatePayload, { merge: true }).catch(() => {});
+        if (winnerUser) showWinnerCelebrationPopup(liveGamesMemoryCache[docId], ctx);
+        if (window.Nexus && Nexus.db) {
+            Nexus.db.collection("nexus_live_games").doc(docId).set(updatePayload, { merge: true }).catch(() => {});
+        }
     };
 
-    window.makeRpsMove = async function(docId, moveChar) {
-        if (!window.Nexus || !Nexus.db) return;
+    window.makeRpsMove = function(docId, moveChar) {
         const ctx = getPartnerContext();
-        const ref = Nexus.db.collection("nexus_live_games").doc(docId);
-        const doc = await ref.get();
-        if (!doc.exists) return;
-        const g = doc.data();
+        const g = liveGamesMemoryCache[docId];
+        if (!g || g.winner) return;
         const moves = Object.assign({}, g.rpsMoves || {});
         moves[ctx.myU] = moveChar;
 
@@ -487,46 +753,92 @@
         if (mX && mO) {
             if (mX === mO) winner = 'Draw!';
             else if ((mX === 'R' && mO === 'S') || (mX === 'P' && mO === 'R') || (mX === 'S' && mO === 'P')) {
-                winner = `@${g.playerX} Wins!`;
-                sX++;
+                winner = `@${g.playerX} Wins!`; sX++;
             } else {
-                winner = `@${g.playerO} Wins!`;
-                sO++;
+                winner = `@${g.playerO} Wins!`; sO++;
             }
         }
 
-        await ref.set({
-            rpsMoves: moves,
-            winner: winner,
-            scoreX: sX,
-            scoreO: sO,
-            updatedAt: Date.now()
-        }, { merge: true });
+        const patch = { rpsMoves: moves, winner, scoreX: sX, scoreO: sO, updatedAt: Date.now() };
+        liveGamesMemoryCache[docId] = Object.assign({}, g, patch, { docId });
+        renderActiveGameModalContent(liveGamesMemoryCache[docId], ctx);
+        if (winner) showWinnerCelebrationPopup(liveGamesMemoryCache[docId], ctx);
+        if (window.Nexus && Nexus.db) {
+            Nexus.db.collection("nexus_live_games").doc(docId).set(patch, { merge: true }).catch(() => {});
+        }
     };
 
-    window.answerMathDuel = async function(docId, chosenVal) {
-        if (!window.Nexus || !Nexus.db) return;
+    window.answerMathDuel = function(docId, chosenVal) {
         const ctx = getPartnerContext();
-        const ref = Nexus.db.collection("nexus_live_games").doc(docId);
-        const doc = await ref.get();
-        if (!doc.exists) return;
-        const g = doc.data();
-        if (g.winner || !g.mathQuestion) return;
+        const g = liveGamesMemoryCache[docId];
+        if (!g || g.winner || !g.mathQuestion) return;
         if (Number(chosenVal) !== Number(g.mathQuestion.ans)) {
-            if (Nexus.toast) Nexus.toast('❌ Wrong Answer! Try fast!');
+            if (window.Nexus && Nexus.toast) Nexus.toast('❌ Galat jawab! Dusra try karo!');
             return;
         }
         const isX = ctx.myU === normU(g.playerX) || ctx.myName === normU(g.playerX);
-        await ref.set({
+        const patch = {
             winner: `@${ctx.myU} Solved First!`,
             scoreX: Number(g.scoreX || 0) + (isX ? 1 : 0),
             scoreO: Number(g.scoreO || 0) + (isX ? 0 : 1),
             updatedAt: Date.now()
-        }, { merge: true });
-        if (Nexus.toast) Nexus.toast('⚡ Correct! +1 Point!');
+        };
+        liveGamesMemoryCache[docId] = Object.assign({}, g, patch, { docId });
+        renderActiveGameModalContent(liveGamesMemoryCache[docId], ctx);
+        showWinnerCelebrationPopup(liveGamesMemoryCache[docId], ctx);
+        if (window.Nexus && Nexus.db) {
+            Nexus.db.collection("nexus_live_games").doc(docId).set(patch, { merge: true }).catch(() => {});
+        }
+    };
+
+    window.answerQuizDuel = function(docId, optIdx) {
+        const ctx = getPartnerContext();
+        const g = liveGamesMemoryCache[docId];
+        if (!g || g.winner || !g.quizQuestion) return;
+        if (Number(optIdx) !== Number(g.quizQuestion.ans)) {
+            if (window.Nexus && Nexus.toast) Nexus.toast('❌ Wrong option! Try fast!');
+            return;
+        }
+        const isX = ctx.myU === normU(g.playerX) || ctx.myName === normU(g.playerX);
+        const patch = {
+            winner: `@${ctx.myU} Answered First!`,
+            scoreX: Number(g.scoreX || 0) + (isX ? 1 : 0),
+            scoreO: Number(g.scoreO || 0) + (isX ? 0 : 1),
+            updatedAt: Date.now()
+        };
+        liveGamesMemoryCache[docId] = Object.assign({}, g, patch, { docId });
+        renderActiveGameModalContent(liveGamesMemoryCache[docId], ctx);
+        showWinnerCelebrationPopup(liveGamesMemoryCache[docId], ctx);
+        if (window.Nexus && Nexus.db) {
+            Nexus.db.collection("nexus_live_games").doc(docId).set(patch, { merge: true }).catch(() => {});
+        }
+    };
+
+    let tapSyncTimer = null;
+    window.registerReflexTap = function(docId) {
+        const ctx = getPartnerContext();
+        const g = liveGamesMemoryCache[docId];
+        if (!g || g.winner) return;
+        const tc = Object.assign({}, g.tapCounts || {});
+        tc[ctx.myU] = Number(tc[ctx.myU] || 0) + 1;
+        g.tapCounts = tc;
+        g.updatedAt = Date.now();
+        renderActiveGameModalContent(g, ctx);
+        // Batch Firestore write every 350ms so tapping 10x/sec NEVER floods network!
+        clearTimeout(tapSyncTimer);
+        tapSyncTimer = setTimeout(() => {
+            if (window.Nexus && Nexus.db && liveGamesMemoryCache[docId]) {
+                Nexus.db.collection("nexus_live_games").doc(docId).set({
+                    [`tapCounts.${ctx.myU}`]: liveGamesMemoryCache[docId].tapCounts[ctx.myU],
+                    updatedAt: Date.now()
+                }, { merge: true }).catch(() => {});
+            }
+        }, 350);
     };
 
     window.endLive1v1Game = async function(docId) {
+        clearInterval(gameClockInterval);
+        document.getElementById('nx-game-victory-overlay')?.remove();
         document.getElementById('nx-global-modal').style.display = 'none';
         document.getElementById('nx-inchat-game-invite-bar')?.remove();
         if (docId && window.Nexus && Nexus.db) {
@@ -793,6 +1105,199 @@
         setTimeout(() => inp.focus(), 60);
     };
 
+
+    // TOOL 4: 📖 SMART ENGLISH DICTIONARY + PRONUNCIATION AUDIO (dictionaryapi.dev Free External API)
+    window.openNexusDictionaryTool = function() {
+        const modal = document.getElementById('nx-global-modal');
+        if (!modal) return;
+        modal.innerHTML = `
+            <div class="nx-modal-box" style="border:2px solid #38bdf8;background:#090d16;padding:15px;max-width:390px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <strong style="color:#38bdf8;font-size:15px;">📖 Smart Dictionary &amp; Pronunciation</strong>
+                    <button type="button" onclick="document.getElementById('nx-global-modal').style.display='none'" style="background:none;border:none;color:#94a3b8;font-size:19px;cursor:pointer;">✕</button>
+                </div>
+                <div style="display:flex;gap:6px;margin-bottom:10px;">
+                    <input type="text" id="nx-dict-in" placeholder="Type any English word (e.g. Resilience)..." style="flex:1;padding:9px 11px;border-radius:10px;background:#111827;border:1px solid #334155;color:#fff;font-size:12.5px;outline:none;">
+                    <button type="button" id="nx-dict-go" style="padding:9px 14px;border-radius:10px;background:#38bdf8;color:#020617;border:none;font-weight:900;font-size:12px;cursor:pointer;">Define</button>
+                </div>
+                <div id="nx-dict-out" style="max-height:48vh;overflow-y:auto;font-size:12.5px;color:#cbd5e1;line-height:1.45;">
+                    <div style="text-align:center;color:#64748b;padding:18px 8px;">Get instant meaning, voice pronunciation, examples &amp; synonyms!</div>
+                </div>
+            </div>
+        `;
+        modal.style.zIndex = '272000';
+        modal.style.display = 'flex';
+        const runDict = async () => {
+            const w = (modal.querySelector('#nx-dict-in').value || '').trim();
+            const out = modal.querySelector('#nx-dict-out');
+            if (!w) return;
+            out.innerHTML = `<div style="text-align:center;color:#38bdf8;padding:14px;">⏳ Looking up "${escHtml(w)}"...</div>`;
+            try {
+                const r = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(w)}`);
+                const d = await r.json();
+                if (!Array.isArray(d) || !d[0]) {
+                    out.innerHTML = `<div style="text-align:center;color:#fb7185;padding:14px;">Word not found. Check spelling!</div>`;
+                    return;
+                }
+                const entry = d[0];
+                const audioObj = (entry.phonetics || []).find(p => p && p.audio);
+                const mean = (entry.meanings || [])[0] || {};
+                const defObj = (mean.definitions || [])[0] || {};
+                const syns = (mean.synonyms || []).slice(0, 5).join(', ');
+                out.innerHTML = `
+                    <div style="background:#111827;border:1px solid #26334d;border-radius:13px;padding:11px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                            <div>
+                                <span style="font-size:16px;font-weight:900;color:#34d399;">${escHtml(entry.word)}</span>
+                                <span style="font-size:11px;color:#94a3b8;margin-left:6px;">${escHtml(entry.phonetic || '')} (${escHtml(mean.partOfSpeech || '')})</span>
+                            </div>
+                            ${audioObj ? `<button type="button" id="nx-dict-aud" style="background:#1e293b;border:1px solid #38bdf8;color:#38bdf8;border-radius:8px;padding:4px 9px;font-size:11px;font-weight:900;cursor:pointer;">🔊 Listen</button>` : ''}
+                        </div>
+                        <div style="color:#f8fafc;margin-bottom:6px;"><b>Meaning:</b> ${escHtml(defObj.definition || 'N/A')}</div>
+                        ${defObj.example ? `<div style="color:#93c5fd;font-style:italic;font-size:12px;margin-bottom:6px;">"${escHtml(defObj.example)}"</div>` : ''}
+                        ${syns ? `<div style="color:#fde047;font-size:11.5px;margin-bottom:9px;"><b>Synonyms:</b> ${escHtml(syns)}</div>` : ''}
+                        <button type="button" id="nx-dict-send" style="width:100%;padding:9px;border-radius:10px;background:#10b981;color:#020617;border:none;font-weight:900;font-size:12px;cursor:pointer;">📤 Share Meaning in Chat</button>
+                    </div>
+                `;
+                if (audioObj) {
+                    out.querySelector('#nx-dict-aud').onclick = () => { new Audio(audioObj.audio).play().catch(() => {}); };
+                }
+                out.querySelector('#nx-dict-send').onclick = () => {
+                    modal.style.display = 'none';
+                    insertTextIntoActiveChat(`📖 *${entry.word}* (${mean.partOfSpeech || ''}): ${defObj.definition || ''}`);
+                };
+            } catch (e) {
+                out.innerHTML = `<div style="text-align:center;color:#fb7185;padding:14px;">⚠️ Network slow, try again.</div>`;
+            }
+        };
+        modal.querySelector('#nx-dict-go').onclick = runDict;
+        modal.querySelector('#nx-dict-in').onkeydown = (e) => { if (e.key === 'Enter') runDict(); };
+    };
+
+    // TOOL 5: 🤖 INSTANT AI DOUBT SOLVER (External Free AI API)
+    window.openNexusAiDoubtTool = function() {
+        const modal = document.getElementById('nx-global-modal');
+        if (!modal) return;
+        modal.innerHTML = `
+            <div class="nx-modal-box" style="border:2px solid #10b981;background:#090d16;padding:15px;max-width:395px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <strong style="color:#34d399;font-size:15px;">🤖 Nexus AI Instant Doubt Solver</strong>
+                    <button type="button" onclick="document.getElementById('nx-global-modal').style.display='none'" style="background:none;border:none;color:#94a3b8;font-size:19px;cursor:pointer;">✕</button>
+                </div>
+                <textarea id="nx-ai-in" rows="3" placeholder="Ask any Physics, Chemistry, Math, Coding or general doubt..." style="width:100%;padding:10px;border-radius:10px;background:#111827;border:1px solid #334155;color:#fff;font-size:12.5px;outline:none;resize:none;box-sizing:border-box;"></textarea>
+                <button type="button" id="nx-ai-go" style="width:100%;margin-top:8px;padding:10px;border-radius:11px;background:linear-gradient(90deg,#10b981,#06b6d4);color:#020617;border:none;font-weight:900;font-size:13px;cursor:pointer;">⚡ Solve Now</button>
+                <div id="nx-ai-out" style="display:none;margin-top:10px;padding:11px;border-radius:12px;background:#111827;border:1px solid #10b981;color:#e2e8f0;font-size:12.5px;line-height:1.5;max-height:36vh;overflow-y:auto;white-space:pre-wrap;"></div>
+                <button type="button" id="nx-ai-send" style="display:none;width:100%;margin-top:8px;padding:9px;border-radius:10px;background:#1e293b;border:1px solid #10b981;color:#34d399;font-weight:900;font-size:12px;cursor:pointer;">📤 Share Answer in Chat</button>
+            </div>
+        `;
+        modal.style.zIndex = '272000';
+        modal.style.display = 'flex';
+        let lastAns = '';
+        modal.querySelector('#nx-ai-go').onclick = async function() {
+            const q = (modal.querySelector('#nx-ai-in').value || '').trim();
+            const out = modal.querySelector('#nx-ai-out');
+            const sBtn = modal.querySelector('#nx-ai-send');
+            if (!q) return;
+            this.disabled = true; this.textContent = '⏳ Thinking...';
+            out.style.display = 'block'; out.textContent = '⚡ Connecting to AI...';
+            try {
+                const prompt = `Answer clearly and concisely in Hinglish (max 120 words): ${q}`;
+                const r = await fetch(`https://text.pollinations.ai/${encodeURIComponent(prompt)}`);
+                lastAns = (await r.text() || '').trim();
+                out.textContent = lastAns || 'No response received.';
+                sBtn.style.display = lastAns ? 'block' : 'none';
+            } catch (e) {
+                out.textContent = '⚠️ AI server busy or network slow. Please retry.';
+            }
+            this.disabled = false; this.textContent = '⚡ Solve Now';
+        };
+        modal.querySelector('#nx-ai-send').onclick = () => {
+            if (!lastAns) return;
+            modal.style.display = 'none';
+            insertTextIntoActiveChat(`🤖 AI Answer:\n${lastAns.slice(0, 420)}`);
+        };
+    };
+
+    // TOOL 6: 📱 INSTANT QR CODE GENERATOR (api.qrserver.com Free External API)
+    window.openNexusQrMakerTool = function() {
+        const modal = document.getElementById('nx-global-modal');
+        if (!modal) return;
+        modal.innerHTML = `
+            <div class="nx-modal-box" style="border:2px solid #fbbf24;background:#090d16;padding:15px;max-width:365px;text-align:center;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <strong style="color:#fde047;font-size:15px;">📱 Instant QR Code Generator</strong>
+                    <button type="button" onclick="document.getElementById('nx-global-modal').style.display='none'" style="background:none;border:none;color:#94a3b8;font-size:19px;cursor:pointer;">✕</button>
+                </div>
+                <input type="text" id="nx-qrm-in" placeholder="Paste any link, text, phone or UPI ID..." style="width:100%;padding:9px 11px;border-radius:10px;background:#111827;border:1px solid #334155;color:#fff;font-size:12.5px;outline:none;box-sizing:border-box;margin-bottom:8px;">
+                <button type="button" id="nx-qrm-go" style="width:100%;padding:9px;border-radius:10px;background:#fbbf24;color:#020617;border:none;font-weight:900;font-size:12.5px;cursor:pointer;">⚡ Generate QR</button>
+                <div id="nx-qrm-out" style="display:none;margin-top:12px;">
+                    <img id="nx-qrm-img" src="" style="width:185px;height:185px;border-radius:14px;border:2px solid #fbbf24;background:#fff;padding:6px;">
+                    <div style="display:flex;gap:8px;margin-top:10px;">
+                        <a id="nx-qrm-dl" href="" download="Nexus_QR.png" target="_blank" style="flex:1;padding:9px;border-radius:10px;background:#10b981;color:#020617;font-weight:900;font-size:12px;text-decoration:none;">⬇️ Save QR</a>
+                        <button type="button" id="nx-qrm-send" style="flex:1;padding:9px;border-radius:10px;background:#1e293b;border:1px solid #38bdf8;color:#38bdf8;font-weight:900;font-size:12px;cursor:pointer;">📤 Send Link</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        modal.style.zIndex = '272000';
+        modal.style.display = 'flex';
+        let curUrl = '';
+        modal.querySelector('#nx-qrm-go').onclick = () => {
+            const val = (modal.querySelector('#nx-qrm-in').value || '').trim();
+            if (!val) return;
+            curUrl = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(val)}`;
+            modal.querySelector('#nx-qrm-img').src = curUrl;
+            modal.querySelector('#nx-qrm-dl').href = curUrl;
+            modal.querySelector('#nx-qrm-out').style.display = 'block';
+        };
+        modal.querySelector('#nx-qrm-send').onclick = () => {
+            if (!curUrl) return;
+            modal.style.display = 'none';
+            insertTextIntoActiveChat(`📱 QR Code: ${curUrl}`);
+        };
+    };
+
+    // TOOL 7: 🎲 LIVE DICE ROLLER & COIN FLIP (Quick Decision Maker in Chat)
+    window.openNexusLuckTool = function() {
+        const modal = document.getElementById('nx-global-modal');
+        if (!modal) return;
+        modal.innerHTML = `
+            <div class="nx-modal-box" style="border:2px solid #a78bfa;background:#090d16;padding:15px;max-width:345px;text-align:center;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <strong style="color:#d8b4fe;font-size:15px;">🎲 Coin Flip &amp; Dice Roller</strong>
+                    <button type="button" onclick="document.getElementById('nx-global-modal').style.display='none'" style="background:none;border:none;color:#94a3b8;font-size:19px;cursor:pointer;">✕</button>
+                </div>
+                <div id="nx-luck-res" style="font-size:28px;font-weight:900;color:#fde047;background:#111827;border:1px solid #26334d;border-radius:16px;padding:18px 10px;margin-bottom:12px;">Tap Below!</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+                    <button type="button" id="nx-coin-btn" style="padding:11px;border-radius:11px;background:#1e293b;border:1.5px solid #fbbf24;color:#fde047;font-weight:900;font-size:13px;cursor:pointer;">🪙 Flip Coin</button>
+                    <button type="button" id="nx-dice-btn" style="padding:11px;border-radius:11px;background:#1e293b;border:1.5px solid #38bdf8;color:#38bdf8;font-weight:900;font-size:13px;cursor:pointer;">🎲 Roll Dice</button>
+                </div>
+                <button type="button" id="nx-luck-send" style="display:none;width:100%;padding:10px;border-radius:11px;background:#10b981;color:#020617;border:none;font-weight:900;font-size:12.5px;cursor:pointer;">📤 Send Result to Chat</button>
+            </div>
+        `;
+        modal.style.zIndex = '272000';
+        modal.style.display = 'flex';
+        let lastRes = '';
+        const resEl = modal.querySelector('#nx-luck-res');
+        const sendBtn = modal.querySelector('#nx-luck-send');
+        modal.querySelector('#nx-coin-btn').onclick = () => {
+            lastRes = Math.random() < 0.5 ? '🪙 Coin Toss: HEADS!' : '🪙 Coin Toss: TAILS!';
+            resEl.textContent = lastRes;
+            sendBtn.style.display = 'block';
+        };
+        modal.querySelector('#nx-dice-btn').onclick = () => {
+            const n = 1 + Math.floor(Math.random() * 6);
+            lastRes = `🎲 Dice Rolled: ${n}`;
+            resEl.textContent = lastRes;
+            sendBtn.style.display = 'block';
+        };
+        sendBtn.onclick = () => {
+            if (!lastRes) return;
+            modal.style.display = 'none';
+            insertTextIntoActiveChat(lastRes);
+        };
+    };
+
     // =========================================================================
     // 4. OPEN UNIFIED 1:1 DM ⋮ (3-DOTS) PRO MENU
     // =========================================================================
@@ -831,8 +1336,8 @@
                     <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(56,189,248,0.5);" onclick="window.startNew1v1LiveGame('ttt');">
                         <span class="nx-pro-dots-icon" style="background:rgba(56,189,248,0.18);">🎮</span>
                         <div>
-                            <div style="color:#38bdf8;">Play 1v1 Live Games (Tic-Tac-Toe &amp; RPS)</div>
-                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Sends live game invite banner to partner's chat!</div>
+                            <div style="color:#38bdf8;">1v1 Live Game Arcade (5 Games + Timer &amp; XP)</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">TTT, RPS, Math Duel, GK Quiz, Tap Race + Trophy!</div>
                         </div>
                     </button>
 
@@ -900,6 +1405,38 @@
                             <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Trig, log, physics constants &amp; send result</div>
                         </div>
                     </button>
+                    <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(56,189,248,0.45);" onclick="window.openNexusDictionaryTool();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(56,189,248,0.18);">📖</span>
+                        <div>
+                            <div style="color:#7dd3fc;">Smart Dictionary &amp; Audio</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Meaning, voice pronunciation &amp; synonyms</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(16,185,129,0.45);" onclick="window.openNexusAiDoubtTool();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(16,185,129,0.18);">🤖</span>
+                        <div>
+                            <div style="color:#34d399;">Nexus AI Doubt Solver</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Instant Hinglish study &amp; coding answers</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(251,191,36,0.45);" onclick="window.openNexusQrMakerTool();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(251,191,36,0.18);">📱</span>
+                        <div>
+                            <div style="color:#fde047;">Instant QR Code Generator</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Convert links, UPI or notes to QR image</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(167,139,250,0.45);" onclick="window.openNexusLuckTool();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(167,139,250,0.18);">🎲</span>
+                        <div>
+                            <div style="color:#d8b4fe;">Coin Flip &amp; Dice Roller</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Quick fun toss &amp; dice right inside chat</div>
+                        </div>
+                    </button>
+
 
                     <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(245,158,11,0.4);" onclick="window.startSyncedPomodoroTimer(25);">
                         <span class="nx-pro-dots-icon" style="background:rgba(245,158,11,0.18);">⏱️</span>
@@ -1067,6 +1604,38 @@
                             <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Trig, log, physics constants &amp; send result</div>
                         </div>
                     </button>
+                    <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(56,189,248,0.45);" onclick="window.openNexusDictionaryTool();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(56,189,248,0.18);">📖</span>
+                        <div>
+                            <div style="color:#7dd3fc;">Smart Dictionary &amp; Audio</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Meaning, voice pronunciation &amp; synonyms</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(16,185,129,0.45);" onclick="window.openNexusAiDoubtTool();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(16,185,129,0.18);">🤖</span>
+                        <div>
+                            <div style="color:#34d399;">Nexus AI Doubt Solver</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Instant Hinglish study &amp; coding answers</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(251,191,36,0.45);" onclick="window.openNexusQrMakerTool();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(251,191,36,0.18);">📱</span>
+                        <div>
+                            <div style="color:#fde047;">Instant QR Code Generator</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Convert links, UPI or notes to QR image</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="nx-pro-dots-btn" style="border-color:rgba(167,139,250,0.45);" onclick="window.openNexusLuckTool();">
+                        <span class="nx-pro-dots-icon" style="background:rgba(167,139,250,0.18);">🎲</span>
+                        <div>
+                            <div style="color:#d8b4fe;">Coin Flip &amp; Dice Roller</div>
+                            <div style="font-size:10.5px; color:#94a3b8; font-weight:600;">Quick fun toss &amp; dice right inside chat</div>
+                        </div>
+                    </button>
+
 
                     <button type="button" class="nx-pro-dots-btn" onclick="document.getElementById('nx-global-modal').style.display='none'; if(window.NexusSuperChat) NexusSuperChat.openLiveSketchpadModal(false);">
                         <span class="nx-pro-dots-icon" style="background:rgba(16,185,129,0.18);">🎨</span>
